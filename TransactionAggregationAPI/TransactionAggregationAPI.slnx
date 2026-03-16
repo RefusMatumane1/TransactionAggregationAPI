@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="TransactionAggregationAPI.AppHost/TransactionAggregationAPI.AppHost.csproj" />
+  <Project Path="TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.ServiceDefaults.csproj" />
+  <Project Path="TransactionAggregationAPI/TransactionAggregationAPI.csproj" />
+</Solution>

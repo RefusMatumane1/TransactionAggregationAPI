@@ -1,4 +1,8 @@
 <Solution>
+  <Project Path="TransactionAggregation.Application/TransactionAggregation.Application.csproj" Id="ffdc5dc1-72ce-4ff2-8f05-f8ad6f205bfe" />
+  <Project Path="TransactionAggregation.Domain/TransactionAggregation.Domain.csproj" Id="69d4d908-2140-4efc-b376-cd669f1b39dd" />
+  <Project Path="TransactionAggregation.Infrastructure/TransactionAggregation.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />
+  <Project Path="TransactionAggregation.Persistence/TransactionAggregation.Persistence.csproj" Id="86965b73-5a62-4911-9d86-b0c182d0f845" />
   <Project Path="TransactionAggregationAPI.AppHost/TransactionAggregationAPI.AppHost.csproj" />
   <Project Path="TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.ServiceDefaults.csproj" />
   <Project Path="TransactionAggregationAPI/TransactionAggregationAPI.csproj" />

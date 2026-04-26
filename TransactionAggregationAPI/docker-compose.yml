@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: transactionaggregation-postgres-1
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: transactiondb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - transaction-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: transactionaggregation-redis-1
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - transaction-network
+
+  seq:
+    image: datalust/seq:latest
+    container_name: transactionaggregation-seq-1
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80"
+    volumes:
+      - seq_data:/data
+    networks:
+      - transaction-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: transactionaggregation-pgadmin-1
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@transaction.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - transaction-network
+
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: transactionaggregation-redis-commander-1
+    environment:
+      REDIS_HOSTS: redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - transaction-network
+
+volumes:
+  postgres_data:
+    name: transactionaggregation_postgres_data
+  redis_data:
+    name: transactionaggregation_redis_data
+  seq_data:
+    name: transactionaggregation_seq_data
+
+networks:
+  transaction-network:
+    name: transactionaggregation-network
+    driver: bridge

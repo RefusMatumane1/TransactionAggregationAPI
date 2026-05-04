@@ -20,11 +20,11 @@ namespace TransactionAggregation.Application.Common.Behaviors
             CancellationToken cancellationToken)
         {
             if (request is not IIdempotentRequest idempotentRequest)
-                return await next();
+                return await next(cancellationToken);
 
             var rawKey = idempotentRequest.IdempotencyKey;
             if (string.IsNullOrEmpty(rawKey))
-                return await next();
+                return await next(cancellationToken);
 
             var cacheKey = $"idempotent:{rawKey}";
 
@@ -38,7 +38,7 @@ namespace TransactionAggregation.Application.Common.Behaviors
                 return JsonSerializer.Deserialize<TResponse>(cachedResult)!;
             }
 
-            var response = await next();
+            var response = await next(cancellationToken);
 
             var serialized = JsonSerializer.Serialize(response);
             await _cache.SetStringAsync(

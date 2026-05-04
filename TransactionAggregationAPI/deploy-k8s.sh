@@ -121,26 +121,25 @@ if command -v nerdctl &>/dev/null; then
   if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transaction-aggregation-api"; then
     log_ok "API image present:  $API_IMAGE"
   else
-    log_warn "API image NOT found in the k8s.io namespace: $API_IMAGE"
-    log_warn "Build it with:"
-    log_warn "  nerdctl --namespace k8s.io build -t $API_IMAGE -f TransactionAggregationAPI/Dockerfile ."
-    printf "   Continue anyway? [y/N] "
-    read -r REPLY
-    [[ "$REPLY" =~ ^[Yy]$ ]] || exit 1
+    log_error "API image NOT found in the k8s.io namespace: $API_IMAGE"
+    log_error "Build it first, then re-run this script:"
+    log_error "  nerdctl --namespace k8s.io build -t $API_IMAGE -f TransactionAggregationAPI/Dockerfile ."
+    exit 1
   fi
 
   if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transaction-aggregation-ui"; then
     log_ok "UI  image present:  $UI_IMAGE"
   else
-    log_warn "UI image NOT found in the k8s.io namespace: $UI_IMAGE"
-    log_warn "Build it with:"
-    log_warn "  nerdctl --namespace k8s.io build -t $UI_IMAGE -f TransactionAggregationUI/Dockerfile ."
-    printf "   Continue anyway? [y/N] "
-    read -r REPLY
-    [[ "$REPLY" =~ ^[Yy]$ ]] || exit 1
+    log_error "UI image NOT found in the k8s.io namespace: $UI_IMAGE"
+    log_error "Build it first, then re-run this script:"
+    log_error "  nerdctl --namespace k8s.io build -t $UI_IMAGE -f TransactionAggregationUI/Dockerfile ."
+    exit 1
   fi
 else
-  log_warn "nerdctl not found — cannot verify images. Continuing."
+  log_warn "nerdctl not found — cannot verify images are present in the k8s.io namespace."
+  log_warn "If the migration Job fails with ErrImagePull, build the images first:"
+  log_warn "  nerdctl --namespace k8s.io build -t $API_IMAGE -f TransactionAggregationAPI/Dockerfile ."
+  log_warn "  nerdctl --namespace k8s.io build -t $UI_IMAGE -f TransactionAggregationUI/Dockerfile ."
 fi
 
 # secrets.yaml has been populated?

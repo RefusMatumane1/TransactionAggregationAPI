@@ -16,59 +16,47 @@ namespace TransactionAggregation.Persistence
 
         public async Task BeginTransactionAsync(CancellationToken cancellationToken = default)
         {
-
+            // InMemory and other non-relational providers do not support transactions
+            if (!_context.Database.IsRelational())
+                return;
 
             _currentTransaction ??= await _context.Database.BeginTransactionAsync(cancellationToken);
-
-            if (_currentTransaction != null)
-                return;
         }
 
         public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
         {
+            if (!_context.Database.IsRelational())
+                return;
+
+            if (_currentTransaction == null)
+                return;
+
             try
             {
-                if (_currentTransaction == null)
-                    throw new InvalidOperationException("No active transaction exists.");
-
-                var strategy = _context.Database.CreateExecutionStrategy();
-                await strategy.ExecuteAsync(async () =>
-                {
-                    try
-                    {
-                        await _context.SaveChangesAsync(cancellationToken);
-
-                        await _currentTransaction.CommitAsync(cancellationToken);
-                    }
-                    catch
-                    {
-                        await _currentTransaction.RollbackAsync(cancellationToken);
-                        throw;
-                    }
-                    finally
-                    {
-                        await _currentTransaction.DisposeAsync();
-                        _currentTransaction = null;
-                    }
-                });
                 await _context.SaveChangesAsync(cancellationToken);
-                await (_currentTransaction?.CommitAsync(cancellationToken) ?? Task.CompletedTask);
+                await _currentTransaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await _currentTransaction.RollbackAsync(cancellationToken);
+                throw;
             }
             finally
             {
-                if (_currentTransaction != null)
-                {
-                    await _currentTransaction.DisposeAsync();
-                    _currentTransaction = null;
-                }
+                await _currentTransaction.DisposeAsync();
+                _currentTransaction = null;
             }
         }
 
         public async Task RollbackTransactionAsync(CancellationToken cancellationToken = default)
         {
+            if (!_context.Database.IsRelational())
+                return;
+
             try
             {
-                await (_currentTransaction?.RollbackAsync(cancellationToken) ?? Task.CompletedTask);
+                if (_currentTransaction != null)
+                    await _currentTransaction.RollbackAsync(cancellationToken);
             }
             finally
             {

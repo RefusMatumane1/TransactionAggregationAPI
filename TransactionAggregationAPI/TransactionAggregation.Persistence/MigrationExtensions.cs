@@ -19,7 +19,13 @@ namespace TransactionAggregation.Persistence
                 var context = services.GetRequiredService<ApplicationDbContext>();
                 logger.LogInformation("Applying database migrations...");
 
-                await context.Database.MigrateAsync(cancellationToken);
+                // MigrateAsync is only available for relational providers.
+                // When running under the integration-test WebApplicationFactory the context
+                // uses an InMemory database, so we call EnsureCreated instead.
+                if (context.Database.IsRelational())
+                    await context.Database.MigrateAsync(cancellationToken);
+                else
+                    await context.Database.EnsureCreatedAsync(cancellationToken);
 
                 logger.LogInformation("Database migrations applied successfully");
             }

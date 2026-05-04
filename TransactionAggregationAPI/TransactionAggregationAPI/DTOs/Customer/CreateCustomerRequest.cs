@@ -2,5 +2,5 @@
 {
     public sealed record CreateCustomerRequest(
         string Email,
-        string Name);
+        string Name, string password);
 }

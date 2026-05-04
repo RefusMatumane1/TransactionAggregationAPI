@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transaction-ui-config
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-ui
+    app.kubernetes.io/component: config
+    app.kubernetes.io/part-of: transaction-aggregation
+data:
+  # nginx proxies /api/ to this upstream — uses in-cluster service DNS
+  API_UPSTREAM: "http://transaction-api"

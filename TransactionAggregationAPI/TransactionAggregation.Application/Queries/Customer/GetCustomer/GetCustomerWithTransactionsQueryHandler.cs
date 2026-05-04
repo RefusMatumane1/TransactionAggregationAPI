@@ -29,20 +29,29 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
 
                 if (customer is null)
                     return Result.Failure<CustomerWithTransactionsDto>(
-                        Error.NotFound("Customer.NotFound", "Customer not found"));
+                        Error.NotFound("Customer", request.CustomerId));
 
                 var transactionQuery = _context.Transactions
                     .Where(t => t.CustomerId == customerId)
                     .AsQueryable();
 
                 if (request.StartDate.HasValue)
-                    transactionQuery = transactionQuery.Where(t => t.Date >= request.StartDate.Value);
+                {
+                    var start = DateTime.SpecifyKind(request.StartDate.Value, DateTimeKind.Utc);
+                    transactionQuery = transactionQuery.Where(t => t.Date >= start);
+                }
 
                 if (request.EndDate.HasValue)
-                    transactionQuery = transactionQuery.Where(t => t.Date <= request.EndDate.Value);
+                {
+                    var end = DateTime.SpecifyKind(request.EndDate.Value, DateTimeKind.Utc);
+                    transactionQuery = transactionQuery.Where(t => t.Date <= end);
+                }
 
                 if (request.Category.HasValue)
                     transactionQuery = transactionQuery.Where(t => t.Category == request.Category.Value);
+
+                // Count all matching transactions BEFORE applying pagination
+                var totalTransactionCount = await transactionQuery.CountAsync(cancellationToken);
 
                 var transactions = await transactionQuery
                     .Skip((request.Page - 1) * request.PageSize)
@@ -58,8 +67,10 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     t.Description,
                     t.Category,
                     t.Status,
-                    t.Source.Name));
+                    t.Source.Name,
+                    t.AccountId != null ? t.AccountId.Value : null));
 
+                // Income/expenses are computed across the current page only (used for the page summary)
                 var totalIncome = transactions
                     .Where(t => t.Amount.Amount > 0 && t.Status == TransactionStatus.Settled)
                     .Sum(t => t.Amount.Amount);
@@ -75,7 +86,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     customer.CreatedAt,
                     customer.UpdatedAt,
                     transactionDtos,
-                    transactions.Count,
+                    totalTransactionCount,   // total across all pages, not just current page
                     totalIncome,
                     totalExpenses,
                     totalIncome - totalExpenses);

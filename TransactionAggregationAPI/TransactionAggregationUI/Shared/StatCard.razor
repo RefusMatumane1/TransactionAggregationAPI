@@ -1,0 +1,18 @@
+<div class="card stat-card h-100">
+    <div class="card-body d-flex align-items-center gap-3">
+        <div class="icon-wrap @IconBg">
+            <i class="bi @IconClass text-white"></i>
+        </div>
+        <div>
+            <div class="text-muted small">@Label</div>
+            <div class="fs-5 fw-bold">@Value</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string IconClass { get; set; } = "bi-info-circle";
+    [Parameter] public string IconBg { get; set; } = "bg-primary";
+}

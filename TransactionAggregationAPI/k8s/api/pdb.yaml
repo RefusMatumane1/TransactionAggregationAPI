@@ -1,0 +1,16 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: transaction-api-pdb
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  # Ensure at least 1 pod is always available during voluntary disruptions
+  # (node drains, rolling cluster upgrades, etc.)
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api

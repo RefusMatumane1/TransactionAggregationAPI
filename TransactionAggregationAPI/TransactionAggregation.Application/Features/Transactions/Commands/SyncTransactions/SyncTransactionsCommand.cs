@@ -3,16 +3,16 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using TransactionAggregation.Application.Abstractions;
 using TransactionAggregation.Application.Common.Behaviors;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
-using TransactionAggregation.Domain.Events;
 using TransactionAggregation.Domain.Events.Transaction;
 
 namespace TransactionAggregation.Application.Features.Transactions.Commands.SyncTransactions
 {
-    public sealed record SyncTransactionsCommand : IRequest<Result<SyncTransactionsResult>>, ICommand, IIdempotentRequest
+    public sealed record SyncTransactionsCommand : IRequest<Result<SyncTransactionsResult>>, ICommandBase, IIdempotentRequest
     {
         public required Guid CustomerId { get; init; }
         public DateTime? FromDate { get; init; }
@@ -71,31 +71,50 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Sync
 
             try
             {
-                // Get existing transaction IDs to avoid duplicates
-                var existingIds = await _context.Transactions
-                    .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
-                    .Select(t => t.Source.ExternalId)
-                    .ToHashSetAsync(cancellationToken);
-
-                // Aggregate from all sources
+                // Aggregate from all sources first so we know what's incoming.
                 var aggregationResult = await _aggregator.AggregateCustomerTransactionsAsync(
                     request.CustomerId,
                     request.FromDate,
                     request.ToDate,
                     cancellationToken);
 
-                // Filter new transactions
-                var newTransactions = aggregationResult
-                    .Where(t => !existingIds.Contains(t.Source.ExternalId))
+                // Check globally which of the *incoming* ExternalIds already exist in the DB.
+                // Scoping to the current customer is not enough: IX_Transactions_SourceExternalId
+                // is a global unique index, so a bank that reuses ExternalIds across customers
+                // would still cause a 23505 violation on the second customer's sync.
+                // Querying only the incoming IDs keeps the result set small regardless of
+                // how many total transactions are in the database.
+                var incomingExternalIds = aggregationResult.Transactions
+                    .Select(t => t.Source.ExternalId)
+                    .ToHashSet();
+
+                var alreadyExistingIds = await _context.Transactions
+                    .Where(t => incomingExternalIds.Contains(t.Source.ExternalId))
+                    .Select(t => t.Source.ExternalId)
+                    .ToHashSetAsync(cancellationToken);
+
+                var newTransactions = aggregationResult.Transactions
+                    .Where(t => !alreadyExistingIds.Contains(t.Source.ExternalId))
                     .ToList();
 
                 // Save new transactions
                 if (newTransactions.Any())
                 {
-                    await _context.Transactions.AddRangeAsync(newTransactions, cancellationToken);
-                    await _context.SaveChangesAsync(cancellationToken);
+                    try
+                    {
+                        await _context.Transactions.AddRangeAsync(newTransactions, cancellationToken);
+                        await _context.SaveChangesAsync(cancellationToken);
+                    }
+                    catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("23505") == true)
+                    {
+                        // A concurrent sync request raced between our existence check and our insert.
+                        // The transactions are already persisted — treat as idempotent success.
+                        _logger.LogWarning(
+                            "Duplicate ExternalId on sync for customer {CustomerId} — already inserted by a concurrent request",
+                            request.CustomerId);
+                        newTransactions = [];
+                    }
 
-                    // Publish domain events for each new transaction
                     foreach (var transaction in newTransactions)
                     {
                         await _publisher.Publish(
@@ -104,13 +123,25 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Sync
                     }
                 }
 
+                var sourceResults = aggregationResult.SourceResults
+                    .Select(s => new SourceResult
+                    {
+                        SourceName = s.SourceName,
+                        TransactionsFound = s.TransactionsFound,
+                        TransactionsAdded = newTransactions.Count(t => t.Source.Name == s.SourceName),
+                        IsSuccess = s.IsSuccess,
+                        Error = s.Error,
+                        Duration = s.Duration
+                    })
+                    .ToList();
+
                 var result = new SyncTransactionsResult
                 {
-                    TotalRetrieved = aggregationResult.Count,
+                    TotalRetrieved = aggregationResult.Transactions.Count,
                     NewTransactions = newTransactions.Count,
-                    Duplicates = aggregationResult.Count - newTransactions.Count,
-                    //FailedSources = aggregationResult.Count(r => !r.),
-                    //SourceResults = aggregationResult.Select(x => x.Source),
+                    Duplicates = aggregationResult.Transactions.Count - newTransactions.Count,
+                    FailedSources = aggregationResult.FailedSourceCount,
+                    SourceResults = sourceResults,
                     Duration = stopwatch.Elapsed,
                     SyncedAt = DateTime.UtcNow
                 };

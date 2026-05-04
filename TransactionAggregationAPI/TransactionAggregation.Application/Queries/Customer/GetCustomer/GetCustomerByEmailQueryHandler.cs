@@ -23,7 +23,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
 
                 if (customer is null)
                     return Result.Failure<CustomerDto>(
-                        Error.NotFound("Customer.NotFound", $"Customer with email {request.Email} not found"));
+                        Error.NotFound("Customer", request.Email));
 
                 var dto = new CustomerDto(
                     customer.Id.Value,

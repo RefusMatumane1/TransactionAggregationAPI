@@ -1,0 +1,109 @@
+# ── Default (production-safe) values ─────────────────────────────────────
+# Override per environment with values.dev.yaml / values.staging.yaml / etc.
+# Usage:
+#   helm upgrade --install transaction-aggregation ./helm \
+#     -f helm/values.yaml \
+#     -f helm/values.production.yaml \
+#     --set api.image.tag=1.2.3 \
+#     -n transaction-aggregation --create-namespace
+
+global:
+  namespace: transaction-aggregation
+  environment: production
+
+# ── API ───────────────────────────────────────────────────────────────────
+api:
+  image:
+    repository: transaction-aggregation-api
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+
+  replicaCount: 2
+
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  ingress:
+    enabled: true
+    className: traefik
+    host: api.transaction.local
+    tls: true
+    tlsSecretName: transaction-api-tls
+    certIssuer: selfsigned-issuer
+
+  env:
+    ASPNETCORE_ENVIRONMENT: "Production"
+    ASPNETCORE_HTTP_PORTS: "8080"
+    TransactionSync__IntervalMinutes: "60"
+
+  # Secrets are NEVER stored here — inject via external-secrets or sealed-secrets
+  existingSecret: transaction-api-secrets
+
+# ── PostgreSQL ────────────────────────────────────────────────────────────
+postgres:
+  image: postgres:16-alpine
+  storageClassName: local-path
+  storageSize: 10Gi
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "256Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+# ── Redis ─────────────────────────────────────────────────────────────────
+redis:
+  image: redis:7-alpine
+  storageClassName: local-path
+  storageSize: 2Gi
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+# ── Seq ───────────────────────────────────────────────────────────────────
+seq:
+  enabled: true
+  image: datalust/seq:latest
+  storageClassName: local-path
+  storageSize: 5Gi
+  ingress:
+    enabled: true
+    host: seq.transaction.local
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# ── Dev tools (disabled in production) ───────────────────────────────────
+devTools:
+  pgadmin:
+    enabled: false
+    image: dpage/pgadmin4:8.14
+    ingress:
+      host: pgadmin.transaction.local
+
+  redisCommander:
+    enabled: false
+    image: rediscommander/redis-commander:latest
+    ingress:
+      host: redis-commander.transaction.local

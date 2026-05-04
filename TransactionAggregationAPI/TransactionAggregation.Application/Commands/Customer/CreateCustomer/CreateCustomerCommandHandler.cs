@@ -1,13 +1,15 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Abstractions;
+using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
 
 namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
 {
-    internal sealed class CreateCustomerCommandHandler(IApplicationDbContext _context,
+    internal sealed class CreateCustomerCommandHandler(IApplicationDbContext context,
+        IPasswordHasher passwordHasher,
         ILogger<CreateCustomerCommandHandler> logger) 
         : ICommandHandler<CreateCustomerCommand, Guid>
     {
@@ -15,17 +17,18 @@ namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
         {
             try
             {
-                var emailExists = await _context.Customers
+                var emailExists = await context.Customers
               .AnyAsync(c => c.Email == request.Email, cancellationToken);
 
                 if (emailExists)
                     return Result.Failure<Guid>(Error.Conflict("Customer with this email already exists"));
 
                 var customerId = CustomerId.Create();
-                Domain.Entities.Customer customer = Domain.Entities.Customer.Create(customerId, request.Email, request.Name);
+                var passwordHash = passwordHasher.Hash(request.Password);
+                Domain.Entities.Customer customer = Domain.Entities.Customer.Create(customerId, request.Email, request.Name, passwordHash);
 
-                await _context.Customers.AddAsync(customer, cancellationToken);
-                await _context.SaveChangesAsync(cancellationToken);
+                await context.Customers.AddAsync(customer, cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
 
                 logger.LogInformation("Customer created with ID: {CustomerId}", customer.Id);
 

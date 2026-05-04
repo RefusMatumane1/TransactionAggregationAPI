@@ -1,0 +1,127 @@
+/* ── Layout ────────────────────────────────── */
+html, body {
+    height: 100%;
+}
+
+.app-wrapper {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* ── Sidebar ───────────────────────────────── */
+.sidebar {
+    width: 240px;
+    min-width: 240px;
+    background-color: #1e293b;
+    color: #cbd5e1;
+    display: flex;
+    flex-direction: column;
+    padding: 1rem 0;
+    overflow-y: auto;
+}
+
+.sidebar .brand {
+    padding: 0.5rem 1.25rem 1.25rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    border-bottom: 1px solid #334155;
+    margin-bottom: 0.5rem;
+}
+
+.sidebar .nav-link {
+    color: #94a3b8;
+    padding: 0.6rem 1.25rem;
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-size: 0.9rem;
+    transition: background 0.15s, color 0.15s;
+}
+
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+    background-color: #334155;
+    color: #f1f5f9;
+}
+
+/* ── Main content area ─────────────────────── */
+.main-content {
+    flex: 1;
+    overflow-y: auto;
+    background-color: #f8fafc;
+}
+
+.topbar {
+    background: #fff;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.page-body {
+    padding: 1.5rem;
+}
+
+/* ── Stat cards ────────────────────────────── */
+.stat-card {
+    border: none;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+
+.stat-card .icon-wrap {
+    width: 48px;
+    height: 48px;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+}
+
+/* ── Badges ────────────────────────────────── */
+.badge-Uncategorized  { background-color: #94a3b8; color: #fff; }
+.badge-Groceries      { background-color: #22c55e; color: #fff; }
+.badge-Dining         { background-color: #f97316; color: #fff; }
+.badge-Transportation { background-color: #3b82f6; color: #fff; }
+.badge-Entertainment  { background-color: #a855f7; color: #fff; }
+.badge-Utilities      { background-color: #06b6d4; color: #fff; }
+.badge-Housing        { background-color: #64748b; color: #fff; }
+.badge-Healthcare     { background-color: #ef4444; color: #fff; }
+.badge-Income         { background-color: #10b981; color: #fff; }
+.badge-Transfer       { background-color: #8b5cf6; color: #fff; }
+.badge-Shopping       { background-color: #ec4899; color: #fff; }
+.badge-Subscriptions  { background-color: #f59e0b; color: #fff; }
+
+.badge-Pending   { background-color: #f59e0b; color: #fff; }
+.badge-Approved  { background-color: #3b82f6; color: #fff; }
+.badge-Rejected  { background-color: #ef4444; color: #fff; }
+.badge-Flagged   { background-color: #f97316; color: #fff; }
+.badge-Settled   { background-color: #10b981; color: #fff; }
+.badge-Refunded  { background-color: #06b6d4; color: #fff; }
+.badge-Disputed  { background-color: #8b5cf6; color: #fff; }
+.badge-Cancelled { background-color: #94a3b8; color: #fff; }
+
+/* ── Tables ────────────────────────────────── */
+.table-hover tbody tr:hover {
+    background-color: #f1f5f9;
+}
+
+/* ── Auth pages ────────────────────────────── */
+.auth-card {
+    max-width: 420px;
+    width: 100%;
+}
+
+/* ── Blazor error UI ───────────────────────── */
+#blazor-error-ui {
+    display: none;
+}

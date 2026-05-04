@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-ui
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-ui
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: transaction-aggregation
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    configmap.reloader.stakater.com/reload: "transaction-ui-config"
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-ui
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transaction-ui
+        app.kubernetes.io/component: ui
+        app.kubernetes.io/part-of: transaction-aggregation
+        app.kubernetes.io/version: "1.0.0"
+
+    spec:
+      # nginx master process must start as root to bind port 80;
+      # worker processes drop to user 101 (nginx) automatically.
+      securityContext:
+        fsGroup: 101
+
+      terminationGracePeriodSeconds: 30
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-ui
+
+      containers:
+        - name: transaction-ui
+          # Build with: docker build -f TransactionAggregationUI/Dockerfile -t <registry>/transaction-aggregation-ui:1.0.0 .
+          image: transaction-aggregation-ui:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # API_UPSTREAM is substituted into nginx.conf at container startup
+          envFrom:
+            - configMapRef:
+                name: transaction-ui-config
+
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

@@ -1,0 +1,43 @@
+# ── Production overrides ──────────────────────────────────────────────────
+global:
+  environment: production
+
+api:
+  replicaCount: 3
+  env:
+    ASPNETCORE_ENVIRONMENT: "Production"
+  ingress:
+    host: api.transaction.example.com
+    tls: true
+    certIssuer: letsencrypt-prod
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2000m"
+      memory: "1Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+
+postgres:
+  storageSize: 50Gi
+  # In production, strongly consider replacing the raw StatefulSet with
+  # CloudNativePG operator or a managed PaaS (AWS RDS, Azure Database, etc.)
+
+redis:
+  storageSize: 10Gi
+
+seq:
+  enabled: true   # Consider replacing with Grafana Loki in production
+  storageSize: 20Gi
+  ingress:
+    enabled: false   # Do not expose Seq publicly in production
+
+devTools:
+  pgadmin:
+    enabled: false
+  redisCommander:
+    enabled: false

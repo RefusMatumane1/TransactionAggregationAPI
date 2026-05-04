@@ -1,8 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using TransactionAggregation.Application.Common.DTOs;
 using TransactionAggregation.Application.Common.Interfaces;
+using TransactionAggregation.Application.Services;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
@@ -12,17 +13,19 @@ namespace TransactionAggregation.Infrastructure.Services
     public class TransactionAggregator : ITransactionAggregator
     {
         private readonly IEnumerable<ITransactionSource> _transactionSources;
+        private readonly ITransactionCategorizationService _categorizationService;
         private readonly ILogger<TransactionAggregator> _logger;
         private readonly AsyncRetryPolicy _retryPolicy;
 
         public TransactionAggregator(
             IEnumerable<ITransactionSource> transactionSources,
+            ITransactionCategorizationService categorizationService,
             ILogger<TransactionAggregator> logger)
         {
             _transactionSources = transactionSources;
+            _categorizationService = categorizationService;
             _logger = logger;
 
-            // Configure retry policy
             _retryPolicy = Policy
                 .Handle<HttpRequestException>()
                 .Or<TimeoutException>()
@@ -39,89 +42,89 @@ namespace TransactionAggregation.Infrastructure.Services
                     });
         }
 
-        public async Task<IReadOnlyList<Transaction>> AggregateCustomerTransactionsAsync(
-            CustomerId customerId,
+        public async Task<AggregationResult> AggregateCustomerTransactionsAsync(
+            Guid customerId,
+            DateTime? fromDate,
+            DateTime? toDate,
             CancellationToken cancellationToken = default)
         {
-            var fromDate = DateTime.UtcNow.AddMonths(-3); // Last 3 months
-            var toDate = DateTime.UtcNow;
+            var customerIdVO = CustomerId.CreateFrom(customerId);
+            var resolvedFrom = fromDate ?? DateTime.UtcNow.AddMonths(-3);
+            var resolvedTo = toDate ?? DateTime.UtcNow;
 
-            var sourceTasks = _transactionSources.Select(async source =>
+            var sourceList = _transactionSources.ToList();
+
+            _logger.LogInformation(
+                "Aggregating transactions for customer {CustomerId} from {SourceCount} sources between {From} and {To}",
+                customerId, sourceList.Count, resolvedFrom, resolvedTo);
+
+            var sourceTasks = sourceList.Select(async source =>
             {
+                var sw = System.Diagnostics.Stopwatch.StartNew();
                 try
                 {
-                    return await _retryPolicy.ExecuteAsync(async () =>
-                        await source.GetTransactionsAsync(customerId, fromDate, toDate, cancellationToken));
+                    var results = await _retryPolicy.ExecuteAsync(async () =>
+                        await source.GetTransactionsAsync(customerIdVO, resolvedFrom, resolvedTo, cancellationToken));
+                    sw.Stop();
+                    return (Source: source.SourceName, Transactions: results, IsSuccess: true, Error: (string?)null, Duration: sw.Elapsed);
                 }
                 catch (Exception ex)
                 {
+                    sw.Stop();
                     _logger.LogError(ex, "Failed to get transactions from source {SourceName}", source.SourceName);
-                    return new List<ExternalTransactionDTO>();
+                    return (Source: source.SourceName, Transactions: (IReadOnlyList<ExternalTransactionDTO>)new List<ExternalTransactionDTO>(), IsSuccess: false, Error: ex.Message, Duration: sw.Elapsed);
                 }
             });
 
-            var externalTransactions = await Task.WhenAll(sourceTasks);
-            var allTransactions = externalTransactions.SelectMany(x => x).ToList();
+            var sourceOutcomes = await Task.WhenAll(sourceTasks);
+
+            var sourceResults = sourceOutcomes.Select(o => new SourceAggregationResult
+            {
+                SourceName = o.Source,
+                TransactionsFound = o.Transactions.Count,
+                IsSuccess = o.IsSuccess,
+                Error = o.Error,
+                Duration = o.Duration
+            }).ToList();
+
+            var allTransactions = sourceOutcomes.SelectMany(o => o.Transactions).ToList();
 
             _logger.LogInformation(
-                "Retrieved {TotalCount} transactions from {SourceCount} sources for customer {CustomerId}",
-                allTransactions.Count,
-                _transactionSources.Count(),
-                customerId);
+                "Retrieved {TotalCount} raw transactions from {SourceCount} sources for customer {CustomerId}",
+                allTransactions.Count, sourceList.Count, customerId);
 
-            // Remove duplicates based on transaction ID
+            // Deduplicate by external ID
             var uniqueTransactions = allTransactions
                 .GroupBy(t => t.Id)
                 .Select(g => g.First())
                 .ToList();
 
-            // Map to domain entities with categorization
-            var domainTransactions = uniqueTransactions
-                .Select(t => MapToDomainTransaction(customerId, t))
-                .ToList();
+            // Map to domain entities then categorize via the shared categorization service
+            var domainTransactions = new List<Transaction>(uniqueTransactions.Count);
 
-            return domainTransactions;
-        }
-
-        private static Transaction MapToDomainTransaction(CustomerId customerId, ExternalTransactionDTO external)
-        {
-            return Transaction.Create(
-                customerId,
-                Money.Create(external.Amount, external.Currency),
-                external.Description,
-                CategorizeTransaction(external),
-                TransactionSource.Create(external.Id, external.Id));
-        }
-
-        private static TransactionCategory CategorizeTransaction(ExternalTransactionDTO external)
-        {
-            // Simple categorization logic based on description and amount
-            var description = external.Description?.ToLower() ?? "";
-            var amount = external.Amount;
-
-            // Income detection
-            if (amount > 0)
-                return TransactionCategory.Income;
-
-            // Expense categorization
-            return description switch
+            foreach (var external in uniqueTransactions)
             {
-                var d when d.Contains("grocery") || d.Contains("supermarket") => TransactionCategory.Groceries,
-                var d when d.Contains("uber") || d.Contains("taxi") || d.Contains("bus") || d.Contains("train") => TransactionCategory.Transportation,
-                var d when d.Contains("electric") || d.Contains("water") || d.Contains("gas") || d.Contains("internet") => TransactionCategory.Utilities,
-                var d when d.Contains("netflix") || d.Contains("spotify") || d.Contains("cinema") || d.Contains("theater") => TransactionCategory.Entertainment,
-                var d when d.Contains("amazon") || d.Contains("mall") || d.Contains("store") => TransactionCategory.Shopping,
-                _ => TransactionCategory.Uncategorized
-            };
-        }
+                var transaction = Transaction.Create(
+                    customerIdVO,
+                    Money.Create(external.Amount, external.Currency),
+                    external.Description,
+                    TransactionCategory.Uncategorized,
+                    TransactionSource.Create(external.Id, external.Id));
 
-        Task<IReadOnlyList<Transaction>> ITransactionAggregator.AggregateCustomerTransactionsAsync(
-            Guid customerId,
-            DateTime? FromDate,
-            DateTime? ToDate,
-            CancellationToken cancellationToken)
-        {
-            throw new NotImplementedException();
+                var category = await _categorizationService.CategorizeTransactionAsync(
+                    transaction, cancellationToken);
+
+                if (category != TransactionCategory.Uncategorized)
+                    transaction.Categorize(category);
+
+                domainTransactions.Add(transaction);
+            }
+
+            return new AggregationResult
+            {
+                Transactions = domainTransactions,
+                SourceResults = sourceResults
+            };
         }
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
@@ -67,11 +68,9 @@ public static class Extensions
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath)
                             && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
                     )
-                    // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
-                    //.AddGrpcClientInstrumentation()
-                    .AddHttpClientInstrumentation();
-                    //.AddEntityFrameworkCoreInstrumentation()
-                    //.AddRedisInstrumentation(); 
+                    .AddHttpClientInstrumentation()
+                    .AddEntityFrameworkCoreInstrumentation()
+                    .AddRedisInstrumentation(); 
             });
 
         builder.AddOpenTelemetryExporters();
@@ -109,20 +108,57 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        // Adding health checks endpoints to applications in non-development environments has security implications.
-        // See https://aka.ms/dotnet/aspire/healthchecks for details before enabling these endpoints in non-development environments.
-        if (app.Environment.IsDevelopment())
+        // /alive — liveness: only the "self" check (no DB/Redis I/O).
+        // Kubernetes restarts the pod if this fails.
+        app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
         {
-            // All health checks must pass for app to be considered ready to accept traffic after starting
-            app.MapHealthChecks(HealthEndpointPath);
+            Predicate = r => r.Tags.Contains("live"),
+            // Return only the status code; no body that could reveal internal details.
+            ResponseWriter = WriteStatusOnlyResponse
+        });
 
-            // Only health checks tagged with the "live" tag must pass for app to be considered alive
-            app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
-            {
-                Predicate = r => r.Tags.Contains("live")
-            });
-        }
+        // /health — readiness: all registered checks (Postgres, Redis, self).
+        // Kubernetes stops routing traffic to the pod if this fails.
+        // In non-Development environments the response body is suppressed so that
+        // check names and exception messages are not exposed externally.
+        app.MapHealthChecks(HealthEndpointPath, new HealthCheckOptions
+        {
+            ResponseWriter = app.Environment.IsDevelopment()
+                ? WriteDetailedResponse
+                : WriteStatusOnlyResponse
+        });
 
         return app;
+    }
+
+    // Writes a plain-text status line and sets the correct HTTP status code.
+    // 200 OK → Healthy | 503 Service Unavailable → Degraded / Unhealthy
+    private static Task WriteStatusOnlyResponse(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "text/plain; charset=utf-8";
+        return context.Response.WriteAsync(report.Status.ToString());
+    }
+
+    // Writes a JSON body with per-check names, statuses, and durations.
+    // Only used in Development where the endpoint is reachable by developers.
+    private static Task WriteDetailedResponse(HttpContext context, HealthReport report)
+    {
+        context.Response.ContentType = "application/json; charset=utf-8";
+
+        var result = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            status = report.Status.ToString(),
+            totalDuration = report.TotalDuration,
+            checks = report.Entries.Select(e => new
+            {
+                name = e.Key,
+                status = e.Value.Status.ToString(),
+                duration = e.Value.Duration,
+                description = e.Value.Description,
+                exception = e.Value.Exception?.Message
+            })
+        });
+
+        return context.Response.WriteAsync(result);
     }
 }

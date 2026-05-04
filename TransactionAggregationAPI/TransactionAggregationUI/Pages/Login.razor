@@ -1,0 +1,63 @@
+@page "/login"
+@layout TransactionAggregationUI.Shared.MainLayout
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Login</PageTitle>
+
+<div class="d-flex justify-content-center align-items-center" style="min-height:100vh; background:#f8fafc;">
+    <div class="auth-card card shadow-sm p-4">
+        <h4 class="mb-4 text-center fw-bold">
+            <i class="bi bi-bank me-2 text-primary"></i>Transaction Aggregation
+        </h4>
+        <h5 class="mb-3">Sign in</h5>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleLogin">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control" @bind-Value="_model.Username" placeholder="you@example.com" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText type="password" class="form-control" @bind-Value="_model.Password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100" disabled="@_loading">
+                @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Sign in
+            </button>
+        </EditForm>
+
+        <hr />
+        <p class="text-center text-muted small mb-0">
+            Don't have an account? <a href="/register">Register</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private readonly LoginRequest _model = new();
+    private bool _loading;
+    private string? _error;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private async Task HandleLogin()
+    {
+        _loading = true;
+        _error = null;
+        var (success, error) = await AuthService.LoginAsync(_model);
+        _loading = false;
+
+        if (success)
+            Nav.NavigateTo(ReturnUrl ?? "/");
+        else
+            _error = error;
+    }
+}

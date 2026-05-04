@@ -25,7 +25,7 @@ namespace TransactionAggregation.Application.Queries.Transaction.GetTransaction
                     .FirstOrDefaultAsync(t => t.Id == transactionId, cancellationToken);
 
                 if (transaction is null)
-                    return Result.Failure<TransactionDto>(Error.NotFound("Transaction.NotFound", "Transaction not found"));
+                    return Result.Failure<TransactionDto>(Error.NotFound("Transaction", request.TransactionId));
 
                 var dto = new TransactionDto(
                     transaction.Id.Value,
@@ -36,9 +36,10 @@ namespace TransactionAggregation.Application.Queries.Transaction.GetTransaction
                     transaction.Description,
                     transaction.Category,
                     transaction.Status,
-                    transaction.Source.Name);
+                    transaction.Source.Name,
+                    transaction.AccountId != null ? transaction.AccountId.Value : null);
 
-                return Result<TransactionDto>.Success(dto);
+                return Result.Success(dto);
             }
             catch (Exception ex)
             {

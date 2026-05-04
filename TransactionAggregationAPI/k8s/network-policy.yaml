@@ -1,0 +1,170 @@
+# ── Network Policies ────────────────────────────────────────────────────────
+# Assumption: CNI plugin supports NetworkPolicy (Calico, Cilium, Flannel with
+# NetworkPolicy, etc.). Rancher k3s ships with Flannel by default, which does
+# NOT enforce NetworkPolicy. Install Calico or switch to Canal/Cilium if you
+# need enforcement.
+# ────────────────────────────────────────────────────────────────────────────
+
+# Allow API → Postgres
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-postgres
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-api
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Also allow migration job
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: db-migrate
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# Allow API → Redis
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-redis
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-api
+      ports:
+        - protocol: TCP
+          port: 6379
+
+---
+# Allow API → Seq (log ingestion)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-seq
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: seq
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-api
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 5341
+
+---
+# Allow UI nginx proxy → API
+# The browser never calls the API directly; the UI nginx pod proxies /api/ to
+# the API service. This policy permits that in-cluster hop.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ui-to-api
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-ui
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow Ingress controller → API
+# ingressClassName is "traefik" in all manifests.
+# k3s default: Traefik runs in kube-system.
+# Custom Helm Traefik install: change the namespace label to "traefik".
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-to-api
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow pgAdmin → Postgres (dev-tools only)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-pgadmin-to-postgres
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: pgadmin
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# Default deny-all egress from postgres and redis
+# (they should never initiate outbound connections)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress-datastores
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: database
+  policyTypes:
+    - Egress
+  egress: []
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress-cache
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: cache
+  policyTypes:
+    - Egress
+  egress: []

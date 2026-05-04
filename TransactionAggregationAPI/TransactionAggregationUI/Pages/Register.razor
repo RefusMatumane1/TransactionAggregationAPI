@@ -1,0 +1,72 @@
+@page "/register"
+@layout TransactionAggregationUI.Shared.MainLayout
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Register</PageTitle>
+
+<div class="d-flex justify-content-center align-items-center" style="min-height:100vh; background:#f8fafc;">
+    <div class="auth-card card shadow-sm p-4">
+        <h4 class="mb-4 text-center fw-bold">
+            <i class="bi bi-bank me-2 text-primary"></i>Transaction Aggregation
+        </h4>
+        <h5 class="mb-3">Create account</h5>
+
+        @if (_error is not null)
+        {
+            <div class="alert alert-danger py-2">@_error</div>
+        }
+        @if (_success)
+        {
+            <div class="alert alert-success py-2">
+                Account created! <a href="/login">Sign in</a>
+            </div>
+        }
+
+        <EditForm Model="_model" OnValidSubmit="HandleRegister">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label class="form-label">Full name</label>
+                <InputText class="form-control" @bind-Value="_model.Name" placeholder="Jane Doe" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Email</label>
+                <InputText class="form-control" @bind-Value="_model.Email" placeholder="you@example.com" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Password</label>
+                <InputText type="password" class="form-control" @bind-Value="_model.Password" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100" disabled="@_loading">
+                @if (_loading) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                Register
+            </button>
+        </EditForm>
+
+        <hr />
+        <p class="text-center text-muted small mb-0">
+            Already have an account? <a href="/login">Sign in</a>
+        </p>
+    </div>
+</div>
+
+@code {
+    private readonly RegisterRequest _model = new();
+    private bool _loading;
+    private bool _success;
+    private string? _error;
+
+    private async Task HandleRegister()
+    {
+        _loading = true;
+        _error = null;
+        _success = false;
+        var (success, error) = await AuthService.RegisterAsync(_model);
+        _loading = false;
+
+        if (success)
+            _success = true;
+        else
+            _error = error;
+    }
+}

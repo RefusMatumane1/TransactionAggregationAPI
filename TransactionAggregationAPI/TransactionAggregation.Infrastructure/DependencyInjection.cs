@@ -1,9 +1,11 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using StackExchange.Redis;
+using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Services;
+using TransactionAggregation.Infrastructure.Authentication;
+using TransactionAggregation.Infrastructure.BackgroundServices;
+using TransactionAggregation.Infrastructure.Providers;
 using TransactionAggregation.Infrastructure.Services;
 
 namespace TransactionAggregation.Infrastructure
@@ -14,44 +16,33 @@ namespace TransactionAggregation.Infrastructure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            // Add HTTP client factory
             services.AddHttpClient();
 
-            // Register transaction sources
-            //services.AddScoped<ITransactionSource, BankATransactionSource>();
-            //services.AddScoped<ITransactionSource, BankBTransactionSource>();
-            //services.AddScoped<ITransactionSource, WalletTransactionSource>();
+            // Register multiple mock transaction sources (satisfies "multiple data sources" requirement)
+            services.AddScoped<ITransactionSource, BogusTransactionSource>();
+            services.AddScoped<ITransactionSource, StaticDataTransactionSource>();
 
             services.AddScoped<ITransactionAggregator, TransactionAggregator>();
 
-            // Add Redis caching
+            // Redis-backed distributed cache
             services.AddDistributedMemoryCache();
-
-            services.AddScoped<ICacheService>(sp =>
-            {
-                var redis = sp.GetRequiredService<IConnectionMultiplexer>();
-                var logger = sp.GetRequiredService<ILogger<RedisCacheService>>();
-                return new RedisCacheService(redis, logger);
-            });
-
             services.AddScoped<ICacheService, RedisCacheService>();
 
-            // Application services (implementations in Application layer)
-            services.AddScoped<IAnalyticsService, AnalyticsService>();
-            services.AddScoped<INotificationService, NotificationService>();
-
-            // Infrastructure services
-          //  services.AddScoped<IMetricsCollector, MetricsCollector>();
-            services.AddScoped<ITransactionValidator, TransactionValidator>();
-            //services.AddScoped<IRuleBasedCategorizationStrategy, RuleBasedCategorizationStrategy>();
-            //services.AddScoped<ITransactionCategorizationStrategy, MLCategorizationService>();
-
-            // Configure options
             services.Configure<NotificationOptions>(
                 configuration.GetSection("NotificationOptions"));
 
             services.Configure<TransactionValidationOptions>(
                 configuration.GetSection("TransactionValidationOptions"));
+
+            // Background sync worker
+            services.Configure<TransactionSyncOptions>(
+                configuration.GetSection(TransactionSyncOptions.SectionName));
+            services.AddHostedService<TransactionSyncBackgroundService>();
+            
+            
+            services.AddScoped<IUserContext, UserContext>();
+            services.AddSingleton<IPasswordHasher, PasswordHasher>();
+            services.AddSingleton<ITokenProvider, TokenProvider>();
 
             return services;
         }

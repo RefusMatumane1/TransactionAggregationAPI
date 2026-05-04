@@ -22,11 +22,13 @@ namespace TransactionAggregation.Persistence
 
         public DbSet<Transaction> Transactions => Set<Transaction>();
         public DbSet<Customer> Customers => Set<Customer>();
+        public DbSet<Account> Accounts => Set<Account>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfiguration(new TransactionConfiguration());
             modelBuilder.ApplyConfiguration(new CustomerConfiguration());
+            modelBuilder.ApplyConfiguration(new AccountConfiguration());
 
             base.OnModelCreating(modelBuilder);
             modelBuilder.Ignore<BaseDomainEvent>();
@@ -40,10 +42,10 @@ namespace TransactionAggregation.Persistence
                 switch (entry.State)
                 {
                     case EntityState.Added:
-                        entry?.Entity.CreatedAt = DateTime.UtcNow;
+                        entry.Entity.CreatedAt = DateTime.UtcNow;
                         break;
                     case EntityState.Modified:
-                        entry?.Entity.UpdatedAt = DateTime.UtcNow;
+                        entry.Entity.UpdatedAt = DateTime.UtcNow;
                         break;
                 }
             }

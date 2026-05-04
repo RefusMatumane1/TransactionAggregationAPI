@@ -6,6 +6,7 @@ namespace TransactionAggregation.Application.Features.Transactions.DTOs
     {
         public Guid Id { get; init; }
         public Guid CustomerId { get; init; }
+        public Guid? AccountId { get; init; }
         public decimal Amount { get; init; }
         public string Currency { get; init; } = null!;
         public string FormattedAmount => $"{Currency} {Amount:N2}";

@@ -14,5 +14,6 @@ namespace TransactionAggregation.Application.Common.DTOs
         string Description,
         TransactionCategory Category,
         TransactionStatus Status,
-        string SourceSystem);
+        string SourceSystem,
+        Guid? AccountId = null);
 }

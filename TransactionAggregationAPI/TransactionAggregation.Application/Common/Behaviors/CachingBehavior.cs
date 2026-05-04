@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using TransactionAggregation.Application.Common.Interfaces;
+using TransactionAggregation.Application.Common.Models;
 
 namespace TransactionAggregation.Application.Common.Behaviors
 {
@@ -39,6 +40,14 @@ namespace TransactionAggregation.Application.Common.Behaviors
 
             _logger.LogInformation("Cache miss for key: {CacheKey}", cacheKey);
             var response = await next();
+
+            // Never cache failure results:
+            // 1. Result<T>.Value throws InvalidOperationException when IsSuccess == false,
+            //    so JSON serialisation would crash immediately.
+            // 2. Caching a failure would serve stale error responses to future requests
+            //    that may succeed (e.g. after the underlying data is created).
+            if (response is Result { IsFailure: true })
+                return response;
 
             await _cacheService.SetAsync(
                 cacheKey,

@@ -50,15 +50,15 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     request.PageSize);
 
                 logger.LogInformation("Successfully retrieved {Count} customers for Page {Page} with PageSize {PageSize}",
-                    customerDtos.Count(), request.Page, request.PageSize);
+                    customerDtos?.Count(), request.Page, request.PageSize);
 
-                return Result<PagedResult<CustomerDto>>.Success(result);
+                return Result.Success(result);
             }
             catch (Exception ex)
             {
                 logger.LogError(ex, "An error occurred while handling GetAllCustomersQuery: Page {Page}, PageSize {PageSize}, SearchTerm {SearchTerm}",
                     request.Page, request.PageSize, request.SearchTerm);
-                return Result.Failure<PagedResult<CustomerDto>>(Error.Failure("500","An error occurred while retrieving customers."));
+                return Result.Failure<PagedResult<CustomerDto>>(Error.Failure("Customer.RetrievalFailed", "An error occurred while retrieving customers."));
             }
         }
     }

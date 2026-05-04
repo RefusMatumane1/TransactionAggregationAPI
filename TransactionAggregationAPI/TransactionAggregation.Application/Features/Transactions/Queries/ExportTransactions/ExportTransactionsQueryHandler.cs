@@ -34,10 +34,16 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
 
                 // Apply filters
                 if (request.FromDate.HasValue)
-                    query = query.Where(t => t.Date >= request.FromDate.Value);
+                {
+                    var from = DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc);
+                    query = query.Where(t => t.Date >= from);
+                }
 
                 if (request.ToDate.HasValue)
-                    query = query.Where(t => t.Date <= request.ToDate.Value);
+                {
+                    var to = DateTime.SpecifyKind(request.ToDate.Value, DateTimeKind.Utc);
+                    query = query.Where(t => t.Date <= to);
+                }
 
                 if (request.Category.HasValue)
                     query = query.Where(t => t.Category == request.Category.Value);
@@ -76,7 +82,7 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
             // Data
             foreach (var t in transactions)
             {
-                csv.AppendLine($"{t.CreatedAt:yyyy-MM-dd HH:mm:ss}," +
+                csv.AppendLine($"{t.Date:yyyy-MM-dd HH:mm:ss}," +
                               $"{EscapeCsvField(t.Description)}," +
                               $"{t.Amount.Amount}," +
                               $"{t.Amount.Currency}," +

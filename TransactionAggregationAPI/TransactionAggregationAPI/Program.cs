@@ -1,22 +1,37 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
-using System;
+using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
-using TransactionAggregation.API.Endpoints;
+using StackExchange.Redis;
 using TransactionAggregation.Application;
 using TransactionAggregation.Infrastructure;
 using TransactionAggregation.Persistence;
+using TransactionAggregationAPI;
 using TransactionAggregationAPI.Endpoints;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
+using TransactionAggregationAPI.RateLimiting;
 
 try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog();
+    builder.Host.UseSerilog((ctx, lc) =>
+    {
+        lc.ReadFrom.Configuration(ctx.Configuration)
+          .Enrich.FromLogContext();
+
+        // Aspire (and docker-compose) inject the Seq server URL as ConnectionStrings:seq.
+        // WriteTo.Seq cannot be expressed as a static appsettings entry because the URL
+        // is dynamic, so we wire it in code.
+        var seqUrl = ctx.Configuration.GetConnectionString("seq");
+        if (!string.IsNullOrWhiteSpace(seqUrl))
+            lc.WriteTo.Seq(seqUrl);
+    });
 
     builder.AddServiceDefaults();
 
@@ -25,7 +40,7 @@ try
     {
         options.UseNpgsql(connectionString, npgsqlOptions =>
         {
-            npgsqlOptions.MigrationsAssembly("TransactionAggregation.Infrastructure");
+            npgsqlOptions.MigrationsAssembly("TransactionAggregation.Persistence");
             npgsqlOptions.EnableRetryOnFailure(
                 maxRetryCount: 5,
                 maxRetryDelay: TimeSpan.FromSeconds(30),
@@ -38,22 +53,46 @@ try
             options.EnableSensitiveDataLogging();
         }
     });
+    
+    builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
 
     builder.AddRedisClient("redis");
 
-    builder.AddSeqEndpoint(connectionName: "seq");
-
-    builder.Services.AddApplication();
+    builder.Services.AddApplication(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddPersistence();
 
+    builder.Services
+        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = builder.Configuration["Jwt:Issuer"],
+                ValidAudience = builder.Configuration["Jwt:Audience"],
+                IssuerSigningKey = new SymmetricSecurityKey(
+                    Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!))
+            };
+        });
+    
+    builder.Services.AddAuthorization();
+
     builder.Services.AddResponseCaching();
+    builder.Services.AddHttpContextAccessor();
 
     builder.Services.AddApiVersioning(options =>
     {
         options.AssumeDefaultVersionWhenUnspecified = true;
         options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
         options.ReportApiVersions = true;
+    }).AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
     });
 
     builder.Services.AddControllers();
@@ -62,27 +101,50 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddProblemDetails();
 
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("DevCors", policy =>
+            policy.WithOrigins("http://localhost:7200", "https://localhost:7201")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod());
+    });
+
+    // Named policy — applied to all endpoint groups via .RequireRateLimiting("FixedWindow").
+    // Limit: 10 requests/min per authenticated user or IP address.
+    // Registered as singleton: IConnectionMultiplexer is injected once, reused per request.
+    builder.Services.AddSingleton<RedisFixedWindowPolicy>();
     builder.Services.AddRateLimiter(options =>
     {
-        options.AddFixedWindowLimiter("FixedWindow", opt =>
-        {
-            opt.PermitLimit = 10;
-            opt.Window = TimeSpan.FromMinutes(1);
-            opt.QueueLimit = 0;
-            opt.AutoReplenishment = true;
-        });
-
-        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-            httpContext => RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-                factory: partition => new FixedWindowRateLimiterOptions
-                {
-                    AutoReplenishment = true,
-                    PermitLimit = 100,
-                    QueueLimit = 0,
-                    Window = TimeSpan.FromMinutes(1)
-                }));
+        options.AddPolicy<string, RedisFixedWindowPolicy>("FixedWindow");
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
+
+    // Global limiter — applied before named policies; 100 requests/min per client.
+    // Configured via AddOptions so IConnectionMultiplexer is resolved from DI
+    // without a second BuildServiceProvider() call inside the delegate.
+    builder.Services.AddOptions<RateLimiterOptions>()
+        .Configure<IConnectionMultiplexer>((options, redis) =>
+        {
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
+                context =>
+                {
+                    var key = context.User.Identity?.Name
+                        ?? context.Connection.RemoteIpAddress?.ToString()
+                        ?? "anonymous";
+
+                    return RateLimitPartition.Get<string>(
+                        key,
+                        partitionKey => new RedisFixedWindowRateLimiter(
+                            redis,
+                            $"ratelimit:global:{partitionKey}",
+                            new RedisRateLimiterOptions
+                            {
+                                PermitLimit = 100,
+                                Window = TimeSpan.FromMinutes(1),
+                                AllowRequestOnRedisFailure = true
+                            }));
+                });
+        });
 
     var app = builder.Build();
 
@@ -93,6 +155,15 @@ try
         app.MapOpenApi();
         app.MapScalarApiReference();
     }
+    
+    app.UseHttpsRedirection();
+
+    app.UseBlazorFrameworkFiles();
+    app.UseStaticFiles();
+
+    app.UseResponseCaching();
+
+    app.UseCors("DevCors");
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
 
@@ -102,16 +173,29 @@ try
 
     app.UseExceptionHandler();
 
-    app.UseHttpsRedirection();
-    app.UseRateLimiter();
-    app.UseExceptionHandler(_ => { });
+    app.UseAuthentication();
     app.UseAuthorization();
+
+    app.UseRateLimiter();
 
     app.MapCustomerEndpoints();
     app.MapTransactionEndpoints();
+    app.MapAccountEndpoints();
 
+    app.MapFallbackToFile("index.html");
 
+    // --migrate-only: apply pending migrations and exit with code 0.
+    // Used exclusively by the Kubernetes pre-deploy Job (k8s/api/migration-job.yaml)
+    // so that exactly one process runs migrations before any API replica starts.
+    /*if (args.Contains("--migrate-only"))
+    {
+        await app.ApplyMigrationsAsync();
+        return;
+    }*/
+    
     await app.ApplyMigrationsAsync();
+
+    await SeedData.SeedDatabaseAsync(app.Services);
     await app.RunAsync();
 }
 catch (Exception ex)
@@ -123,3 +207,6 @@ finally
 {
     Log.CloseAndFlush();
 }
+
+// Expose Program to the integration test assembly
+public partial class Program { }

@@ -23,7 +23,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
                 if (customer is null)
-                    return Result.Failure<CustomerDto>(Error.NotFound("Customer.NotFound", "Customer not found"));
+                    return Result.Failure<CustomerDto>(Error.NotFound("Customer", request.CustomerId));
 
                 var dto = new CustomerDto(
                     customer.Id.Value,
@@ -33,7 +33,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     customer.UpdatedAt);
 
                 logger.LogInformation("Successfully retrieved Customer with Id: {CustomerId}", customer.Id.Value);
-                return Result<CustomerDto>.Success(dto);
+                return Result.Success(dto);
             }
             catch (Exception ex)
             {

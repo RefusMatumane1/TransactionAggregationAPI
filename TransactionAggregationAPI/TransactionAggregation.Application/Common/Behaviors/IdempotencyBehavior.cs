@@ -8,7 +8,8 @@ using System.Text.Json;
 
 namespace TransactionAggregation.Application.Common.Behaviors
 {
-    public class IdempotencyBehavior<TRequest, TResponse>(IDistributedCache _cache, ILogger<IdempotencyBehavior<TRequest, TResponse>> _logger)
+    public class IdempotencyBehavior<TRequest, TResponse>(IDistributedCache _cache,
+        ILogger<IdempotencyBehavior<TRequest, TResponse>> _logger)
         : IPipelineBehavior<TRequest, TResponse>
         where TRequest : IRequest<TResponse>
         where TResponse : class
@@ -21,7 +22,11 @@ namespace TransactionAggregation.Application.Common.Behaviors
             if (request is not IIdempotentRequest idempotentRequest)
                 return await next();
 
-            var cacheKey = $"idempotent:{idempotentRequest.IdempotencyKey}";
+            var rawKey = idempotentRequest.IdempotencyKey;
+            if (string.IsNullOrEmpty(rawKey))
+                return await next();
+
+            var cacheKey = $"idempotent:{rawKey}";
 
             var cachedResult = await _cache.GetStringAsync(cacheKey, cancellationToken);
             if (cachedResult != null)
@@ -41,7 +46,7 @@ namespace TransactionAggregation.Application.Common.Behaviors
                 serialized,
                 new DistributedCacheEntryOptions
                 {
-                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24)
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
                 },
                 cancellationToken);
 
@@ -51,6 +56,6 @@ namespace TransactionAggregation.Application.Common.Behaviors
 
     public interface IIdempotentRequest
     {
-        string IdempotencyKey { get; }
+        string? IdempotencyKey { get; }
     }
 }

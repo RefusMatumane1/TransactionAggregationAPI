@@ -1,0 +1,29 @@
+apiVersion: v2
+name: transaction-aggregation
+description: Transaction Aggregation API — Kubernetes Helm chart
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+keywords:
+  - api
+  - transactions
+  - finance
+
+maintainers:
+  - name: platform-team
+    email: platform@yourcompany.com
+
+dependencies:
+  # PostgreSQL — Bitnami chart for production-grade HA (optional)
+  # Uncomment when you want a managed PostgreSQL instead of the raw StatefulSet.
+  # - name: postgresql
+  #   version: "15.x.x"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  #   condition: postgresql.enabled
+
+  # Redis — Bitnami chart (optional)
+  # - name: redis
+  #   version: "19.x.x"
+  #   repository: "https://charts.bitnami.com/bitnami"
+  #   condition: redis.enabled

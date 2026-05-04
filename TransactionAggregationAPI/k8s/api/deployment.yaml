@@ -1,0 +1,180 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transaction-api
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: transaction-aggregation
+    app.kubernetes.io/version: "1.0.0"
+  annotations:
+    # Triggers a rolling restart when the ConfigMap or Secret content changes
+    # if you use a tool like Reloader (stakater/Reloader).
+    configmap.reloader.stakater.com/reload: "transaction-api-config"
+    secret.reloader.stakater.com/reload: "transaction-api-secrets"
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-api
+
+  # ── Zero-downtime rolling update ────────────────────────────────────────
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1        # Allow 1 extra pod during update
+      maxUnavailable: 0  # Never take a pod down before a new one is ready
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: transaction-api
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: transaction-aggregation
+        app.kubernetes.io/version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+
+    spec:
+      # ── Security context ──────────────────────────────────────────────
+      securityContext:
+        runAsUser: 1654   # Matches APP_UID in the Dockerfile
+        runAsGroup: 1654
+        fsGroup: 1654
+        runAsNonRoot: true
+
+      # ── Graceful shutdown ─────────────────────────────────────────────
+      terminationGracePeriodSeconds: 60
+
+      # ── Spread replicas across nodes to avoid single-node failure ─────
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-api
+
+      # Migrations are applied by the dedicated Job in migration-job.yaml
+      # (Helm pre-install/pre-upgrade hook) before this Deployment rolls out.
+      # No init container is needed here — running migrations in an init container
+      # on every pod would recreate the same concurrent-migration race condition.
+
+      containers:
+        - name: transaction-api
+          # Replace with your actual image from a registry.
+          # Build with: docker build -t <registry>/transaction-aggregation-api:1.0.0 .
+          image: transaction-aggregation-api:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # ── Environment: non-sensitive from ConfigMap ──────────────────
+          envFrom:
+            - configMapRef:
+                name: transaction-api-config
+
+          # ── Environment: sensitive from Secret + computed values ───────
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: postgres-password
+
+            # Build the full Npgsql connection string from parts.
+            # This avoids storing the whole string (with password) in the ConfigMap.
+            - name: ConnectionStrings__transactiondb
+              value: "Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+
+            # Redis connection string comes from ConfigMap key REDIS_CONNECTION_STRING.
+            # ASP.NET Core reads ConnectionStrings__redis, so map it explicitly:
+            - name: ConnectionStrings__redis
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: REDIS_CONNECTION_STRING
+
+            # Seq connection string (consumed by Program.cs → ConnectionStrings:seq)
+            - name: ConnectionStrings__seq
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: SEQ_URL
+
+            - name: Jwt__Secret
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: jwt-secret
+
+            - name: Jwt__Issuer
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: jwt-issuer
+
+            - name: Jwt__Audience
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: jwt-audience
+
+            - name: Jwt__ExpirationInMinutes
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: jwt-expiration-minutes
+
+          # ── Resource limits ────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+
+          # ── Liveness probe ─────────────────────────────────────────────
+          # /alive only checks the "self" health-check tag — fast, no DB I/O.
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ── Readiness probe ────────────────────────────────────────────
+          # /health checks Postgres + Redis + self. Pod only receives traffic
+          # once all dependencies are reachable.
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ── Startup probe ──────────────────────────────────────────────
+          # Gives the pod up to 3 minutes (18 × 10 s) to complete startup
+          # before liveness kicks in.
+          startupProbe:
+            httpGet:
+              path: /alive
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 18

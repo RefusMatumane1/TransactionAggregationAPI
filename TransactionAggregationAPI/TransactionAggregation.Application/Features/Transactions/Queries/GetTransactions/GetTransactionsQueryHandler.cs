@@ -81,10 +81,16 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTr
                 query = query.Where(t => t.Status == request.Status.Value);
 
             if (request.FromDate.HasValue)
-                query = query.Where(t => t.CreatedAt >= request.FromDate.Value);
+            {
+                var from = DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc);
+                query = query.Where(t => t.Date >= from);
+            }
 
             if (request.ToDate.HasValue)
-                query = query.Where(t => t.CreatedAt <= request.ToDate.Value);
+            {
+                var to = DateTime.SpecifyKind(request.ToDate.Value, DateTimeKind.Utc);
+                query = query.Where(t => t.Date <= to);
+            }
 
             if (request.MinAmount.HasValue)
                 query = query.Where(t => Math.Abs(t.Amount.Amount) >= request.MinAmount.Value);
@@ -123,8 +129,8 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTr
                     ? query.OrderByDescending(t => t.Amount.Amount)
                     : query.OrderBy(t => t.Amount.Amount),
                 "date" => request.SortDescending
-                    ? query.OrderByDescending(t => t.CreatedAt)
-                    : query.OrderBy(t => t.CreatedAt),
+                    ? query.OrderByDescending(t => t.Date)
+                    : query.OrderBy(t => t.Date),
                 "category" => request.SortDescending
                     ? query.OrderByDescending(t => t.Category)
                     : query.OrderBy(t => t.Category),
@@ -135,8 +141,8 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTr
                     ? query.OrderByDescending(t => t.Description)
                     : query.OrderBy(t => t.Description),
                 _ => request.SortDescending
-                    ? query.OrderByDescending(t => t.CreatedAt)
-                    : query.OrderBy(t => t.CreatedAt)
+                    ? query.OrderByDescending(t => t.Date)
+                    : query.OrderBy(t => t.Date)
             };
         }
     }

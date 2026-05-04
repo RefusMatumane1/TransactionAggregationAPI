@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: transaction-api
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: api.transaction.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: transaction-api
+                port:
+                  name: http
+
+---
+# Seq UI — dev/staging only
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: seq-ui
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: seq
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: seq.transaction.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: seq
+                port:
+                  name: ui

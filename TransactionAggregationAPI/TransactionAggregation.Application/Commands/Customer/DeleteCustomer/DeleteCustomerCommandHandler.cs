@@ -25,7 +25,7 @@ namespace TransactionAggregation.Application.Commands.Customer.DeleteCustomer
                     .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
                 if (customer is null)
-                    return Result.Failure(Error.NotFound("Customer.NotFound", "Customer not found"));
+                    return Result.Failure(Error.NotFound("Customer", request.CustomerId));
 
                 if (customer.Transactions.Any())
                     return Result.Failure(Error.Validation("Cannot delete customer with existing transactions"));

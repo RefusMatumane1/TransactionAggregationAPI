@@ -1,0 +1,70 @@
+# ── EF Core Migration Job ──────────────────────────────────────────────────
+# Run BEFORE deploying the API Deployment to prevent the race condition where
+# multiple API pods all call ApplyMigrationsAsync() on startup simultaneously.
+#
+# Apply workflow:
+#   1. kubectl apply -f k8s/api/migration-job.yaml -n transaction-aggregation
+#   2. kubectl wait --for=condition=complete job/db-migrate -n transaction-aggregation --timeout=120s
+#   3. kubectl apply -f k8s/api/deployment.yaml -n transaction-aggregation
+#
+# In CI/CD (e.g. GitHub Actions / Rancher Fleet):
+#   helm upgrade ... (renders the Job as a pre-install hook — see annotation below)
+# ──────────────────────────────────────────────────────────────────────────
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrate
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: db-migrate
+    app.kubernetes.io/component: migration
+    app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    # Helm pre-install/pre-upgrade hook — runs this Job before any other
+    # resources are applied.
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 300   # Fail the job after 5 minutes
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: db-migrate
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+
+      securityContext:
+        runAsUser: 1654
+        runAsGroup: 1654
+        runAsNonRoot: true
+
+      containers:
+        - name: migrate
+          image: transaction-aggregation-api:latest
+          imagePullPolicy: IfNotPresent
+
+          # --migrate-only is handled in Program.cs: the app applies all pending
+          # EF Core migrations and exits with code 0 without starting the web server.
+          command: ["dotnet", "TransactionAggregationAPI.dll", "--migrate-only"]
+
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: postgres-password
+            - name: ConnectionStrings__transactiondb
+              value: "Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

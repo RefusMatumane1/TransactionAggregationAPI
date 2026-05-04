@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-aggregation
+    app.kubernetes.io/managed-by: kubectl

@@ -1,0 +1,44 @@
+@inherits LayoutComponentBase
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <div class="app-wrapper">
+            <nav class="sidebar d-flex flex-column">
+                <div class="brand">
+                    <i class="bi bi-bank me-2"></i>Transaction Aggregation
+                </div>
+                <NavMenu />
+                <div class="mt-auto px-3 pb-3">
+                    <button class="btn btn-sm btn-outline-secondary w-100" @onclick="Logout">
+                        <i class="bi bi-box-arrow-left me-1"></i>Logout
+                    </button>
+                </div>
+            </nav>
+            <div class="main-content d-flex flex-column">
+                <div class="topbar">
+                    <span class="fw-semibold text-dark">Transaction Aggregation</span>
+                    <span class="text-muted small">
+                        <i class="bi bi-person-circle me-1"></i>
+                        @context.User.Identity?.Name
+                    </span>
+                </div>
+                <div class="page-body flex-grow-1">
+                    @Body
+                </div>
+            </div>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @Body
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private async Task Logout()
+    {
+        await AuthService.LogoutAsync();
+        Nav.NavigateTo("/login", forceLoad: true);
+    }
+}

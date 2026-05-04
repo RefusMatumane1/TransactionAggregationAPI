@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: seq
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: seq
+    app.kubernetes.io/component: logging
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  replicas: 1
+  serviceName: seq
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: seq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: seq
+        app.kubernetes.io/component: logging
+        app.kubernetes.io/part-of: transaction-aggregation
+    spec:
+      # Seq runs as root by default (datalust/seq); we cannot override the user
+      # without a custom entry point. Accept this for a local dev/staging cluster.
+      # For production, evaluate the Seq cloud offering or a production-grade log
+      # aggregation stack (Loki + Grafana).
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: seq
+          image: datalust/seq:latest
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: ACCEPT_EULA
+              value: "Y"
+
+          ports:
+            - name: ui
+              containerPort: 80
+              protocol: TCP
+            - name: ingestion
+              containerPort: 5341
+              protocol: TCP
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: seq-data
+              mountPath: /data
+
+  volumeClaimTemplates:
+    - metadata:
+        name: seq-data
+        labels:
+          app.kubernetes.io/name: seq
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: "local-path"
+        resources:
+          requests:
+            storage: 5Gi

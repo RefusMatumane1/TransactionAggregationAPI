@@ -23,7 +23,7 @@ namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
                     .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
                 if (customer is null)
-                    return Result.Failure(Error.NotFound("Customer.NotFound", "Customer not found"));
+                    return Result.Failure(Error.NotFound("Customer", request.CustomerId));
 
                 var emailExists = await _context.Customers
                     .AnyAsync(c => c.Email == request.Email && c.Id != customerId, cancellationToken);
@@ -41,7 +41,7 @@ namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
             catch (Exception ex)
             {
                 logger.LogError(ex, "An error occurred while updating customer with ID {CustomerId}", request.CustomerId);
-                return Result.Failure(Error.Failure("500","An error occurred while updating the customer"));
+                return Result.Failure(Error.Failure("Customer.UpdateFailed", "An error occurred while updating the customer"));
             }
         }
     }

@@ -1,6 +1,47 @@
 services:
+  api:
+    build:
+      context: .
+      dockerfile: TransactionAggregationAPI/Dockerfile
+    container_name: transactionaggregation-api-1
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=postgres
+      - ConnectionStrings__redis=redis:6379
+      - ConnectionStrings__seq=http://seq:80
+    ports:
+      - "5001:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seq:
+        condition: service_healthy
+    networks:
+      - transaction-network
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: TransactionAggregationUI/Dockerfile
+    container_name: transactionaggregation-ui-1
+    environment:
+      # nginx proxies /api/ to this upstream — must be reachable from inside the container network
+      - API_UPSTREAM=http://api:8080
+    ports:
+      - "7200:80"
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - transaction-network
+    restart: unless-stopped
+
   postgres:
-    image: postgres:16-alpine
+    image: postgres:latest
     container_name: transactionaggregation-postgres-1
     environment:
       POSTGRES_USER: postgres
@@ -19,8 +60,9 @@ services:
       - transaction-network
 
   redis:
-    image: redis:7-alpine
+    image: redis:latest
     container_name: transactionaggregation-redis-1
+    command: redis-server --appendonly yes --save 60 1
     ports:
       - "6379:6379"
     volumes:
@@ -35,6 +77,7 @@ services:
 
   seq:
     image: datalust/seq:latest
+    platform: linux/amd64
     container_name: transactionaggregation-seq-1
     environment:
       ACCEPT_EULA: "Y"
@@ -42,11 +85,17 @@ services:
       - "5341:80"
     volumes:
       - seq_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     networks:
       - transaction-network
 
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.14
     container_name: transactionaggregation-pgadmin-1
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@transaction.com
@@ -54,7 +103,8 @@ services:
     ports:
       - "5050:80"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks:
       - transaction-network
 
@@ -64,9 +114,10 @@ services:
     environment:
       REDIS_HOSTS: redis:6379
     ports:
-      - "8081:8081"
+      - "8082:8081"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     networks:
       - transaction-network
 

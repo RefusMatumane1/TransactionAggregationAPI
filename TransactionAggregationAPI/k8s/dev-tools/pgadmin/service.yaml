@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: pgadmin
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: pgadmin
+    app.kubernetes.io/component: dev-tool
+    app.kubernetes.io/part-of: transaction-aggregation
+    environment: dev
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: pgadmin
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+# ── Optional: expose pgAdmin outside the cluster during local development ─
+# For Rancher Desktop, use a NodePort or port-forward:
+#   kubectl port-forward svc/pgadmin 5050:80 -n transaction-aggregation
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pgadmin
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: pgadmin
+    environment: dev
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: pgadmin.transaction.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pgadmin
+                port:
+                  name: http

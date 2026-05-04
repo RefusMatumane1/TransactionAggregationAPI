@@ -1,0 +1,55 @@
+# ── DEV / STAGING ONLY ────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-commander
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: redis-commander
+    app.kubernetes.io/component: dev-tool
+    app.kubernetes.io/part-of: transaction-aggregation
+    environment: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-commander
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-commander
+        app.kubernetes.io/component: dev-tool
+        app.kubernetes.io/part-of: transaction-aggregation
+        environment: dev
+    spec:
+      containers:
+        - name: redis-commander
+          image: rediscommander/redis-commander:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8081
+          env:
+            - name: REDIS_HOSTS
+              value: "local:redis:6379"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8081
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3

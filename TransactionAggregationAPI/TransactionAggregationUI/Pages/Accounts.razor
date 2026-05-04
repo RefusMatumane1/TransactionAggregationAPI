@@ -1,0 +1,168 @@
+@page "/accounts"
+@attribute [Authorize]
+@inject AuthService AuthService
+@inject AccountService AccountService
+
+<PageTitle>Accounts</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Accounts</h4>
+    <button class="btn btn-primary btn-sm" @onclick="OpenCreateModal">
+        <i class="bi bi-plus-lg me-1"></i>New Account
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else if (_accounts.Count == 0)
+{
+    <div class="alert alert-info">No accounts found. Create one to get started.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var acc in _accounts)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100 @(acc.IsActive ? "" : "opacity-50")">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">@acc.AccountName</h6>
+                            <span class="badge bg-secondary">@acc.AccountType</span>
+                        </div>
+                        <p class="text-muted small mb-1">@acc.AccountNumber</p>
+                        <p class="text-muted small mb-2">@acc.Currency</p>
+                        <div class="fs-5 fw-bold mb-2">@acc.Balance.ToString("C", new System.Globalization.CultureInfo("en-ZA"))</div>
+                        
+                        <div class="d-flex gap-2">
+                            <a href="/accounts/@acc.Id/transactions" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-list-ul me-1"></i>Transactions
+                            </a>
+                            @if (acc.IsActive)
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => DeactivateAccount(acc.Id)">
+                                    Deactivate
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary align-self-center">Inactive</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_showCreateModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create Account</h5>
+                    <button type="button" class="btn-close" @onclick="CloseModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_modalError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_modalError</div>
+                    }
+                    <EditForm Model="_createModel" OnValidSubmit="HandleCreate">
+                        <DataAnnotationsValidator />
+                        <div class="mb-3">
+                            <label class="form-label">Account Number</label>
+                            <InputText class="form-control" @bind-Value="_createModel.AccountNumber" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Account Name</label>
+                            <InputText class="form-control" @bind-Value="_createModel.AccountName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Account Type</label>
+                            <InputSelect class="form-select" @bind-Value="_createModel.AccountType">
+                                @foreach (var t in Enum.GetValues<AccountType>())
+                                {
+                                    <option value="@t">@t</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Currency</label>
+                            <InputText class="form-control" @bind-Value="_createModel.Currency" />
+                        </div>
+                        <div class="d-flex gap-2 justify-content-end">
+                            <button type="button" class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                            <button type="submit" class="btn btn-primary" disabled="@_creating">
+                                @if (_creating) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                                Create
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AccountModel> _accounts = [];
+    private bool _loading = true;
+    private bool _showCreateModal;
+    private bool _creating;
+    private string? _modalError;
+    private CreateAccountModel _createModel = new();
+    private Guid _customerId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userIdStr = AuthService.GetCurrentUserId();
+        if (Guid.TryParse(userIdStr, out _customerId))
+            await LoadAccounts();
+        _loading = false;
+    }
+
+    private async Task LoadAccounts()
+    {
+        _accounts = await AccountService.GetAccountsAsync(_customerId);
+    }
+
+    private void OpenCreateModal()
+    {
+        _createModel = new CreateAccountModel();
+        _modalError = null;
+        _showCreateModal = true;
+    }
+
+    private void CloseModal() => _showCreateModal = false;
+
+    private async Task HandleCreate()
+    {
+        _creating = true;
+        _modalError = null;
+        var (success, error) = await AccountService.CreateAccountAsync(_customerId, _createModel);
+        _creating = false;
+        if (success)
+        {
+            _showCreateModal = false;
+            await LoadAccounts();
+        }
+        else
+        {
+            _modalError = error;
+        }
+    }
+
+    private async Task DeactivateAccount(Guid accountId)
+    {
+        await AccountService.DeactivateAccountAsync(_customerId, accountId);
+        await LoadAccounts();
+    }
+}

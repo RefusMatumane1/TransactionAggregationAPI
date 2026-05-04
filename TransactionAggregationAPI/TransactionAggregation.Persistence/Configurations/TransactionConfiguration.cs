@@ -12,8 +12,7 @@ namespace TransactionAggregation.Persistence.Configurations
         public void Configure(EntityTypeBuilder<Transaction> builder)
         {
             builder.ToTable("Transactions");
-
-            // ID
+            
             builder.HasKey(t => t.Id);
             builder.Property(t => t.Id)
                 .HasConversion(
@@ -27,7 +26,15 @@ namespace TransactionAggregation.Persistence.Configurations
                     value => CustomerId.CreateFrom(value))
                 .IsRequired();
 
-     
+            builder.Property(t => t.AccountId)
+                .HasConversion(
+                    id => id != null ? (Guid?)id.Value : null,
+                    value => value.HasValue ? AccountId.CreateFrom(value.Value) : null)
+                .HasColumnName("AccountId");
+
+            builder.HasIndex(t => t.AccountId)
+                .HasDatabaseName("IX_Transactions_AccountId");
+
             builder.OwnsOne(t => t.Amount, money =>
             {
                 money.Property(m => m.Amount)
@@ -66,7 +73,6 @@ namespace TransactionAggregation.Persistence.Configurations
                     .HasColumnName("SourceLastSyncDate");
 
                 source.HasIndex(s => s.ExternalId)
-                    .IsUnique()
                     .HasDatabaseName("IX_Transactions_SourceExternalId");
             });
 

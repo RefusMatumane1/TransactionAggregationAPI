@@ -1,8 +1,6 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Text;
+using TransactionAggregation.Application.Abstractions;
 using TransactionAggregation.Application.Common.Interfaces;
 
 namespace TransactionAggregation.Application.Common.Behaviors
@@ -28,7 +26,7 @@ namespace TransactionAggregation.Application.Common.Behaviors
             CancellationToken cancellationToken)
         {
             // Only handle commands that modify data
-            if (request is not ICommand)
+            if (request is not ICommandBase)
                 return await next();
 
             try
@@ -52,7 +50,4 @@ namespace TransactionAggregation.Application.Common.Behaviors
         }
     }
 
-    // Marker interfaces
-    public interface ICommand { }
-    public interface IQuery { }
 }

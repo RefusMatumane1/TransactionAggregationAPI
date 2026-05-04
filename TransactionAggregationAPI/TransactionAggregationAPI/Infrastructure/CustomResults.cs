@@ -55,6 +55,7 @@ namespace TransactionAggregationAPI.Infrastructure
                     ErrorType.Validation => StatusCodes.Status400BadRequest,
                     ErrorType.NotFound => StatusCodes.Status404NotFound,
                     ErrorType.Conflict => StatusCodes.Status409Conflict,
+                    ErrorType.Problem => StatusCodes.Status422UnprocessableEntity,
                     _ => StatusCodes.Status500InternalServerError
                 };
 

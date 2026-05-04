@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: transaction-ui
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-ui
+    app.kubernetes.io/component: ui
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: ui.transaction.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: transaction-ui
+                port:
+                  name: http

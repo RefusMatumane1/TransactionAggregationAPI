@@ -1,0 +1,27 @@
+# ── Staging overrides ─────────────────────────────────────────────────────
+global:
+  environment: staging
+
+api:
+  replicaCount: 2
+  env:
+    ASPNETCORE_ENVIRONMENT: "Staging"
+  ingress:
+    host: api.staging.transaction.example.com
+    tls: true
+    certIssuer: letsencrypt-staging
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+
+seq:
+  ingress:
+    enabled: true
+    host: seq.staging.transaction.example.com
+
+devTools:
+  pgadmin:
+    enabled: true   # Allowed in staging for debugging
+  redisCommander:
+    enabled: true

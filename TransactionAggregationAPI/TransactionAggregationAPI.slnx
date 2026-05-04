@@ -11,8 +11,10 @@
   <Project Path="TransactionAggregation.Domain/TransactionAggregation.Domain.csproj" Id="69d4d908-2140-4efc-b376-cd669f1b39dd" />
   <Project Path="TransactionAggregation.Infrastructure/TransactionAggregation.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />
   <Project Path="TransactionAggregation.PerformanceTests/TransactionAggregation.PerformanceTests.csproj" Id="2f3e6e62-6274-4703-90e9-a3d41a5af559" />
+  <Project Path="TransactionAggregation.Tests/TransactionAggregation.Tests.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
   <Project Path="TransactionAggregation.Persistence/TransactionAggregation.Persistence.csproj" Id="86965b73-5a62-4911-9d86-b0c182d0f845" />
   <Project Path="TransactionAggregationAPI.AppHost/TransactionAggregationAPI.AppHost.csproj" />
   <Project Path="TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.ServiceDefaults.csproj" />
   <Project Path="TransactionAggregationAPI/TransactionAggregationAPI.csproj" />
+  <Project Path="TransactionAggregationUI/TransactionAggregationUI.csproj" />
 </Solution>

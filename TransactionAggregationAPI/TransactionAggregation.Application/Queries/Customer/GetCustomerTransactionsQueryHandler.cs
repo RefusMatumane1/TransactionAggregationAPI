@@ -9,17 +9,10 @@ using TransactionAggregation.Domain.Common.ValueObjects;
 
 namespace TransactionAggregation.Application.Queries.Customer
 {
-    internal sealed class GetCustomerTransactionsQueryHandler
+    internal sealed class GetCustomerTransactionsQueryHandler(
+        IApplicationDbContext _context, IMapper _mapper)
         : IQueryHandler<GetCustomerTransactionsQuery, PagedResult<TransactionDto>>
     {
-        private readonly IApplicationDbContext _context;
-        private readonly IMapper _mapper;
-
-        public GetCustomerTransactionsQueryHandler(IApplicationDbContext context, IMapper mapper)
-        {
-            _context = context;
-            _mapper = mapper;
-        }
 
         public async Task<Result<PagedResult<TransactionDto>>> Handle(
             GetCustomerTransactionsQuery request,
@@ -48,7 +41,7 @@ namespace TransactionAggregation.Application.Queries.Customer
                 .ProjectToType<TransactionDto>(_mapper.Config)
                 .ToListAsync(cancellationToken);
 
-            return Result<PagedResult<TransactionDto>>.Success(
+            return Result.Success(
                 new PagedResult<TransactionDto>(transactions, totalCount, request.Page, request.PageSize));
         }
     }

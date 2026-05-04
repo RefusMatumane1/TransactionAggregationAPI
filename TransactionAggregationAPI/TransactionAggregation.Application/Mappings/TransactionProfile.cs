@@ -9,8 +9,9 @@ namespace TransactionAggregation.Application.Mappings
         public void Register(TypeAdapterConfig config)
         {
             config.NewConfig<Transaction, TransactionDto>()
-                .Map(dest => dest.Id, src => src.Id)
+                .Map(dest => dest.Id, src => src.Id.Value)
                 .Map(dest => dest.CustomerId, src => src.CustomerId.Value)
+                .Map(dest => dest.AccountId, src => src.AccountId != null ? (Guid?)src.AccountId.Value : null)
                 .Map(dest => dest.Amount, src => src.Amount.Amount)
                 .Map(dest => dest.Currency, src => src.Amount.Currency)
                 .Map(dest => dest.Description, src => src.Description)

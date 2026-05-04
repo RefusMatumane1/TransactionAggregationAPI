@@ -19,7 +19,7 @@ namespace TransactionAggregation.Application.Commands.CategorizeTransaction
                 (t => t.Id == transactionId, cancellationToken);
 
             if (transaction is null)
-                return Result.Failure(Error.NotFound("Transaction.NotFound", "Transaction not found"));
+                return Result.Failure(Error.NotFound("Transaction", request.TransactionId));
 
             transaction.Categorize(request.Category);
             await _context.SaveChangesAsync(cancellationToken);

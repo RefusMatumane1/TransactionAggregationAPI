@@ -7,6 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
 using TransactionAggregation.Application.Common.Behaviors;
 using TransactionAggregation.Application.Common.Interfaces;
+using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Features.Transactions.Queries.GetTransactions;
 using TransactionAggregation.Application.Mappings;
 using TransactionAggregation.Application.Services;
@@ -15,11 +16,14 @@ namespace TransactionAggregation.Application
 {
     public static class DependencyInjection
     {
-        public static IServiceCollection AddApplication(this IServiceCollection services)
+        public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
         {
+            services.Configure<CategorizationOptions>(
+                configuration.GetSection(CategorizationOptions.SectionName));
             services.AddScoped<ITransactionCategorizationService, TransactionCategorizationService>();
             services.AddScoped<IAnalyticsService, AnalyticsService>();
             services.AddScoped<INotificationService, NotificationService>();
+            services.AddScoped<ITransactionValidator, TransactionValidator>();
 
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
@@ -30,7 +34,7 @@ namespace TransactionAggregation.Application
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
-                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
+                //cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             });
 

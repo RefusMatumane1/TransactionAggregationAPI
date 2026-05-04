@@ -1,0 +1,39 @@
+# ── Development overrides ─────────────────────────────────────────────────
+global:
+  environment: dev
+
+api:
+  replicaCount: 1   # Save resources locally
+  image:
+    pullPolicy: Never   # Use locally-built image in Rancher Desktop / k3d
+  env:
+    ASPNETCORE_ENVIRONMENT: "Development"
+  autoscaling:
+    enabled: false   # No HPA in dev
+
+  ingress:
+    host: api.transaction.local
+    tls: false
+
+postgres:
+  storageSize: 2Gi
+
+redis:
+  storageSize: 1Gi
+
+seq:
+  enabled: true
+  storageSize: 1Gi
+  ingress:
+    enabled: true
+    host: seq.transaction.local
+
+devTools:
+  pgadmin:
+    enabled: true
+    ingress:
+      host: pgadmin.transaction.local
+  redisCommander:
+    enabled: true
+    ingress:
+      host: redis-commander.transaction.local

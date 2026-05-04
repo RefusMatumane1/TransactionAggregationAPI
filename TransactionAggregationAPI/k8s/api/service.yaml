@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-api
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    # Expose Prometheus scrape target metadata for kube-prometheus-stack
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: transaction-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP

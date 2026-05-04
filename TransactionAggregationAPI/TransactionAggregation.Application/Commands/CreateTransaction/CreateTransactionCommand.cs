@@ -8,5 +8,6 @@ namespace TransactionAggregation.Application.Commands.CreateTransaction
         string Currency,
         DateTime TransactionDate,
         string Description,
-        string SourceSystem) : ICommand<Guid>;
+        string SourceSystem,
+        Guid? AccountId = null) : ICommand<Guid>;
 }

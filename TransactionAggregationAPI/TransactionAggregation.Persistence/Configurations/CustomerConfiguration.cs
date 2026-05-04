@@ -30,6 +30,10 @@ namespace TransactionAggregation.Persistence.Configurations
                 .HasMaxLength(200)
                 .IsRequired();
 
+            builder.Property(c => c.PasswordHash)
+                .HasMaxLength(500)
+                .IsRequired();
+
             builder.Property(c => c.CreatedAt)
                 .IsRequired();
 
@@ -39,6 +43,11 @@ namespace TransactionAggregation.Persistence.Configurations
                 .WithOne()
                 .HasForeignKey(t => t.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            builder.HasMany(c => c.Accounts)
+                .WithOne()
+                .HasForeignKey("CustomerId")
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

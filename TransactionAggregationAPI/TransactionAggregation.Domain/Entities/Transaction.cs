@@ -14,6 +14,7 @@ namespace TransactionAggregation.Domain.Entities
         private Transaction(
             TransactionId id,
             CustomerId customerId,
+            AccountId? accountId,
             Money amount,
             string description,
             TransactionCategory category,
@@ -22,6 +23,7 @@ namespace TransactionAggregation.Domain.Entities
         {
             Id = id;
             CustomerId = customerId;
+            AccountId = accountId;
             Amount = amount;
             Description = description;
             Category = category;
@@ -34,6 +36,7 @@ namespace TransactionAggregation.Domain.Entities
         // Properties
         public TransactionId Id { get; private set; }
         public CustomerId CustomerId { get; private set; }
+        public AccountId? AccountId { get; private set; }
         public Money Amount { get; private set; }
         public string Description { get; private set; }
         public TransactionCategory Category { get; private set; }
@@ -50,17 +53,19 @@ namespace TransactionAggregation.Domain.Entities
             Money amount,
             string description,
             TransactionCategory category,
-            TransactionSource source)
+            TransactionSource source,
+            AccountId? accountId = null,
+            DateTime? date = null)
         {
-            DateTime date =  DateTime.UtcNow;
             return new Transaction(
                 TransactionId.Create(),
                 customerId,
+                accountId,
                 amount,
                 description,
                 category,
                 source,
-                date);
+                date ?? DateTime.UtcNow);
         }
 
 

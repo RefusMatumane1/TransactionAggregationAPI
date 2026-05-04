@@ -24,8 +24,8 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1        # Allow 1 extra pod during update
-      maxUnavailable: 0  # Never take a pod down before a new one is ready
+      maxSurge: 1 # Allow 1 extra pod during update
+      maxUnavailable: 0 # Never take a pod down before a new one is ready
 
   template:
     metadata:
@@ -42,7 +42,7 @@ spec:
     spec:
       # ── Security context ──────────────────────────────────────────────
       securityContext:
-        runAsUser: 1654   # Matches APP_UID in the Dockerfile
+        runAsUser: 1654 # Matches APP_UID in the Dockerfile
         runAsGroup: 1654
         fsGroup: 1654
         runAsNonRoot: true
@@ -67,8 +67,8 @@ spec:
       containers:
         - name: transaction-api
           # Replace with your actual image from a registry.
-          # Build with: docker build -t <registry>/transaction-aggregation-api:1.0.0 .
-          image: transaction-aggregation-api:latest
+          # Build with: docker build -t <registry>/transactionaggregationapi:1.0.0 .
+          image: transactionaggregationapi:latest
           imagePullPolicy: IfNotPresent
 
           ports:

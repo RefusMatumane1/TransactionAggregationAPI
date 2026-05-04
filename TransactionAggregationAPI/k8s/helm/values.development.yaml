@@ -7,7 +7,7 @@ api:
   image:
     pullPolicy: Never # Use locally-built image in Rancher Desktop / k3d
   env:
-    ASPNETCORE_ENVIRONMENT: "Development"
+    ASPNETCORE_ENVIRONMENT: "development"
   autoscaling:
     enabled: false # No HPA in dev
 

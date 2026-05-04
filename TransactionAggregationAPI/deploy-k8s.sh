@@ -5,8 +5,8 @@
 # (Rancher Desktop / k3s).
 #
 # Assumes both images are already built into the k8s.io containerd namespace:
-#   transaction-aggregation-api:latest
-#   transaction-aggregation-ui:latest
+#   transactionaggregationapi:latest
+#   transactionaggregationui:latest
 #
 # Usage:
 #   ./deploy-k8s.sh                  Deploy everything
@@ -35,8 +35,8 @@ log_error() { echo -e "   ${RED}✘${NC}  $*" >&2; }
 
 # ── Config ────────────────────────────────────────────────────────────────────
 NAMESPACE="transaction-aggregation"
-API_IMAGE="transaction-aggregation-api:latest"
-UI_IMAGE="transaction-aggregation-ui:latest"
+API_IMAGE="transactionaggregationapi:latest"
+UI_IMAGE="transactionaggregationui:latest"
 ROLLOUT_TIMEOUT="180s"
 MIGRATE_TIMEOUT="120s"
 
@@ -118,7 +118,7 @@ log_ok "Cluster is reachable  (context: ${CURRENT_CTX})"
 
 # Images present in the k8s.io namespace?
 if command -v nerdctl &>/dev/null; then
-  if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transaction-aggregation-api"; then
+  if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transactionaggregationapi"; then
     log_ok "API image present:  $API_IMAGE"
   else
     log_error "API image NOT found in the k8s.io namespace: $API_IMAGE"
@@ -127,7 +127,7 @@ if command -v nerdctl &>/dev/null; then
     exit 1
   fi
 
-  if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transaction-aggregation-ui"; then
+  if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transactionaggregationui"; then
     log_ok "UI  image present:  $UI_IMAGE"
   else
     log_error "UI image NOT found in the k8s.io namespace: $UI_IMAGE"
@@ -179,27 +179,27 @@ kubectl rollout status statefulset/postgres \
 log_ok "PostgreSQL is ready"
 
 # ── Step 4: Database migrations ──────────────────────────────────────────────
-log_step "Step 4/9  — EF Core database migrations"
+# log_step "Step 4/9  — EF Core database migrations"
 
-# Remove any previously completed Job so we can run a fresh one
-if kubectl get job db-migrate -n "$NAMESPACE" &>/dev/null 2>&1; then
-  log_info "Removing previous migration Job…"
-  kubectl delete job db-migrate -n "$NAMESPACE"
-fi
+# # Remove any previously completed Job so we can run a fresh one
+# if kubectl get job db-migrate -n "$NAMESPACE" &>/dev/null 2>&1; then
+#   log_info "Removing previous migration Job…"
+#   kubectl delete job db-migrate -n "$NAMESPACE"
+# fi
 
-kubectl apply -f "$K8S/api/migration-job.yaml"
+# kubectl apply -f "$K8S/api/migration-job.yaml"
 
-log_info "Waiting for the migration Job to complete (up to $MIGRATE_TIMEOUT)…"
-# Give the pod a moment to be scheduled before we start watching
-sleep 3
-kubectl wait --for=condition=complete job/db-migrate \
-  -n "$NAMESPACE" --timeout="$MIGRATE_TIMEOUT"
+# log_info "Waiting for the migration Job to complete (up to $MIGRATE_TIMEOUT)…"
+# # Give the pod a moment to be scheduled before we start watching
+# sleep 3
+# kubectl wait --for=condition=complete job/db-migrate \
+#   -n "$NAMESPACE" --timeout="$MIGRATE_TIMEOUT"
 
-log_ok "Migrations applied successfully"
-log_info "Migration output:"
-kubectl logs job/db-migrate -n "$NAMESPACE" 2>/dev/null \
-  | sed 's/^/      /' \
-  || true
+# log_ok "Migrations applied successfully"
+# log_info "Migration output:"
+# kubectl logs job/db-migrate -n "$NAMESPACE" 2>/dev/null \
+#   | sed 's/^/      /' \
+#   || true
 
 # ── Step 5: API ───────────────────────────────────────────────────────────────
 log_step "Step 5/9  — API deployment"
@@ -215,15 +215,15 @@ kubectl rollout status deployment/transaction-api \
 log_ok "API is running"
 
 # ── Step 6: UI ────────────────────────────────────────────────────────────────
-log_step "Step 6/9  — UI deployment  (nginx + Blazor WASM)"
-kubectl apply -f "$K8S/ui/service.yaml"
-kubectl apply -f "$K8S/ui/deployment.yaml"
-kubectl apply -f "$K8S/ui/ingress.yaml"
+# log_step "Step 6/9  — UI deployment  (nginx + Blazor WASM)"
+# kubectl apply -f "$K8S/ui/service.yaml"
+# kubectl apply -f "$K8S/ui/deployment.yaml"
+# kubectl apply -f "$K8S/ui/ingress.yaml"
 
-log_info "Waiting for UI replicas to be ready…"
-kubectl rollout status deployment/transaction-ui \
-  -n "$NAMESPACE" --timeout=60s
-log_ok "UI is running"
+# log_info "Waiting for UI replicas to be ready…"
+# kubectl rollout status deployment/transaction-ui \
+#   -n "$NAMESPACE" --timeout=60s
+# log_ok "UI is running"
 
 # ── Step 7: Network policies ─────────────────────────────────────────────────
 log_step "Step 7/9  — Network policies"

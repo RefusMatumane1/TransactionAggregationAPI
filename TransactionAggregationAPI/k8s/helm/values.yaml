@@ -44,7 +44,7 @@ api:
     certIssuer: selfsigned-issuer
 
   env:
-    ASPNETCORE_ENVIRONMENT: "Production"
+    ASPNETCORE_ENVIRONMENT: "development"
     ASPNETCORE_HTTP_PORTS: "8080"
     TransactionSync__IntervalMinutes: "60"
 

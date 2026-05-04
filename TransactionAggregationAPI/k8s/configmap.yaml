@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/component: config
 data:
   # ── ASP.NET Core ──────────────────────────────────────────────────────
-  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_ENVIRONMENT: "development"
   ASPNETCORE_HTTP_PORTS: "8080"
 
   # ── PostgreSQL (non-secret parts) ─────────────────────────────────────
@@ -28,7 +28,7 @@ data:
   # ── OpenTelemetry (set endpoint for your collector, e.g. Jaeger/OTEL) ─
   # Uncomment and set when a collector is running in the cluster.
   # OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
-  # OTEL_SERVICE_NAME: "transaction-aggregation-api"
+  # OTEL_SERVICE_NAME: "transactionaggregationapi"
 
   # ── Bank integration base URLs ─────────────────────────────────────────
   BankA__BaseUrl: "https://api.banka.com"

@@ -27,7 +27,7 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 300   # Fail the job after 5 minutes
+  activeDeadlineSeconds: 300 # Fail the job after 5 minutes
   template:
     metadata:
       labels:
@@ -43,7 +43,7 @@ spec:
 
       containers:
         - name: migrate
-          image: transaction-aggregation-api:latest
+          image: transactionaggregationapi:latest
           imagePullPolicy: IfNotPresent
 
           # --migrate-only is handled in Program.cs: the app applies all pending
@@ -52,7 +52,7 @@ spec:
 
           env:
             - name: ASPNETCORE_ENVIRONMENT
-              value: "Production"
+              value: "development"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:

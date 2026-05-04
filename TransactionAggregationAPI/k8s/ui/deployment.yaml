@@ -50,7 +50,7 @@ spec:
       containers:
         - name: transaction-ui
           # Build with: docker build -f TransactionAggregationUI/Dockerfile -t <registry>/transaction-aggregation-ui:1.0.0 .
-          image: transaction-aggregation-ui:latest
+          image: transactionaggregationui:latest
           imagePullPolicy: IfNotPresent
 
           ports:

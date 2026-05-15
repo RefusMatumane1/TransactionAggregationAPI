@@ -91,27 +91,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
+      - name: Install kubeconform
+        run: |
+          curl -sSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
 
       - name: Validate namespace & shared config
         run: |
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/namespace.yaml
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/configmap.yaml
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/network-policy.yaml
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/namespace.yaml
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/configmap.yaml
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/network-policy.yaml
 
       - name: Validate workload manifests
         run: |
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/postgres/
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/redis/
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/seq/
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/api/
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/ui/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/postgres/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/redis/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/seq/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/api/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/ui/
 
       - name: Validate dev-tools
         run: |
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/dev-tools/pgadmin/
-          kubectl apply --dry-run=client -f TransactionAggregationAPI/k8s/dev-tools/redis-commander/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/dev-tools/pgadmin/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/dev-tools/redis-commander/
 
   # ─── Publish Images to GHCR (main branch only) ──────────────────────────────
   publish:

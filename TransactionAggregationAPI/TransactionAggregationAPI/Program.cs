@@ -20,20 +20,24 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-    builder.Host.UseSerilog((ctx, lc) =>
-    {
-        lc.ReadFrom.Configuration(ctx.Configuration)
-          .Enrich.FromLogContext();
 
-        // Aspire (and docker-compose) inject the Seq server URL as ConnectionStrings:seq.
-        // WriteTo.Seq cannot be expressed as a static appsettings entry because the URL
-        // is dynamic, so we wire it in code.
-        var seqUrl = ctx.Configuration.GetConnectionString("seq");
-        if (!string.IsNullOrWhiteSpace(seqUrl))
-            lc.WriteTo.Seq(seqUrl);
-    });
+    builder.Logging.ClearProviders();
 
     builder.AddServiceDefaults();
+
+    Log.Logger = new LoggerConfiguration()
+        .ReadFrom.Configuration(builder.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
+        .CreateLogger();
+
+    
+    builder.Logging.AddSerilog(Log.Logger, dispose: true);
+
+    builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
+    builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
+    builder.Services.AddSingleton<Serilog.IDiagnosticContext>(
+        sp => sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
 
     var connectionString = builder.Configuration.GetConnectionString("transactiondb");
     builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -109,9 +113,6 @@ try
                   .AllowAnyMethod());
     });
 
-    // Named policy — applied to all endpoint groups via .RequireRateLimiting("FixedWindow").
-    // Limit: 10 requests/min per authenticated user or IP address.
-    // Registered as singleton: IConnectionMultiplexer is injected once, reused per request.
     builder.Services.AddSingleton<RedisFixedWindowPolicy>();
     builder.Services.AddRateLimiter(options =>
     {
@@ -119,9 +120,7 @@ try
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
 
-    // Global limiter — applied before named policies; 100 requests/min per client.
-    // Configured via AddOptions so IConnectionMultiplexer is resolved from DI
-    // without a second BuildServiceProvider() call inside the delegate.
+   
     builder.Services.AddOptions<RateLimiterOptions>()
         .Configure<IConnectionMultiplexer>((options, redis) =>
         {

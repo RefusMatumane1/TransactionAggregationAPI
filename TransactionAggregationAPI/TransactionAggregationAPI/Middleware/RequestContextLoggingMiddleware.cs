@@ -1,18 +1,24 @@
-﻿using Microsoft.Extensions.Primitives;
+using Microsoft.Extensions.Primitives;
 using Serilog.Context;
 
 namespace TransactionAggregationAPI.Middleware;
 
-public class RequestContextLoggingMiddleware(RequestDelegate next)
+public class RequestContextLoggingMiddleware(
+    RequestDelegate next,
+    ILogger<RequestContextLoggingMiddleware> logger)
 {
     private const string CorrelationIdHeaderName = "X-Correlation-Id";
 
     public Task Invoke(HttpContext context)
     {
-        using (LogContext.PushProperty("CorrelationId", GetCorrelationId(context)))
-        {
-            return next.Invoke(context);
-        }
+        var correlationId = GetCorrelationId(context);
+
+        using var serilogProp = LogContext.PushProperty("CorrelationId", correlationId);
+
+        using var scope = logger.BeginScope(
+            new Dictionary<string, object> { ["CorrelationId"] = correlationId });
+
+        return next.Invoke(context);
     }
 
     private static string GetCorrelationId(HttpContext context)

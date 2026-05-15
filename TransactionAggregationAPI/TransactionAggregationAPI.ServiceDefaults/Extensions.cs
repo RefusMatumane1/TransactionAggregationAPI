@@ -75,6 +75,8 @@ public static class Extensions
 
         builder.AddOpenTelemetryExporters();
 
+        builder.AddSeqEndpoint("seq");
+
         return builder;
     }
 

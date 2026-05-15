@@ -49,7 +49,7 @@ spec:
 
       containers:
         - name: transaction-ui
-          # Build with: docker build -f TransactionAggregationUI/Dockerfile -t <registry>/transaction-aggregation-ui:1.0.0 .
+
           image: transactionaggregationui:latest
           imagePullPolicy: IfNotPresent
 
@@ -58,7 +58,6 @@ spec:
               containerPort: 80
               protocol: TCP
 
-          # API_UPSTREAM is substituted into nginx.conf at container startup
           envFrom:
             - configMapRef:
                 name: transaction-ui-config

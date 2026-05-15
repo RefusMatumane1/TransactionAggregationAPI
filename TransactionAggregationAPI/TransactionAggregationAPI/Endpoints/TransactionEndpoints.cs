@@ -65,7 +65,6 @@ namespace TransactionAggregationAPI.Endpoints
             [FromBody] CategorizeTransactionRequest request,
             CancellationToken cancellationToken)
         {
-            // Verify the transaction belongs to the authenticated user before categorizing
             var ownershipQuery = new GetTransactionQuery(id);
             var ownershipResult = await sender.Send(ownershipQuery, cancellationToken);
 

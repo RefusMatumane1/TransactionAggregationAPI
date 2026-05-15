@@ -38,9 +38,9 @@ namespace TransactionAggregation.Infrastructure.Providers
 
             var count = _faker.Random.Int(8, 20);
             var transactions = Enumerable.Range(0, count)
-                .Select(_ => new ExternalTransactionDTO
+                .Select(i => new ExternalTransactionDTO
                 {
-                    Id = _faker.Random.Guid().ToString(),
+                    Id = $"bogus-{customerId.Value:N}-{i:D3}",
                     Amount = _faker.Finance.Amount(-1000, 5000),
                     Currency = "ZAR",
                     Description = _faker.PickRandom(Descriptions),

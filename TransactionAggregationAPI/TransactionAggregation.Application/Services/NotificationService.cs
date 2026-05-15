@@ -34,7 +34,7 @@ namespace TransactionAggregation.Application.Services
                 NotificationType.TransactionCreated => $"New transaction: {transaction.Description} for {transaction.Amount.Formatted}",
                 NotificationType.TransactionApproved => $"Transaction approved: {transaction.Description}",
                 NotificationType.TransactionRejected => $"Transaction rejected: {transaction.Description}",
-                NotificationType.TransactionFlagged => $"⚠️ Transaction flagged for review: {transaction.Description}",
+                NotificationType.TransactionFlagged => $"Transaction flagged for review: {transaction.Description}",
                 NotificationType.TransactionSettled => $"Transaction settled: {transaction.Description}",
                 NotificationType.TransactionRefunded => $"Transaction refunded: {transaction.Description}",
                 _ => $"Transaction update: {transaction.Description}"
@@ -64,7 +64,7 @@ namespace TransactionAggregation.Application.Services
 
         public async Task SendHighValueTransactionAlertAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
-            var alertMessage = $"🚨 HIGH VALUE ALERT: {transaction.Amount.Formatted} transaction at {transaction.Description}";
+            var alertMessage = $"HIGH VALUE ALERT: {transaction.Amount.Formatted} transaction at {transaction.Description}";
 
             // Send to fraud team
             await SendEmailAsync(
@@ -90,7 +90,7 @@ namespace TransactionAggregation.Application.Services
 
         public async Task SendFraudAlertAsync(Transaction transaction, string reason, CancellationToken cancellationToken = default)
         {
-            var fraudMessage = $"🔴 FRAUD ALERT: Transaction flagged for {reason}\n" +
+            var fraudMessage = $"FRAUD ALERT: Transaction flagged for {reason}\n" +
                               $"Amount: {transaction.Amount.Formatted}\n" +
                               $"Description: {transaction.Description}\n" +
                               $"Source: {transaction.Source.Name}";

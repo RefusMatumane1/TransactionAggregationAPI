@@ -1,6 +1,7 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Text;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Models;
@@ -11,6 +12,8 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
 {
     public sealed class ExportTransactionsQueryHandler : IRequestHandler<ExportTransactionsQuery, Result<ExportTransactionsResult>>
     {
+        private static readonly Encoding Utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+
         private readonly IApplicationDbContext _context;
         private readonly ILogger<ExportTransactionsQueryHandler> _logger;
 
@@ -32,7 +35,6 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
                     .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
                     .AsNoTracking();
 
-                // Apply filters
                 if (request.FromDate.HasValue)
                 {
                     var from = DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc);
@@ -56,11 +58,15 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
 
                 var result = new ExportTransactionsResult
                 {
-                    Content = Encoding.UTF8.GetBytes(content),
-                    ContentType = "text/csv",
+                    Content = Utf8Bom.GetBytes(content),
+                    ContentType = "text/csv; charset=utf-8",
                     FileName = $"transactions_{request.CustomerId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv",
                     RecordCount = transactions.Count
                 };
+
+                _logger.LogInformation(
+                    "Exported {RecordCount} transactions for customer {CustomerId}",
+                    result.RecordCount, request.CustomerId);
 
                 return Result.Success(result);
             }
@@ -76,29 +82,30 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
         {
             var csv = new StringBuilder();
 
-            // Header
-            csv.AppendLine("Date,Description,Amount,Currency,Category,Status,Source,Notes");
+            csv.AppendLine("Date,Time,Description,Amount,Currency,Flow,Category,Status,Source,External ID,Approved By");
 
-            // Data
             foreach (var t in transactions)
             {
-                csv.AppendLine($"{t.Date:yyyy-MM-dd HH:mm:ss}," +
-                              $"{EscapeCsvField(t.Description)}," +
-                              $"{t.Amount.Amount}," +
-                              $"{t.Amount.Currency}," +
-                              $"{t.Category}," +
-                              $"{t.Status}," +
-                              $"{t.Source.Name},");
+                csv.AppendLine(string.Join(",",
+                    t.Date.ToString("yyyy-MM-dd"),
+                    t.Date.ToString("HH:mm:ss"),
+                    Quote(t.Description),
+                    t.Amount.Amount.ToString("F2", CultureInfo.InvariantCulture),
+                    t.Amount.Currency,
+                    t.IsIncome ? "Income" : "Expense",
+                    t.Category.ToString(),
+                    t.Status.ToString(),
+                    Quote(t.Source.Name),
+                    Quote(t.Source.ExternalId),
+                    Quote(t.ApprovedBy ?? string.Empty)
+                ));
             }
 
             return csv.ToString();
         }
 
-        private static string EscapeCsvField(string field)
-        {
-            if (field.Contains(',') || field.Contains('"') || field.Contains('\n'))
-                return $"\"{field.Replace("\"", "\"\"")}\"";
-            return field;
-        }
+        // Always wraps in quotes and escapes embedded quotes by doubling them (RFC 4180)
+        private static string Quote(string value) =>
+            $"\"{value.Replace("\"", "\"\"")}\"";
     }
 }

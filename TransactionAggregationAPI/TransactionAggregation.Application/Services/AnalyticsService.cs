@@ -1,19 +1,13 @@
-﻿using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Services
 {
-    public class AnalyticsService(ILogger<AnalyticsService> _logger,
-            IApplicationDbContext _context) : IAnalyticsService
+    public class AnalyticsService(ILogger<AnalyticsService> _logger) : IAnalyticsService
     {
-
-        public async Task TrackTransactionCreatedAsync(Transaction transaction, CancellationToken cancellationToken = default)
+        public Task TrackTransactionCreatedAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation(
                 "[Analytics] Transaction created: {TransactionId}, Customer: {CustomerId}, Amount: {Amount} {Currency}",
@@ -22,33 +16,12 @@ namespace TransactionAggregation.Application.Services
                 transaction.Amount.Amount,
                 transaction.Amount.Currency);
 
-            // Track metric
-            await TrackMetricAsync("transactions.created", 1, new Dictionary<string, string>
+            return TrackMetricAsync("transactions.created", 1, new Dictionary<string, string>
             {
                 ["currency"] = transaction.Amount.Currency,
                 ["category"] = transaction.Category.ToString(),
                 ["is_income"] = transaction.IsIncome.ToString()
             }, cancellationToken);
-
-            // Store analytics event for later processing
-            //var analyticsEvent = new AnalyticsEvent
-            //{
-            //    Id = Guid.NewGuid(),
-            //    EventType = "TransactionCreated",
-            //    CustomerId = transaction.CustomerId.Value,
-            //    TransactionId = transaction.Id.Value,
-            //    Timestamp = DateTime.UtcNow,
-            //    Data = JsonSerializer.Serialize(new
-            //    {
-            //        transaction.Amount.Amount,
-            //        transaction.Amount.Currency,
-            //        transaction.Category,
-            //        transaction.Source.Name
-            //    })
-            //};
-
-            //await _context.AnalyticsEvents.AddAsync(analyticsEvent, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
         }
 
         public async Task TrackTransactionApprovedAsync(Transaction transaction, string approvedBy, CancellationToken cancellationToken = default)
@@ -70,21 +43,21 @@ namespace TransactionAggregation.Application.Services
             await TrackPerformanceAsync("transaction.approval", approvalTime, true, cancellationToken);
         }
 
-        public async Task TrackTransactionRejectedAsync(Transaction transaction, string reason, CancellationToken cancellationToken = default)
+        public Task TrackTransactionRejectedAsync(Transaction transaction, string reason, CancellationToken cancellationToken = default)
         {
             _logger.LogWarning(
                 "[Analytics] Transaction rejected: {TransactionId}, Reason: {Reason}",
                 transaction.Id.Value,
                 reason);
 
-            await TrackMetricAsync("transactions.rejected", 1, new Dictionary<string, string>
+            return TrackMetricAsync("transactions.rejected", 1, new Dictionary<string, string>
             {
                 ["reason"] = reason,
                 ["category"] = transaction.Category.ToString()
             }, cancellationToken);
         }
 
-        public async Task TrackTransactionCategorizedAsync(
+        public Task TrackTransactionCategorizedAsync(
             Transaction transaction,
             TransactionCategory oldCategory,
             TransactionCategory newCategory,
@@ -98,7 +71,7 @@ namespace TransactionAggregation.Application.Services
                 newCategory,
                 isAuto);
 
-            await TrackMetricAsync("transactions.categorized", 1, new Dictionary<string, string>
+            return TrackMetricAsync("transactions.categorized", 1, new Dictionary<string, string>
             {
                 ["old_category"] = oldCategory.ToString(),
                 ["new_category"] = newCategory.ToString(),
@@ -106,66 +79,54 @@ namespace TransactionAggregation.Application.Services
             }, cancellationToken);
         }
 
-        public async Task TrackAutoCategorizationAsync(
+        public Task TrackAutoCategorizationAsync(
             Transaction transaction,
             TransactionCategory oldCategory,
             TransactionCategory newCategory,
             CancellationToken cancellationToken = default)
         {
-            await TrackTransactionCategorizedAsync(transaction, oldCategory, newCategory, true, cancellationToken);
+            return TrackTransactionCategorizedAsync(transaction, oldCategory, newCategory, true, cancellationToken);
         }
 
-        public async Task TrackTransactionSyncedAsync(Transaction transaction, CancellationToken cancellationToken = default)
+        public Task TrackTransactionSyncedAsync(Transaction transaction, CancellationToken cancellationToken = default)
         {
-            await TrackMetricAsync("transactions.synced", 1, new Dictionary<string, string>
+            return TrackMetricAsync("transactions.synced", 1, new Dictionary<string, string>
             {
                 ["source"] = transaction.Source.Name
             }, cancellationToken);
         }
 
-        public async Task TrackMetricAsync(
+        public Task TrackMetricAsync(
             string metricName,
             double value,
             Dictionary<string, string>? tags = null,
             CancellationToken cancellationToken = default)
         {
-            // Send to metrics collector (Prometheus, Datadog, etc.)
-           // _metricsCollector.RecordMetric(metricName, value, tags);
+            _logger.LogDebug(
+                "[Metric] {MetricName}: {Value}, Tags: {@Tags}",
+                metricName,
+                value,
+                tags);
 
-            // Store in database for historical analysis
-            //var metric = new MetricRecord
-            //{
-            //    Id = Guid.NewGuid(),
-            //    Name = metricName,
-            //    Value = value,
-            //    Tags = tags ?? new(),
-            //    Timestamp = DateTime.UtcNow
-            //};
-
-            //await _context.Metrics.AddAsync(metric, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+            return Task.CompletedTask;
         }
 
-        public async Task TrackUserBehaviorAsync(
+        public Task TrackUserBehaviorAsync(
             Guid customerId,
             string action,
             Dictionary<string, object>? properties = null,
             CancellationToken cancellationToken = default)
         {
-            //var behavior = new UserBehaviorEvent
-            //{
-            //    Id = Guid.NewGuid(),
-            //    CustomerId = customerId,
-            //    Action = action,
-            //    Properties = properties ?? new(),
-            //    Timestamp = DateTime.UtcNow
-            //};
+            _logger.LogInformation(
+                "[UserBehavior] Customer: {CustomerId}, Action: {Action}, Properties: {@Properties}",
+                customerId,
+                action,
+                properties);
 
-            //await _context.UserBehaviors.AddAsync(behavior, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
+            return Task.CompletedTask;
         }
 
-        public async Task TrackPerformanceAsync(
+        public Task TrackPerformanceAsync(
             string operationName,
             TimeSpan duration,
             bool isSuccess = true,
@@ -177,7 +138,7 @@ namespace TransactionAggregation.Application.Services
                 duration.TotalMilliseconds,
                 isSuccess);
 
-            await TrackMetricAsync($"performance.{operationName}.duration", duration.TotalMilliseconds, new Dictionary<string, string>
+            return TrackMetricAsync($"performance.{operationName}.duration", duration.TotalMilliseconds, new Dictionary<string, string>
             {
                 ["operation"] = operationName,
                 ["success"] = isSuccess.ToString()

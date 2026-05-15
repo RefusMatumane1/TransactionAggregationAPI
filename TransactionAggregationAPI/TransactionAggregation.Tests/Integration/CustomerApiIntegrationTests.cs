@@ -16,6 +16,8 @@ namespace TransactionAggregation.Tests.Integration
             PropertyNameCaseInsensitive = true
         };
 
+        private record LoginResult(string Token);
+
         public CustomerApiIntegrationTests(IntegrationTestWebAppFactory factory)
         {
             _client = factory.CreateClient();
@@ -35,7 +37,8 @@ namespace TransactionAggregation.Tests.Integration
             var loginRequest = new { Username = email, Password = "Password1" };
             var loginResponse = await _client.PostAsJsonAsync("/api/v1/customers/login", loginRequest);
             loginResponse.EnsureSuccessStatusCode();
-            var token = await loginResponse.Content.ReadFromJsonAsync<string>();
+            var loginResult = await loginResponse.Content.ReadFromJsonAsync<LoginResult>(JsonOptions);
+            var token = loginResult?.Token;
 
             _client.DefaultRequestHeaders.Authorization =
                 new AuthenticationHeaderValue("Bearer", token!);

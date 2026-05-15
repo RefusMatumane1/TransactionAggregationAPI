@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using TransactionAggregation.Persistence;
@@ -84,6 +85,14 @@ namespace TransactionAggregation.Tests.Integration
                 // Replace the Redis distributed cache with an in-process memory cache.
                 services.RemoveAll<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
                 services.AddDistributedMemoryCache();
+
+                // ── Health checks ────────────────────────────────────────────────────
+                // Aspire's EnrichNpgsqlDbContext and AddRedisClient register health checks
+                // that open real connections.  Clear them all and add only the "self" liveness
+                // check so /health returns 200 and /alive also returns 200 in tests.
+                services.Configure<HealthCheckServiceOptions>(opts => opts.Registrations.Clear());
+                services.AddHealthChecks()
+                    .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
 
                 // ── Rate limiter ──────────────────────────────────────────────────────
                 // Customer endpoints use .RequireRateLimiting("FixedWindow") with a limit

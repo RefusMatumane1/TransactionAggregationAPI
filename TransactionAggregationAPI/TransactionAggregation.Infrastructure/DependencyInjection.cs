@@ -2,7 +2,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Common.Interfaces;
-using TransactionAggregation.Application.Services;
 using TransactionAggregation.Infrastructure.Authentication;
 using TransactionAggregation.Infrastructure.BackgroundServices;
 using TransactionAggregation.Infrastructure.Providers;
@@ -30,9 +29,7 @@ namespace TransactionAggregation.Infrastructure
 
             services.Configure<NotificationOptions>(
                 configuration.GetSection("NotificationOptions"));
-
-            services.Configure<TransactionValidationOptions>(
-                configuration.GetSection("TransactionValidationOptions"));
+            services.AddScoped<INotificationService, NotificationService>();
 
             // Background sync worker
             services.Configure<TransactionSyncOptions>(

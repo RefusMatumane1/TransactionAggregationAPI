@@ -1,7 +1,7 @@
-﻿using TransactionAggregation.Domain.Entities;
+using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 
-namespace TransactionAggregation.Application.Services
+namespace TransactionAggregation.Application.Common.Interfaces
 {
     public interface ITransactionCategorizationService
     {

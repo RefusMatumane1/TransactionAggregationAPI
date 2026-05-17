@@ -17,7 +17,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj"/>
+		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
 		<ProjectReference Include="..\TransactionAggregationAPI\TransactionAggregationAPI.csproj" />
 		<ProjectReference Include="..\TransactionAggregationUI\TransactionAggregationUI.csproj" />
 	</ItemGroup>

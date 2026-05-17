@@ -126,11 +126,12 @@ namespace TransactionAggregation.Application.Services
             CancellationToken cancellationToken = default)
         {
             var today = DateTime.UtcNow.Date;
+
             var dailySpending = await _context.Transactions
                 .Where(t => t.CustomerId == CustomerId.CreateFrom(customerId) &&
                            t.Date >= today &&
-                           t.Amount.IsExpense)
-                .SumAsync(t => t.Amount.AbsoluteAmount, cancellationToken);
+                           t.Amount.Amount < 0)
+                .SumAsync(t => -t.Amount.Amount, cancellationToken);
 
             var newTotal = dailySpending + amount.AbsoluteAmount;
             return newTotal <= _options.DailySpendingLimit;

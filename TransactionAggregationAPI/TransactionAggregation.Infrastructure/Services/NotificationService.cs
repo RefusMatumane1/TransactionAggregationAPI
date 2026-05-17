@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
@@ -6,7 +6,7 @@ using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 
-namespace TransactionAggregation.Application.Services
+namespace TransactionAggregation.Infrastructure.Services
 {
     public class NotificationService : INotificationService
     {
@@ -40,14 +40,12 @@ namespace TransactionAggregation.Application.Services
                 _ => $"Transaction update: {transaction.Description}"
             };
 
-            // Send email
             await SendEmailAsync(
                 GetCustomerEmail(transaction.CustomerId),
                 $"Transaction {type}",
                 message,
                 cancellationToken);
 
-            // Send push notification if enabled
             if (_options.EnablePushNotifications)
             {
                 await SendPushNotificationAsync(
@@ -66,14 +64,12 @@ namespace TransactionAggregation.Application.Services
         {
             var alertMessage = $"HIGH VALUE ALERT: {transaction.Amount.Formatted} transaction at {transaction.Description}";
 
-            // Send to fraud team
             await SendEmailAsync(
                 _options.FraudTeamEmail,
                 "High Value Transaction Alert",
                 alertMessage,
                 cancellationToken);
 
-            // Send SMS to customer
             if (!string.IsNullOrEmpty(_options.SmsEnabled))
             {
                 await SendSmsAsync(
@@ -90,11 +86,6 @@ namespace TransactionAggregation.Application.Services
 
         public async Task SendFraudAlertAsync(Transaction transaction, string reason, CancellationToken cancellationToken = default)
         {
-            var fraudMessage = $"FRAUD ALERT: Transaction flagged for {reason}\n" +
-                              $"Amount: {transaction.Amount.Formatted}\n" +
-                              $"Description: {transaction.Description}\n" +
-                              $"Source: {transaction.Source.Name}";
-
             await SendWebhookAsync(_options.FraudWebhookUrl, new
             {
                 alert_type = "fraud",
@@ -155,22 +146,18 @@ namespace TransactionAggregation.Application.Services
             }
         }
 
-        // Helper methods (implement based on your infrastructure)
         private async Task SendEmailAsync(string to, string subject, string body, CancellationToken ct, bool isHtml = false)
         {
-            // Implementation would use email service (SendGrid, AWS SES, etc.)
             await Task.CompletedTask;
         }
 
         private async Task SendSmsAsync(string phoneNumber, string message, CancellationToken ct)
         {
-            // Implementation would use SMS service (Twilio, etc.)
             await Task.CompletedTask;
         }
 
         private async Task SendPushNotificationAsync(string deviceToken, string message, CancellationToken ct)
         {
-            // Implementation would use push notification service (Firebase, APNS, etc.)
             await Task.CompletedTask;
         }
 

@@ -11,12 +11,13 @@ var postgres = builder
 var transactionDb = postgres.AddDatabase("transactiondb");
 
 var redis = builder.AddRedis("redis")
-    .WithDataVolume("transaction-redis-data");
+    .WithDataVolume("transaction-redis-data")
+     .WithRedisInsight();
 
 var seq = builder.AddSeq("seq")
     .WithDataVolume("transaction-seq-data")
     .WithLifetime(ContainerLifetime.Persistent)
-    .WithEnvironment("ACCEPT_EULA", "Y"); ;
+    .WithEnvironment("ACCEPT_EULA", "Y");
 
 var api = builder
     .AddProject<Projects.TransactionAggregationAPI>("transactionaggregationapi")

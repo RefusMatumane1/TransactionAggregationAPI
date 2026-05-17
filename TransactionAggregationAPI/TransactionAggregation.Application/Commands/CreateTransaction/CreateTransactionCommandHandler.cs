@@ -1,7 +1,6 @@
 ﻿using TransactionAggregation.Application.Abstractions;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Models;
-using TransactionAggregation.Application.Services;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Exceptions;
@@ -10,15 +9,24 @@ namespace TransactionAggregation.Application.Commands.CreateTransaction
 {
     internal sealed class CreateTransactionCommandHandler(
         IApplicationDbContext _context,
-        ITransactionCategorizationService _categorizationService) 
+        ITransactionValidator _validator)
         : ICommandHandler<CreateTransactionCommand, Guid>
     {
         public async Task<Result<Guid>> Handle(CreateTransactionCommand request, CancellationToken cancellationToken)
         {
             try
             {
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
                 var amount = Money.Create(request.Amount, request.Currency);
+                var source = TransactionSource.Create(request.SourceSystem, Guid.NewGuid().ToString());
+
+                var validation = await _validator.ValidateTransactionAsync(
+                    amount, request.Description, source, request.TransactionDate, cancellationToken);
+
+                if (!validation.IsValid)
+                    return Result.Failure<Guid>(Error.Validation(
+                        string.Join("; ", validation.Errors.Select(e => e.Message))));
+
+                var customerId = CustomerId.CreateFrom(request.CustomerId);
                 var accountId = request.AccountId.HasValue
                     ? AccountId.CreateFrom(request.AccountId.Value)
                     : null;
@@ -28,15 +36,11 @@ namespace TransactionAggregation.Application.Commands.CreateTransaction
                     amount,
                     request.Description,
                     Domain.Enums.TransactionCategory.Uncategorized,
-                    TransactionSource.Create(request.SourceSystem, Guid.NewGuid().ToString()),
+                    source,
                     accountId);
 
-                // Auto-categorize based on description and amount
-                var category = await _categorizationService.CategorizeTransactionAsync(
-                    transaction, cancellationToken);
-                transaction.Categorize(category);
-
                 await _context.Transactions.AddAsync(transaction, cancellationToken);
+
                 await _context.SaveChangesAsync(cancellationToken);
 
                 return Result.Success(transaction.Id.Value);

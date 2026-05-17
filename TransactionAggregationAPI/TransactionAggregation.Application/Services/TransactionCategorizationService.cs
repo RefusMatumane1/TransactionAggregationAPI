@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;

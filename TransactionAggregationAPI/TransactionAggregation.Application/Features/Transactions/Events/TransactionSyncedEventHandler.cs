@@ -5,9 +5,10 @@ using TransactionAggregation.Domain.Events.Transaction;
 
 namespace TransactionAggregation.Application.Features.Transactions.Events
 {
-    public class TransactionSyncedEventHandler(ILogger<TransactionSyncedEventHandler> _logger,
-        ICacheService _cacheService)
-        //,IAnalyticsService _analyticsService)
+    public class TransactionSyncedEventHandler(
+        ILogger<TransactionSyncedEventHandler> _logger,
+        ICacheService _cacheService,
+        IAnalyticsService _analyticsService)
         : INotificationHandler<TransactionSyncedEvent>
     {
         public async Task Handle(TransactionSyncedEvent notification, CancellationToken cancellationToken)
@@ -18,7 +19,6 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 notification.Transaction.CustomerId.Value,
                 notification.SyncSource);
 
-            // Invalidate cache
             await _cacheService.RemoveByPatternAsync(
                 $"transactions:{notification.Transaction.CustomerId.Value}*",
                 cancellationToken);
@@ -27,10 +27,9 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 $"summary:{notification.Transaction.CustomerId.Value}",
                 cancellationToken);
 
-            // Track analytics
-            //await _analyticsService.TrackTransactionSyncedAsync(
-            //    notification.Transaction,
-            //    cancellationToken);
+            await _analyticsService.TrackTransactionSyncedAsync(
+                notification.Transaction,
+                cancellationToken);
         }
     }
 }

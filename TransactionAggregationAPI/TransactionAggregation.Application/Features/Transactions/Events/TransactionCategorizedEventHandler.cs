@@ -1,29 +1,26 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Events.Transaction;
 
 namespace TransactionAggregation.Application.Features.Transactions.Events
 {
-    public class TransactionCategorizedEventHandler(ILogger<TransactionCategorizedEventHandler> _logger,
-       ICacheService _cacheService,
-       IAnalyticsService _analyticsService)
+    public class TransactionCategorizedEventHandler(
+        ILogger<TransactionCategorizedEventHandler> _logger,
+        ICacheService _cacheService,
+        IAnalyticsService _analyticsService,
+        INotificationService _notificationService)
         : INotificationHandler<TransactionCategorizedDomainEvent>
     {
         public async Task Handle(TransactionCategorizedDomainEvent notification, CancellationToken cancellationToken)
         {
             _logger.LogInformation(
-                "Transaction {TransactionId} recategorized from {OldCategory} to {NewCategory}. Reason: {Reason}, Auto: {IsAuto}",
+                "Transaction {TransactionId} recategorized from {OldCategory} to {NewCategory}. Auto: {IsAuto}",
                 notification.Transaction.Id.Value,
                 notification.OldCategory,
                 notification.NewCategory,
-                notification.Reason ?? "Manual",
                 notification.IsAutoCategorized);
 
-            // Invalidate caches
             await _cacheService.RemoveByPatternAsync(
                 $"transactions:{notification.Transaction.CustomerId.Value}*",
                 cancellationToken);
@@ -32,13 +29,19 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 $"summary:{notification.Transaction.CustomerId.Value}",
                 cancellationToken);
 
-            // Track for ML model training
-            if (notification.IsAutoCategorized)
+            await _analyticsService.TrackTransactionCategorizedAsync(
+                notification.Transaction,
+                notification.OldCategory,
+                notification.NewCategory,
+                notification.IsAutoCategorized,
+                cancellationToken);
+
+            // Notify on manual recategorization so the customer knows their category was changed
+            if (!notification.IsAutoCategorized)
             {
-                await _analyticsService.TrackAutoCategorizationAsync(
+                await _notificationService.SendTransactionNotificationAsync(
                     notification.Transaction,
-                    notification.OldCategory,
-                    notification.NewCategory,
+                    NotificationType.TransactionCreated,
                     cancellationToken);
             }
         }

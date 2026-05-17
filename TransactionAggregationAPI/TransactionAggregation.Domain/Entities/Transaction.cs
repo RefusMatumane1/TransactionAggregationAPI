@@ -69,7 +69,7 @@ namespace TransactionAggregation.Domain.Entities
         }
 
 
-        public void Categorize(TransactionCategory newCategory)
+        public void Categorize(TransactionCategory newCategory, bool isAuto = false)
         {
             if (Category == newCategory)
                 return;
@@ -78,7 +78,7 @@ namespace TransactionAggregation.Domain.Entities
             Category = newCategory;
             UpdatedAt = DateTime.UtcNow;
 
-            AddDomainEvent(new TransactionCategorizedDomainEvent(this, oldCategory, newCategory));
+            AddDomainEvent(new TransactionCategorizedDomainEvent(this, oldCategory, newCategory, isAutoCategorized: isAuto));
         }
 
         public void Approve(string approvedBy = "System", string? notes = null)

@@ -20,9 +20,10 @@ namespace TransactionAggregation.Application
         {
             services.Configure<CategorizationOptions>(
                 configuration.GetSection(CategorizationOptions.SectionName));
+            services.Configure<TransactionValidationOptions>(
+                configuration.GetSection("TransactionValidationOptions"));
             services.AddScoped<ITransactionCategorizationService, TransactionCategorizationService>();
             services.AddScoped<IAnalyticsService, AnalyticsService>();
-            services.AddScoped<INotificationService, NotificationService>();
             services.AddScoped<ITransactionValidator, TransactionValidator>();
 
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
 
   postgres:
-    image: postgres:latest
+    image: postgres:17.6
     container_name: transactionaggregation-postgres-1
     environment:
       POSTGRES_USER: postgres
@@ -60,7 +60,7 @@ services:
       - transaction-network
 
   redis:
-    image: redis:latest
+    image: redis:8.6
     container_name: transactionaggregation-redis-1
     command: redis-server --appendonly yes --save 60 1
     ports:
@@ -81,24 +81,25 @@ services:
     container_name: transactionaggregation-seq-1
     environment:
       ACCEPT_EULA: "Y"
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
     ports:
       - "5341:80"
     volumes:
       - seq_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 20s
     networks:
       - transaction-network
 
   pgadmin:
-    image: dpage/pgadmin4:8.14
+    image: dpage/pgadmin4:9.12.0
     container_name: transactionaggregation-pgadmin-1
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@transaction.com
+      PGADMIN_DEFAULT_EMAIL: admin
       PGADMIN_DEFAULT_PASSWORD: admin
     ports:
       - "5050:80"

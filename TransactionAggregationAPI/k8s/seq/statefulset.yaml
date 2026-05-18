@@ -36,6 +36,8 @@ spec:
               value: "Y"
             - name: SEQ_FIRSTRUN_NOAUTHENTICATION
               value: "true"
+            - name: ASPNETCORE_URLS
+              value: "http://+:80"
 
           ports:
             - name: ui

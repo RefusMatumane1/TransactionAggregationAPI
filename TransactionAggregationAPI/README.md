@@ -30,9 +30,11 @@ ways to run it locally.
 - Exposes a versioned REST API (`/api/v1/…`) secured with JWT bearer tokens
 - Caches query results in Redis to reduce database round-trips
 - Enforces distributed rate limiting across all replicas via Redis
-- Emits structured logs to Seq and traces/metrics via OpenTelemetry
+- Emits structured logs to Seq and traces via OpenTelemetry
+- Exposes a Prometheus `/metrics` scrape endpoint via prometheus-net
+- Ships with Grafana dashboards pre-provisioned with HTTP, runtime, and GC panels
 - Ships with a Blazor WASM frontend served by nginx in production
-- Runs EF Core migrations automatically in Development and via a Job in Kubernetes
+- Runs EF Core migrations automatically on startup
 
 ---
 
@@ -45,7 +47,8 @@ ways to run it locally.
 | Database | PostgreSQL 16 + Entity Framework Core 10 |
 | Cache / Rate limiting | Redis 7 + StackExchange.Redis |
 | Structured logging | Serilog → Seq |
-| Observability | OpenTelemetry (traces + metrics) |
+| Traces | OpenTelemetry (ASP.NET Core + EF Core + Redis + HttpClient) |
+| Metrics | prometheus-net.AspNetCore → Prometheus → Grafana |
 | Auth | JWT Bearer tokens |
 | API docs | Scalar (OpenAPI — Development only) |
 | Orchestration | Docker Compose · .NET Aspire · Kubernetes (k3s / Rancher Desktop) |
@@ -81,9 +84,15 @@ TransactionAggregationAPI/              ← solution root
 ├── TransactionAggregation.Domain/      ← Entities, value objects, enums
 ├── TransactionAggregation.Infrastructure/ ← Redis cache, bank adapters
 ├── TransactionAggregation.Persistence/    ← EF Core DbContext, migrations
-├── TransactionAggregationAPI.ServiceDefaults/ ← Health checks, OpenTelemetry
+├── TransactionAggregationAPI.ServiceDefaults/ ← Health checks, OpenTelemetry, prometheus-net
 │
-├── docker-compose.yml                  ← Full local stack
+├── monitoring/                         ← Docker Compose monitoring stack
+│   ├── prometheus.yml                  ← Prometheus scrape config (targets api:8080/metrics)
+│   └── grafana/
+│       ├── provisioning/               ← Auto-provisioned datasource + dashboard provider
+│       └── dashboards/                 ← transaction-api.json Grafana dashboard
+│
+├── docker-compose.yml                  ← Full local stack including Prometheus + Grafana
 ├── docker-compose.override.yml         ← Dev overrides (user secrets, ports)
 ├── deploy-k8s.sh                       ← One-command Kubernetes deployment script
 │
@@ -95,7 +104,10 @@ TransactionAggregationAPI/              ← solution root
     ├── postgres/ redis/ seq/           ← StatefulSets + Services (persistent volumes)
     ├── api/                            ← Deployment, Service, Ingress, HPA, PDB, migration Job
     ├── ui/                             ← Deployment, Service, Ingress, ConfigMap
-    ├── dev-tools/                      ← pgAdmin, Redis Commander (optional)
+    ├── dev-tools/                      ← pgAdmin, Redis Commander (optional --dev-tools)
+    ├── monitoring/                     ← Prometheus + Grafana (optional --monitoring)
+    │   ├── prometheus/                 ← ServiceAccount, RBAC, ConfigMap, Deployment, Service, Ingress
+    │   └── grafana/                    ← ConfigMaps (provisioning + dashboards), PVC, Deployment, Service, Ingress
     └── helm/                           ← Helm chart + per-environment values
 ```
 
@@ -127,8 +139,9 @@ Sample logins:
 
 ## Option A — Docker Compose (quickest)
 
-One command starts everything: API, UI, PostgreSQL, Redis, Seq, pgAdmin, and
-Redis Commander. Migrations and seeding run automatically on first start.
+One command starts everything: API, UI, PostgreSQL, Redis, Seq, pgAdmin,
+Redis Commander, Prometheus, and Grafana. Migrations and seeding run automatically
+on first start.
 
 ### Prerequisites
 
@@ -150,11 +163,16 @@ docker-compose up --build
 | **API** | http://localhost:5001 |
 | **API docs** (Scalar) | http://localhost:5001/scalar/v1 |
 | **Seq** structured logs | http://localhost:5341 |
+| **Prometheus** | http://localhost:9090 |
+| **Grafana** | http://localhost:3000 (admin / admin) |
 | **pgAdmin** | http://localhost:5050 |
 | **Redis Commander** | http://localhost:8082 |
 
 > **pgAdmin first-time setup:** login `admin@transaction.com` / `admin`,
 > add server → host `postgres`, port `5432`, user `postgres`, password `postgres`.
+
+> **Grafana:** open the pre-provisioned "Transaction Aggregation API" dashboard.
+> Data appears within ~30 seconds after the API starts serving requests.
 
 ### Stop
 
@@ -220,13 +238,15 @@ This is the closest to a real staging or production deployment.
 
 | Component | Replicas | Notes |
 |---|---|---|
-| **UI** (nginx + Blazor WASM) | 2 | Serves frontend, proxies `/api/` to the API service |
 | **API** (.NET 10) | 2 | Auto-scales to 10 via HPA |
 | **PostgreSQL 16** | 1 | StatefulSet + 10 Gi PVC |
 | **Redis 7** | 1 | StatefulSet + 2 Gi PVC, AOF persistence |
-| **Seq** | 1 | StatefulSet + 5 Gi PVC |
-| **pgAdmin** *(--dev-tools)* | 1 | PostgreSQL browser |
-| **Redis Commander** *(--dev-tools)* | 1 | Redis key browser |
+| **Seq** | 1 | StatefulSet + 5 Gi PVC; access via port-forward (no Ingress) |
+| **UI** (nginx + Blazor WASM) *(`--ui`)* | 2 | Serves frontend, proxies `/api/` to the API service |
+| **Prometheus** *(`--monitoring`)* | 1 | Pod annotation-based scrape discovery |
+| **Grafana** *(`--monitoring`)* | 1 | Pre-provisioned dashboard + Prometheus datasource |
+| **pgAdmin** *(`--dev-tools`)* | 1 | PostgreSQL browser |
+| **Redis Commander** *(`--dev-tools`)* | 1 | Redis key browser |
 
 ### Prerequisites
 
@@ -262,18 +282,18 @@ cd /path/to/TransactionAggregationAPI
 
 # API image
 nerdctl --namespace k8s.io build \
-  -t transaction-aggregation-api:latest \
+  -t transactionaggregationapi:latest \
   -f TransactionAggregationAPI/Dockerfile \
   .
 
-# UI image
+# UI image (only needed if you plan to pass --ui)
 nerdctl --namespace k8s.io build \
-  -t transaction-aggregation-ui:latest \
+  -t transactionaggregationui:latest \
   -f TransactionAggregationUI/Dockerfile \
   .
 
-# Confirm both are present
-nerdctl --namespace k8s.io images | grep transaction-aggregation
+# Confirm images are present
+nerdctl --namespace k8s.io images | grep transaction
 ```
 
 ### Step 2 — Fill in secrets
@@ -304,13 +324,20 @@ waits for each step to finish, updates `/etc/hosts`, and prints a verification
 summary at the end.
 
 ```bash
-# From the solution root:
-
-# Deploy everything (requires sudo for /etc/hosts)
+# Core stack only (API + data stores)
 ./deploy-k8s.sh
+
+# Also deploy the Blazor WASM UI
+./deploy-k8s.sh --ui
+
+# Also deploy Prometheus + Grafana
+./deploy-k8s.sh --monitoring
 
 # Also deploy pgAdmin + Redis Commander
 ./deploy-k8s.sh --dev-tools
+
+# Deploy all optional components
+./deploy-k8s.sh --ui --monitoring --dev-tools
 
 # Skip the /etc/hosts update (if you manage it manually)
 ./deploy-k8s.sh --skip-hosts
@@ -319,21 +346,24 @@ summary at the end.
 ./deploy-k8s.sh --teardown
 ```
 
-The script runs these steps automatically:
+The script runs these phases automatically:
 
-| Step | Action |
+| Phase | Action |
 |---|---|
-| Pre-flight | Checks kubectl, cluster, images, and that secrets.yaml is populated |
-| 1 | Creates the `transaction-aggregation` namespace |
-| 2 | Applies secrets, API ConfigMap, UI ConfigMap |
-| 3 | Deploys PostgreSQL, Redis, Seq — waits for Postgres to be Ready |
-| 4 | Runs the EF Core migration Job — waits for completion, prints log |
-| 5 | Deploys API (Service, Deployment, Ingress, HPA, PDB) — waits for readiness |
-| 6 | Deploys UI (Service, Deployment, Ingress) — waits for readiness |
-| 7 | Applies NetworkPolicies |
-| 8 | Deploys dev tools *(if --dev-tools)* |
-| 9 | Adds hostnames to `/etc/hosts` via sudo (skips entries already present) |
-| Done | Prints pod status, ingresses, health check, and all URLs |
+| Pre-flight | Checks kubectl, cluster reachability, images in the k8s.io namespace, and that secrets.yaml is populated |
+| Namespace | Creates the `transaction-aggregation` namespace |
+| Secrets & ConfigMaps | Applies secrets and API ConfigMap; UI ConfigMap *(if `--ui`)* |
+| Data stores | Deploys PostgreSQL, Redis, Seq StatefulSets — waits for both PostgreSQL and Redis to be Ready |
+| API | Deploys Service, Deployment, Ingress, HPA, PDB — waits for the readiness probe (`/health`) |
+| UI *(if `--ui`)* | Deploys Deployment, Service, Ingress — waits for readiness |
+| Network policies | Applies pod-level traffic rules |
+| Dev tools *(if `--dev-tools`)* | Deploys pgAdmin and Redis Commander |
+| Monitoring *(if `--monitoring`)* | Applies Prometheus RBAC then Deployment + Service + Ingress; Grafana ConfigMaps, PVC, Deployment, Service, Ingress |
+| /etc/hosts | Adds hostnames for all deployed services via sudo (skips entries already present) |
+
+> EF Core migrations run automatically inside the API pod at startup (`ApplyMigrationsAsync`).
+> There is no separate migration step. `k8s/api/migration-job.yaml` exists as an alternative
+> if you ever need to decouple migrations from app startup.
 
 ### Step 4 — Open the app
 
@@ -341,22 +371,31 @@ Once the script completes:
 
 | Service | URL |
 |---|---|
-| **UI** (start here) | http://ui.transaction.local |
+| **UI** *(if `--ui`, start here)* | http://ui.transaction.local |
 | **API** | http://api.transaction.local |
 | **Health check** | http://api.transaction.local/health |
-| **Seq logs** | http://seq.transaction.local |
-| **pgAdmin** *(--dev-tools)* | http://pgadmin.transaction.local |
-| **Redis Commander** *(--dev-tools)* | http://redis-commander.transaction.local |
+| **Metrics** | http://api.transaction.local/metrics |
+| **Prometheus** *(if `--monitoring`)* | http://prometheus.transaction.local |
+| **Grafana** *(if `--monitoring`)* | http://grafana.transaction.local (admin / admin) |
+| **pgAdmin** *(if `--dev-tools`)* | http://pgadmin.transaction.local |
+| **Redis Commander** *(if `--dev-tools`)* | http://redis-commander.transaction.local |
+
+> Seq has no Kubernetes Ingress — use port-forward to access logs:
+> `kubectl port-forward svc/seq 5341:80 -n transaction-aggregation`
 
 > Scalar API docs (`/scalar/v1`) are not available in Kubernetes — the ConfigMap
 > sets `ASPNETCORE_ENVIRONMENT=Production`. Use Option A or B for API exploration.
 
+**On Windows (Rancher Desktop): add the hostnames to `C:\Windows\System32\drivers\etc\hosts` as `127.0.0.1` entries** — see the troubleshooting section below for the exact lines.
+
 **No hostnames working? Use port-forward instead:**
 
 ```bash
-kubectl port-forward svc/transaction-ui  7200:80   -n transaction-aggregation
-kubectl port-forward svc/transaction-api 8080:80   -n transaction-aggregation
-kubectl port-forward svc/seq             5341:80   -n transaction-aggregation
+kubectl port-forward svc/transaction-api  8080:80    -n transaction-aggregation
+kubectl port-forward svc/transaction-ui   7200:80    -n transaction-aggregation  # if --ui
+kubectl port-forward svc/seq              5341:80    -n transaction-aggregation  # logs (no Ingress)
+kubectl port-forward svc/prometheus       9090:9090  -n transaction-aggregation  # if --monitoring
+kubectl port-forward svc/grafana          3000:80    -n transaction-aggregation  # if --monitoring
 ```
 
 ### Rebuilding after a code change
@@ -364,23 +403,21 @@ kubectl port-forward svc/seq             5341:80   -n transaction-aggregation
 ```bash
 # API or backend code changed
 nerdctl --namespace k8s.io build \
-  -t transaction-aggregation-api:latest \
+  -t transactionaggregationapi:latest \
   -f TransactionAggregationAPI/Dockerfile .
 kubectl rollout restart deployment/transaction-api -n transaction-aggregation
 kubectl rollout status  deployment/transaction-api -n transaction-aggregation
 
 # UI (Blazor pages, nginx.conf) changed
 nerdctl --namespace k8s.io build \
-  -t transaction-aggregation-ui:latest \
+  -t transactionaggregationui:latest \
   -f TransactionAggregationUI/Dockerfile .
 kubectl rollout restart deployment/transaction-ui -n transaction-aggregation
 kubectl rollout status  deployment/transaction-ui -n transaction-aggregation
 
-# New EF Core migration added
-kubectl delete job db-migrate -n transaction-aggregation
-kubectl apply  -f k8s/api/migration-job.yaml
-kubectl wait --for=condition=complete job/db-migrate \
-  -n transaction-aggregation --timeout=120s
+# New EF Core migration added — migrations apply automatically on pod restart
+kubectl rollout restart deployment/transaction-api -n transaction-aggregation
+kubectl rollout status  deployment/transaction-api -n transaction-aggregation
 ```
 
 ### Tear down
@@ -475,12 +512,13 @@ All routes are prefixed with `/api/v1`.
 | `GET` | `/transactions/{id}` | Yes | Get by ID |
 | `PATCH` | `/transactions/{id}/categorize` | Yes | Override category |
 
-#### Health
+#### Health & Metrics
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/health` | No | Readiness — checks Postgres + Redis |
 | `GET` | `/alive` | No | Liveness — self only (fast) |
+| `GET` | `/metrics` | No | Prometheus scrape endpoint |
 
 ---
 
@@ -510,7 +548,7 @@ All routes are prefixed with `/api/v1`.
 | Scope | Limit | Notes |
 |---|---|---|
 | Per endpoint group | 60 req / min per client | `/customers`, `/transactions`, `/accounts` |
-| Global (burst ceiling) | 300 req / min per client | All routes combined |
+| Global (burst ceiling) | 100 req / min per client | All routes combined |
 
 Returns `HTTP 429` with a `Retry-After` header when exceeded.
 Client identity: authenticated username → remote IP → `anonymous`.
@@ -533,7 +571,7 @@ Environment variables use `__` as a section separator:
 | `Jwt:Audience` | JWT audience claim | `TransactionAggregationAPIClients` |
 | `Jwt:ExpirationInMinutes` | Token lifetime | `60` |
 | `ASPNETCORE_ENVIRONMENT` | `Development` / `Production` | `Development` |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector (optional) | not set |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector for traces (optional) | not set |
 
 ---
 
@@ -546,6 +584,22 @@ If it keeps restarting:
 
 ```bash
 docker-compose restart api
+```
+
+### Docker Compose — Grafana shows no data
+
+Confirm the API is reachable from Prometheus:
+
+```bash
+# Check Prometheus targets — all should show State=UP
+open http://localhost:9090/targets
+```
+
+If `transaction-api` is down, confirm the API container is healthy:
+
+```bash
+docker-compose ps
+curl http://localhost:5001/metrics
 ```
 
 ### Aspire — UI keeps loading / spinner never goes away
@@ -569,25 +623,11 @@ kubectl get storageclass
 The images were not built into the k3s containerd namespace:
 
 ```bash
-nerdctl --namespace k8s.io images | grep transaction-aggregation
+nerdctl --namespace k8s.io images | grep transaction
 ```
 
 If missing, re-run the `nerdctl build` commands from Step 1. Also confirm
 Rancher Desktop is using **containerd** (Preferences → Container Engine).
-
-### Kubernetes — migration job failed
-
-```bash
-kubectl logs job/db-migrate -n transaction-aggregation
-```
-
-Common cause: Postgres not ready. Re-run via the script or manually:
-
-```bash
-kubectl delete job db-migrate -n transaction-aggregation
-kubectl rollout status statefulset/postgres -n transaction-aggregation --timeout=120s
-kubectl apply -f k8s/api/migration-job.yaml
-```
 
 ### Kubernetes — API pods not becoming Ready
 
@@ -600,11 +640,19 @@ kubectl describe  pod -n transaction-aggregation \
 The readiness probe calls `/health` (checks Postgres + Redis). If either
 dependency is unhealthy the pod waits until they recover.
 
+EF Core migrations run automatically on startup. If migrations fail the pod
+will not become Ready — check the logs for migration errors:
+
+```bash
+kubectl logs -f deployment/transaction-api -n transaction-aggregation | grep -i migrat
+```
+
 ### Kubernetes — Ingress returns 404
 
 ```bash
 kubectl get ingress -n transaction-aggregation
-# ADDRESS column should show an IP (127.0.0.1)
+# ADDRESS column shows the Rancher Desktop VM IP (192.168.127.2) — that is normal.
+# Services are accessible via 127.0.0.1 on the host through Rancher Desktop's port forwarding.
 ```
 
 If ADDRESS is blank, Traefik is still picking up the Ingress — wait a few
@@ -613,6 +661,34 @@ seconds. Bypass and test directly:
 ```bash
 kubectl port-forward svc/transaction-api 8080:80 -n transaction-aggregation
 curl http://localhost:8080/health
+```
+
+### Kubernetes — hostnames not resolving on Windows (Rancher Desktop)
+
+The deploy script updates the WSL2 `/etc/hosts` file. **Windows browsers read a
+separate file** — `C:\Windows\System32\drivers\etc\hosts` — and will time out
+unless the hostnames are added there too.
+
+Open **Notepad as Administrator** (right-click → Run as administrator), open
+`C:\Windows\System32\drivers\etc\hosts`, and add whichever lines you need:
+
+```
+127.0.0.1  api.transaction.local
+127.0.0.1  ui.transaction.local
+127.0.0.1  prometheus.transaction.local
+127.0.0.1  grafana.transaction.local
+127.0.0.1  pgadmin.transaction.local
+127.0.0.1  redis-commander.transaction.local
+```
+
+Use `127.0.0.1` — Rancher Desktop forwards port 80 from the Windows loopback
+to the Traefik ingress controller running inside the VM.
+
+To confirm Traefik is reachable before editing the hosts file:
+
+```bash
+# From WSL2 — should return {"database":"ok",...}
+curl http://127.0.0.1/api/health -H "Host: grafana.transaction.local"
 ```
 
 ### Kubernetes — UI loads but API calls fail
@@ -631,6 +707,19 @@ Causes and fixes:
 | API pods not ready | `kubectl get pods -n transaction-aggregation` |
 | NetworkPolicy blocking traffic | Confirm `allow-ui-to-api` policy is applied |
 
+### Kubernetes — Grafana shows no data
+
+1. Check Prometheus targets at `http://prometheus.transaction.local/targets`
+   (or via port-forward on port 9090).
+2. Confirm the API pod has the annotation `prometheus.io/scrape: "true"` —
+   it is set in `k8s/api/deployment.yaml`.
+3. Verify `/metrics` returns data:
+   ```bash
+   curl http://api.transaction.local/metrics | head -20
+   ```
+4. In Grafana, confirm the Prometheus datasource URL is `http://prometheus:9090`
+   (Settings → Data Sources → Prometheus → Test).
+
 ### JWT 401 Unauthorized
 
 Check the `Authorization` header is exactly:
@@ -645,7 +734,7 @@ In Kubernetes, verify `k8s/secrets.yaml` has correct base64 values for
 
 ### Rate limit 429 on every request
 
-Limits: 60 req/min per endpoint group, 300 req/min global.
+Limits: 60 req/min per endpoint group, 100 req/min global.
 To raise temporarily for testing:
 
 - Global → `Program.cs` `AddOptions<RateLimiterOptions>` block: `PermitLimit = 3000`

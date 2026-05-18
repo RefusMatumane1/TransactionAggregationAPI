@@ -19,15 +19,21 @@ k8s/
 │
 ├── seq/
 │   ├── statefulset.yaml         # Single-replica StatefulSet + PVC
-│   └── service.yaml             # ClusterIP Service (ports 80 + 5341)
+│   └── service.yaml             # ClusterIP Service (no Ingress; access via port-forward)
 │
 ├── api/
 │   ├── deployment.yaml          # 2-replica Deployment, probes, rolling update
 │   ├── service.yaml             # ClusterIP Service
-│   ├── ingress.yaml             # Traefik Ingress for API + Seq UI
+│   ├── ingress.yaml             # Traefik Ingress → api.transaction.local
 │   ├── hpa.yaml                 # HPA (CPU 70%, Memory 80%, min 2 / max 10)
 │   ├── pdb.yaml                 # PodDisruptionBudget (minAvailable: 1)
-│   └── migration-job.yaml       # EF Core migration Job (Helm pre-install hook)
+│   └── migration-job.yaml       # EF Core migration Job (optional pre-deploy alternative)
+│
+├── ui/
+│   ├── configmap.yaml           # nginx upstream config
+│   ├── deployment.yaml          # 2-replica nginx + Blazor WASM
+│   ├── service.yaml             # ClusterIP Service
+│   └── ingress.yaml             # Traefik Ingress → ui.transaction.local
 │
 ├── dev-tools/
 │   ├── pgadmin/
@@ -37,55 +43,105 @@ k8s/
 │       ├── deployment.yaml
 │       └── service.yaml         # ClusterIP + Ingress (IP-whitelisted)
 │
+├── monitoring/
+│   ├── prometheus/
+│   │   ├── serviceaccount.yaml  # ServiceAccount for pod discovery
+│   │   ├── clusterrole.yaml     # ClusterRole: get/list/watch nodes, pods, services
+│   │   ├── clusterrolebinding.yaml
+│   │   ├── configmap.yaml       # prometheus.yml with kubernetes_sd_configs
+│   │   ├── deployment.yaml      # Single-replica Prometheus
+│   │   ├── service.yaml         # ClusterIP on port 9090
+│   │   └── ingress.yaml         # Traefik Ingress → prometheus.transaction.local
+│   └── grafana/
+│       ├── configmap-provisioning.yaml   # Datasource (Prometheus) + dashboard provider
+│       ├── configmap-dashboards.yaml     # transaction-api.json dashboard (prometheus-net metrics)
+│       ├── pvc.yaml             # 1 Gi PVC for Grafana state
+│       ├── deployment.yaml      # Single-replica Grafana (runAsUser 472)
+│       ├── service.yaml         # ClusterIP port 80 → 3000
+│       └── ingress.yaml         # Traefik Ingress → grafana.transaction.local
+│
 └── helm/
     ├── Chart.yaml
     ├── values.yaml              # Production-safe defaults
     ├── values.dev.yaml          # Local/dev overrides
+    ├── values.development.yaml  # Development overrides
     ├── values.staging.yaml      # Staging overrides
     └── values.production.yaml   # Production overrides
 ```
 
 ---
 
-## Quick-start (local Rancher cluster)
+## Recommended deployment (deploy-k8s.sh)
+
+The script at the repo root handles ordering, waits, and /etc/hosts automatically.
+See the main README for full usage — this is the quickest path:
 
 ```bash
-# 1. Create the namespace
+# Core stack (API + data stores)
+./deploy-k8s.sh
+
+# With optional components
+./deploy-k8s.sh --ui --monitoring --dev-tools
+```
+
+---
+
+## Manual kubectl deployment
+
+If you prefer to apply manifests yourself:
+
+```bash
+# 1. Namespace
 kubectl apply -f k8s/namespace.yaml
 
-# 2. Populate and apply secrets (never commit real values)
-#    Generate base64 values:
-#      echo -n 'MyStr0ngP@ss!' | base64
-#    Then edit k8s/secrets.yaml and apply:
+# 2. Secrets + ConfigMaps (populate secrets.yaml first!)
 kubectl apply -f k8s/secrets.yaml
-
-# 3. Apply ConfigMap
 kubectl apply -f k8s/configmap.yaml
 
-# 4. Deploy data stores
+# 3. Data stores — wait for both before applying the API
 kubectl apply -f k8s/postgres/
 kubectl apply -f k8s/redis/
 kubectl apply -f k8s/seq/
-
-# 5. Wait for PostgreSQL to be ready
 kubectl rollout status statefulset/postgres -n transaction-aggregation
+kubectl rollout status statefulset/redis    -n transaction-aggregation
 
-# 6. Run database migration
-kubectl apply -f k8s/api/migration-job.yaml
-kubectl wait --for=condition=complete job/db-migrate \
-  -n transaction-aggregation --timeout=120s
+# 4. API (migrations run automatically on startup)
+kubectl apply -f k8s/api/service.yaml
+kubectl apply -f k8s/api/deployment.yaml
+kubectl apply -f k8s/api/ingress.yaml
+kubectl apply -f k8s/api/hpa.yaml
+kubectl apply -f k8s/api/pdb.yaml
+kubectl rollout status deployment/transaction-api -n transaction-aggregation
 
-# 7. Deploy the API
-kubectl apply -f k8s/api/
+# 5. UI (optional)
+kubectl apply -f k8s/ui/configmap.yaml
+kubectl apply -f k8s/ui/deployment.yaml
+kubectl apply -f k8s/ui/service.yaml
+kubectl apply -f k8s/ui/ingress.yaml
 
-# 8. (Dev only) Deploy dev tools
-kubectl apply -f k8s/dev-tools/
-
-# 9. Apply network policies
+# 6. Network policies
 kubectl apply -f k8s/network-policy.yaml
+
+# 7. Monitoring (optional) — RBAC must be applied before the Deployment
+kubectl apply -f k8s/monitoring/prometheus/serviceaccount.yaml
+kubectl apply -f k8s/monitoring/prometheus/clusterrole.yaml
+kubectl apply -f k8s/monitoring/prometheus/clusterrolebinding.yaml
+kubectl apply -f k8s/monitoring/prometheus/configmap.yaml
+kubectl apply -f k8s/monitoring/prometheus/deployment.yaml
+kubectl apply -f k8s/monitoring/prometheus/service.yaml
+kubectl apply -f k8s/monitoring/prometheus/ingress.yaml
+kubectl apply -f k8s/monitoring/grafana/configmap-provisioning.yaml
+kubectl apply -f k8s/monitoring/grafana/configmap-dashboards.yaml
+kubectl apply -f k8s/monitoring/grafana/pvc.yaml
+kubectl apply -f k8s/monitoring/grafana/deployment.yaml
+kubectl apply -f k8s/monitoring/grafana/service.yaml
+kubectl apply -f k8s/monitoring/grafana/ingress.yaml
+
+# 8. Dev tools (optional)
+kubectl apply -f k8s/dev-tools/
 ```
 
-### Using Helm (recommended)
+### Using Helm (recommended for multi-environment)
 
 ```bash
 # Dev
@@ -147,38 +203,7 @@ The `IsDevelopment()` guard was removed. Both endpoints are now mapped unconditi
 
 ---
 
-### 2. ~~EF Core migrations race condition~~ — FIXED
-
-**File:** `TransactionAggregationAPI/Program.cs`
-
-Two changes were made:
-
-**`--migrate-only` flag** — when this argument is present the app applies all pending
-migrations via `MigrateAsync()` and exits with code 0 without starting the web server.
-The Kubernetes Job (`migration-job.yaml`) passes this flag and is run as a Helm
-`pre-install,pre-upgrade` hook, so migrations complete before any API replica starts.
-
-**Startup guard** — the unconditional `ApplyMigrationsAsync()` call is now gated:
-```csharp
-// --migrate-only: migrate and exit (Kubernetes Job path)
-if (args.Contains("--migrate-only"))
-{
-    await app.ApplyMigrationsAsync();
-    return;
-}
-
-// In Production/Staging, migrations are owned by the pre-deploy Job.
-if (!app.Environment.IsProduction() && !app.Environment.IsStaging())
-    await app.ApplyMigrationsAsync();
-```
-
-This preserves the convenient auto-migration behaviour for local Development and
-Docker Compose (single process, no race) while eliminating it for multi-replica
-cluster environments.
-
----
-
-### 3. ~~In-memory rate limiting is per-pod~~ — FIXED
+### 2. ~~In-memory rate limiting is per-pod~~ — FIXED
 
 **Files:** `TransactionAggregationAPI/RateLimiting/` (3 new files), `Program.cs`
 
@@ -191,21 +216,20 @@ consistently across every replica. Falls back to allow-all if Redis is unreachab
 
 **`RedisFixedWindowPolicy`** (`IRateLimiterPolicy<string>`) — registered as a
 singleton, injected with `IConnectionMultiplexer` by the DI container.
-Handles the named `"FixedWindow"` policy (10 req/min) used by all endpoint groups.
+Handles the named `"FixedWindow"` policy used by all endpoint groups.
 
 **Global limiter** (100 req/min) — wired via `AddOptions<RateLimiterOptions>().Configure<IConnectionMultiplexer>(...)`.
-This is the idiomatic pattern for accessing DI services inside options configuration
-without calling `BuildServiceProvider()` a second time.
 
 Redis key scheme:
-- `ratelimit:global:{identity}` — global limiter (300/min)
-- `ratelimit:endpoint:{identity}` — endpoint named policy (60/min)
+- `ratelimit:global:{identity}` — global limiter
+- `ratelimit:endpoint:{identity}` — endpoint named policy
 
 where `{identity}` is the authenticated username → remote IP → `"anonymous"`.
 
 ---
 
-### 4. PostgreSQL and Redis are single-replica (not HA)
+### 3. PostgreSQL and Redis are single-replica (not HA)
+
 **Problem:** The StatefulSets are `replicas: 1`. A node failure means database downtime.
 
 **Fix options:**
@@ -215,14 +239,16 @@ where `{identity}` is the authenticated username → remote IP → `"anonymous"`
 
 ---
 
-### 5. Seq (OSS) has no authentication in local mode
-**Problem:** The free tier of Seq has no built-in user authentication. Anyone who can reach the Seq Ingress URL can read all logs (including JWT tokens and request bodies logged at Debug level).
+### 4. Seq (OSS) has no authentication in local mode
 
-**Fix:** The Seq Ingress is IP-whitelisted to RFC-1918 private ranges. For production, disable the Ingress (`seq.ingress.enabled: false` in `values.production.yaml`) and use `kubectl port-forward` for ad-hoc access, or replace Seq with **Grafana Loki** (cloud-native, horizontally scalable, RBAC-capable).
+**Problem:** The free tier of Seq has no built-in user authentication. Anyone who can reach the Seq service can read all logs.
+
+**Note:** Seq has no Kubernetes Ingress in this setup — access is via `kubectl port-forward` only, which limits exposure. For production, replace Seq with **Grafana Loki** (horizontally scalable, RBAC-capable) or another log aggregator with authentication.
 
 ---
 
-### 6. `docker-compose.override.yml` mounts host user-secrets
+### 5. `docker-compose.override.yml` mounts host user-secrets
+
 **Problem:**
 ```yaml
 volumes:
@@ -235,7 +261,8 @@ Host path mounts do not exist in a Kubernetes cluster. The developer's local use
 
 ---
 
-### 7. `platform: linux/amd64` on Seq
+### 6. `platform: linux/amd64` on Seq
+
 The Compose file forces Seq to `linux/amd64`. On Apple Silicon (ARM) this triggers QEMU emulation, which is slow. In Kubernetes on an x86 cluster this is irrelevant. If your Rancher nodes are ARM, pin `seq` to an ARM-compatible image tag or use an alternative log aggregator.
 
 ---
@@ -244,7 +271,7 @@ The Compose file forces Seq to `linux/amd64`. On Apple Silicon (ARM) this trigge
 
 | Signal | How it works |
 |---|---|
-| **Structured logs** | Serilog → Seq (internal `http://seq:80`). Add OTEL log exporter via `OTEL_EXPORTER_OTLP_ENDPOINT` for external collectors |
-| **Metrics** | OpenTelemetry metrics + ASP.NET Core runtime metrics emitted on `:8080`. Annotated for Prometheus scraping (`prometheus.io/scrape: "true"`) |
-| **Traces** | OpenTelemetry distributed tracing (ASP.NET Core + EF Core + Redis + HttpClient). Enable OTLP export by setting `OTEL_EXPORTER_OTLP_ENDPOINT` in ConfigMap |
-| **Health** | `/alive` (liveness — self tag only, fast), `/health` (readiness — includes Postgres + Redis checks via `AspNetCore.HealthChecks.*`) |
+| **Structured logs** | Serilog → Seq (`http://seq:80`). Set `OTEL_EXPORTER_OTLP_ENDPOINT` to additionally send logs to any OTLP-compatible collector |
+| **Metrics** | prometheus-net.AspNetCore serves `/metrics` at `:8080`. Prometheus discovers pods via `prometheus.io/scrape: "true"` annotation and scrapes the endpoint. Grafana visualises the data using the pre-provisioned dashboard. |
+| **Traces** | OpenTelemetry distributed tracing (ASP.NET Core + EF Core + Redis + HttpClient). Set `OTEL_EXPORTER_OTLP_ENDPOINT` in ConfigMap to export traces to Jaeger, Tempo, or any OTLP endpoint. |
+| **Health** | `/alive` (liveness — self tag only, fast), `/health` (readiness — includes Postgres + Redis checks) |

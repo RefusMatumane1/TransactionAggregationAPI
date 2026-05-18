@@ -7,6 +7,8 @@ metadata:
     app.kubernetes.io/name: transaction-api
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   ingressClassName: traefik
   rules:
@@ -32,6 +34,8 @@ metadata:
     app.kubernetes.io/name: seq
     app.kubernetes.io/component: logging
     app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
 spec:
   ingressClassName: traefik
   rules:

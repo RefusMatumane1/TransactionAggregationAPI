@@ -1,7 +1,3 @@
-# ── Assumption: metrics-server is installed in the cluster ─────────────────
-# Rancher Desktop and most Rancher-managed clusters include metrics-server.
-# Verify with: kubectl top pods -n transaction-aggregation
-# ──────────────────────────────────────────────────────────────────────────
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -27,7 +23,7 @@ spec:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70   # Scale up when average CPU > 70%
+          averageUtilization: 70 # Scale up when average CPU > 70%
 
     # ── Memory utilisation ───────────────────────────────────────────────
     - type: Resource
@@ -35,18 +31,18 @@ spec:
         name: memory
         target:
           type: Utilization
-          averageUtilization: 80   # Scale up when average memory > 80%
+          averageUtilization: 80 # Scale up when average memory > 80%
 
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60    # Wait 1 min before scaling up again
+      stabilizationWindowSeconds: 60 # Wait 1 min before scaling up again
       policies:
         - type: Pods
           value: 2
-          periodSeconds: 60             # Add at most 2 pods per minute
+          periodSeconds: 60 # Add at most 2 pods per minute
     scaleDown:
-      stabilizationWindowSeconds: 300   # Wait 5 min before scaling down
+      stabilizationWindowSeconds: 300 # Wait 5 min before scaling down
       policies:
         - type: Pods
           value: 1
-          periodSeconds: 120            # Remove at most 1 pod every 2 min
+          periodSeconds: 120 # Remove at most 1 pod every 2 min

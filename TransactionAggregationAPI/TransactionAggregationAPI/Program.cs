@@ -15,6 +15,7 @@ using TransactionAggregationAPI.Endpoints;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
 using TransactionAggregationAPI.RateLimiting;
+using Prometheus;
 
 try
 {
@@ -60,7 +61,7 @@ try
     
     builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
 
-    builder.AddRedisClient("redis");
+    builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
 
     builder.Services.AddApplication(builder.Configuration);
     builder.Services.AddInfrastructure(builder.Configuration);
@@ -154,7 +155,12 @@ try
         app.MapOpenApi();
         app.MapScalarApiReference();
     }
-    
+
+    // Must run before UseBlazorFrameworkFiles / UseStaticFiles so that Blazor's
+    // MapFallbackToFile("index.html") cannot intercept the /metrics path first.
+    app.UseMetricServer();
+    app.UseHttpMetrics();
+
     app.UseHttpsRedirection();
 
     app.UseBlazorFrameworkFiles();

@@ -122,6 +122,47 @@ services:
     networks:
       - transaction-network
 
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: transactionaggregation-prometheus-1
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      api:
+        condition: service_started
+    networks:
+      - transaction-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: transactionaggregation-grafana-1
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_HTTP_PORT=3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - transaction-network
+    restart: unless-stopped
+
 volumes:
   postgres_data:
     name: transactionaggregation_postgres_data
@@ -129,6 +170,10 @@ volumes:
     name: transactionaggregation_redis_data
   seq_data:
     name: transactionaggregation_seq_data
+  prometheus_data:
+    name: transactionaggregation_prometheus_data
+  grafana_data:
+    name: transactionaggregation_grafana_data
 
 networks:
   transaction-network:

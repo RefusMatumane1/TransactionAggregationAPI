@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
+using StackExchange.Redis;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -55,6 +56,9 @@ public static class Extensions
         builder.Services.AddOpenTelemetry()
             .WithMetrics(metrics =>
             {
+                // Note: If you intend to use a Prometheus exporter, add the appropriate NuGet package
+                // (for example OpenTelemetry.Exporter.Prometheus.AspNetCore) and the matching using directive.
+                // The AddPrometheusExporter extension method is provided by that package.
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
                     .AddRuntimeInstrumentation();
@@ -102,8 +106,11 @@ public static class Extensions
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder
     {
         builder.Services.AddHealthChecks()
-            // Add a default liveness check to ensure app is responsive
-            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"]);
+            .AddCheck("self", () => HealthCheckResult.Healthy(), ["live"])
+            .AddRedis(
+                connectionMultiplexerFactory: sp => sp.GetRequiredService<IConnectionMultiplexer>(),
+                name: "redis",
+                tags: ["ready"]);
 
         return builder;
     }

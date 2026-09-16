@@ -11,6 +11,12 @@ data:
   ASPNETCORE_ENVIRONMENT: "development"
   ASPNETCORE_HTTP_PORTS: "8080"
 
+  # ── CORS (production only — Program.cs falls back to a localhost allow-list in
+  # development) ───────────────────────────────────────────────────────────
+  # Set to the real deployed SPA origin(s); an empty/unset value here means production
+  # gets no CORS-allowed origins at all, not a silent wildcard.
+  Cors__AllowedOrigins__0: "https://transaction.local"
+
   # ── PostgreSQL (non-secret parts) ─────────────────────────────────────
   POSTGRES_HOST: "postgres"
   POSTGRES_PORT: "5432"

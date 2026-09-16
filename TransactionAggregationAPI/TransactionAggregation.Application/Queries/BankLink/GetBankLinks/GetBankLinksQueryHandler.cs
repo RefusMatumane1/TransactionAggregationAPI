@@ -19,16 +19,14 @@ namespace TransactionAggregation.Application.Queries.BankLink.GetBankLinks
                 .Where(b => b.CustomerId == customerId)
                 .ToListAsync(cancellationToken);
 
-            // Projected in-memory rather than in the query itself — EF Core can't translate
-            // property access on a converted value object (b.Id.Value) into SQL.
             var dtos = links
-                .Select(b => new BankLinkDto(
-                    b.Id.Value,
-                    b.Institution,
-                    b.Status,
-                    b.AccountId?.Value,
-                    b.CreatedAt))
-                .ToList();
+                            .Select(b => new BankLinkDto(
+                                b.Id.Value,
+                                b.Institution,
+                                b.Status,
+                                b.AccountId?.Value,
+                                b.CreatedAt))
+                            .ToList();
 
             return Result.Success<IReadOnlyList<BankLinkDto>>(dtos);
         }

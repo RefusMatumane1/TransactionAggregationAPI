@@ -26,8 +26,6 @@ public class CreateAccountCommandHandlerTests
         return customer;
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ValidCommand_CreatesAccountAndReturnsId()
     {
@@ -101,8 +99,6 @@ public class CreateAccountCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
     }
 
-    // ── Customer not found ────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_NonExistentCustomer_ReturnsNotFound()
     {
@@ -119,8 +115,6 @@ public class CreateAccountCommandHandlerTests
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
 
-    // ── Duplicate account number ──────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_DuplicateAccountNumber_ReturnsValidationFailure()
     {
@@ -128,19 +122,17 @@ public class CreateAccountCommandHandlerTests
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
-        // First account
         await handler.Handle(
-            new CreateAccountCommand(
-                customer.Id.Value, "ACC-DUP", "First Account",
-                AccountType.Checking),
-            CancellationToken.None);
+                    new CreateAccountCommand(
+                        customer.Id.Value, "ACC-DUP", "First Account",
+                        AccountType.Checking),
+                    CancellationToken.None);
 
-        // Duplicate
         var result = await handler.Handle(
-            new CreateAccountCommand(
-                customer.Id.Value, "ACC-DUP", "Second Account",
-                AccountType.Savings),
-            CancellationToken.None);
+                    new CreateAccountCommand(
+                        customer.Id.Value, "ACC-DUP", "Second Account",
+                        AccountType.Savings),
+                    CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Validation);
@@ -163,8 +155,6 @@ public class CreateAccountCommandHandlerTests
 
         context.Accounts.Should().HaveCount(1);
     }
-
-    // ── Different customers can share account numbers ─────────────────────────
 
     [Fact]
     public async Task Handle_SameAccountNumberForDifferentCustomers_BothSucceed()

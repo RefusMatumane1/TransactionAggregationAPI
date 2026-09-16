@@ -8,17 +8,10 @@ using TransactionAggregation.Application.Abstractions.Authentication;
 
 namespace TransactionAggregation.Infrastructure.Authentication
 {
-    /// <summary>
-    /// Talks to Keycloak's Admin REST API to provision users. A fresh admin access token (via
-    /// the "transaction-admin" service account, client-credentials grant) is fetched per call
-    /// rather than cached — this client is only exercised during customer registration and
-    /// one-time demo seeding, not a request hot path, so the extra round trip is a worthwhile
-    /// trade for not having to manage token-cache invalidation/concurrency.
-    /// </summary>
     internal sealed class KeycloakAdminClient(
-        HttpClient httpClient,
-        IOptions<KeycloakOptions> options,
-        ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient
+    HttpClient httpClient,
+    IOptions<KeycloakOptions> options,
+    ILogger<KeycloakAdminClient> logger) : IKeycloakAdminClient
     {
         private readonly KeycloakOptions _options = options.Value;
 
@@ -46,10 +39,8 @@ namespace TransactionAggregation.Infrastructure.Authentication
 
             response.EnsureSuccessStatusCode();
 
-            // Keycloak returns the new user's id as the last segment of the Location header —
-            // the response body is empty.
             var location = response.Headers.Location
-                ?? throw new InvalidOperationException("Keycloak did not return a Location header for the created user.");
+                            ?? throw new InvalidOperationException("Keycloak did not return a Location header for the created user.");
 
             var userId = location.Segments[^1].TrimEnd('/');
             return Guid.Parse(userId);
@@ -89,8 +80,7 @@ namespace TransactionAggregation.Infrastructure.Authentication
 
             if (!response.IsSuccessStatusCode)
             {
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                logger.LogError("Keycloak admin token request failed with {StatusCode}: {Body}", response.StatusCode, body);
+                logger.LogError("Keycloak admin token request failed with {StatusCode}", response.StatusCode);
             }
             response.EnsureSuccessStatusCode();
 

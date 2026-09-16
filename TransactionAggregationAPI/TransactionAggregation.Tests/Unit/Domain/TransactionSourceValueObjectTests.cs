@@ -7,7 +7,6 @@ namespace TransactionAggregation.Tests.Unit.Domain;
 
 public class TransactionSourceValueObjectTests
 {
-    // ── Create ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Create_WithValidParameters_SetsAllProperties()
@@ -63,8 +62,6 @@ public class TransactionSourceValueObjectTests
         source.Version.Should().BeNull();
     }
 
-    // ── Factory methods ───────────────────────────────────────────────────────
-
     [Fact]
     public void CreateFromBankA_SetsCorrectNameAndProvider()
     {
@@ -97,8 +94,6 @@ public class TransactionSourceValueObjectTests
         source.Provider.Should().Be("WalletPay");
         source.Version.Should().Be("3.2");
     }
-
-    // ── LastSyncDate ──────────────────────────────────────────────────────────
 
     [Fact]
     public void UpdateLastSyncDate_SetsLastSyncDate()
@@ -137,8 +132,6 @@ public class TransactionSourceValueObjectTests
         source.IsOlderThan(TimeSpan.FromHours(1)).Should().BeFalse();
     }
 
-    // ── Equality ──────────────────────────────────────────────────────────────
-
     [Fact]
     public void TwoSources_WithSameNameAndExternalId_AreEqual()
     {
@@ -169,14 +162,12 @@ public class TransactionSourceValueObjectTests
     [Fact]
     public void TwoSources_WithSameNameAndId_DifferentProvider_AreStillEqual()
     {
-        // Provider/Version are NOT equality components (only Name + ExternalId are)
+
         var a = TransactionSource.Create("Bank A", "EXT-123", "ProviderX");
         var b = TransactionSource.Create("Bank A", "EXT-123", "ProviderY");
 
         a.Should().Be(b);
     }
-
-    // ── ToString ──────────────────────────────────────────────────────────────
 
     [Fact]
     public void ToString_ReturnsNameAndExternalIdFormatted()

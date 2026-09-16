@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace TransactionAggregationAPI.Middleware
@@ -34,9 +34,7 @@ namespace TransactionAggregationAPI.Middleware
 
         private static async Task HandleExceptionAsync(HttpContext context, Exception exception, IWebHostEnvironment environment)
         {
-            // The real exception is always logged above; only Development responses echo
-            // it back to the caller. Anywhere else this can leak internal details (DB
-            // constraint text, internal type names, etc.) to any client that triggers a 500.
+
             var problemDetails = new ProblemDetails
             {
                 Title = "An error occurred while processing your request",

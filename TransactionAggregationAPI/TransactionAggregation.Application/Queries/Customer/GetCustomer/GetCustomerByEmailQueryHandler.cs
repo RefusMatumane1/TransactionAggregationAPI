@@ -17,7 +17,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
         {
             try
             {
-             logger.LogInformation("Handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
+                logger.LogInformation("Handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
                 var customer = await _context.Customers
                     .AsNoTracking()
                     .FirstOrDefaultAsync(c => c.Email == request.Email, cancellationToken);

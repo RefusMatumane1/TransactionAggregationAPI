@@ -13,11 +13,6 @@ public class ValidationBehaviorTests
 {
     public sealed record FakeCommand(string Value) : ICommand<Guid>;
 
-    // Regression test: ValidationBehavior used to build the failure Result<T> via
-    // Activator.CreateInstance(resultType, error), but Result<T> has no single-Error
-    // constructor — that threw MissingMethodException instead of returning a clean validation
-    // failure, for any ICommand<T> whose validator actually failed. Uncovered by the webhook
-    // batch-size-cap validator, the first real end-to-end validation failure in the test suite.
     [Fact]
     public async Task Handle_ValidatorFails_ReturnsFailureResultInsteadOfThrowing()
     {

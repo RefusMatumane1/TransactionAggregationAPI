@@ -24,8 +24,6 @@ public class CustomerEntityTests
             TransactionSource.Create("TestSource", Guid.NewGuid().ToString()));
     }
 
-    // ── Create ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Create_SetsAllProperties()
     {
@@ -38,8 +36,6 @@ public class CustomerEntityTests
         customer.Transactions.Should().BeEmpty();
     }
 
-    // ── Update ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Update_ChangesEmailAndName()
     {
@@ -51,8 +47,6 @@ public class CustomerEntityTests
         customer.Name.Should().Be("New Name");
         customer.UpdatedAt.Should().NotBeNull();
     }
-
-    // ── AddTransaction ────────────────────────────────────────────────────────
 
     [Fact]
     public void AddTransaction_WithMatchingCustomerId_AddsSuccessfully()

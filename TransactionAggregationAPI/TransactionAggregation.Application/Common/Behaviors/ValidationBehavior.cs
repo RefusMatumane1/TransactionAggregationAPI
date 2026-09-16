@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using MediatR;
 using TransactionAggregation.Application.Common.Models;
 
@@ -35,20 +35,15 @@ namespace TransactionAggregation.Application.Common.Behaviors
             if (failures.Count == 0)
                 return await next();
 
-            // Handle Result<T> pattern
             var responseType = typeof(TResponse);
             if (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(Result<>))
             {
                 var error = Error.Validation(string.Join("; ", failures.Select(f => f.ErrorMessage)));
 
-                // Result<T> has no single-Error constructor (it takes value/isSuccess/error), so
-                // this goes through the static Result.Failure<T>(Error) factory instead of
-                // Activator.CreateInstance(resultType, error) — that overload doesn't exist and
-                // throws MissingMethodException at runtime.
                 var failureMethod = typeof(Result)
-                    .GetMethods()
-                    .Single(m => m.Name == nameof(Result.Failure) && m.IsGenericMethodDefinition)
-                    .MakeGenericMethod(responseType.GetGenericArguments()[0]);
+                                    .GetMethods()
+                                    .Single(m => m.Name == nameof(Result.Failure) && m.IsGenericMethodDefinition)
+                                    .MakeGenericMethod(responseType.GetGenericArguments()[0]);
 
                 return (TResponse)failureMethod.Invoke(null, [error])!;
             }

@@ -39,10 +39,8 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.Property(b => b.ExternalAccountId)
                 .HasMaxLength(200);
 
-            // Encrypted (Data Protection ciphertext, base64) — sized generously since
-            // protected payloads are larger than the raw token.
             builder.Property(b => b.EncryptedAccessToken)
-                .HasMaxLength(4000);
+                            .HasMaxLength(4000);
 
             builder.Property(b => b.EncryptedRefreshToken)
                 .HasMaxLength(4000);
@@ -55,11 +53,9 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.HasIndex(b => b.CustomerId)
                 .HasDatabaseName("IX_BankLinks_CustomerId");
 
-            // A customer can only have one link per institution at a time (re-linking after
-            // revocation reuses/replaces rather than accumulating duplicate rows).
             builder.HasIndex(b => new { b.CustomerId, b.Institution })
-                .IsUnique()
-                .HasDatabaseName("IX_BankLinks_CustomerId_Institution");
+                            .IsUnique()
+                            .HasDatabaseName("IX_BankLinks_CustomerId_Institution");
         }
     }
 }

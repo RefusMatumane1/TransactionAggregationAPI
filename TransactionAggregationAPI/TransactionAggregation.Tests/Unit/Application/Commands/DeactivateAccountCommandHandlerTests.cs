@@ -26,8 +26,6 @@ public class DeactivateAccountCommandHandlerTests
         return account;
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ActiveAccount_DeactivatesSuccessfully()
     {
@@ -55,8 +53,6 @@ public class DeactivateAccountCommandHandlerTests
         context.Accounts.Single().UpdatedAt.Should().NotBeNull();
     }
 
-    // ── Idempotency ───────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_AlreadyInactiveAccount_StillReturnsSuccess()
     {
@@ -69,12 +65,9 @@ public class DeactivateAccountCommandHandlerTests
         var result = await handler.Handle(
             new DeactivateAccountCommand(account.Id.Value), CancellationToken.None);
 
-        // Deactivating an already-inactive account is idempotent
         result.IsSuccess.Should().BeTrue();
         context.Accounts.Single().IsActive.Should().BeFalse();
     }
-
-    // ── Not found ─────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_NonExistentAccount_ReturnsNotFound()
@@ -88,8 +81,6 @@ public class DeactivateAccountCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
-
-    // ── Multiple accounts ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_DeactivateOneOfMultipleAccounts_OtherRemainsActive()

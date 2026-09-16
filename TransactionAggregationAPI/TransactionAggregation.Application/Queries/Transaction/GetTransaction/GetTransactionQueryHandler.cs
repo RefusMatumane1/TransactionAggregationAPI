@@ -9,7 +9,7 @@ using TransactionAggregation.Domain.Common.ValueObjects;
 
 namespace TransactionAggregation.Application.Queries.Transaction.GetTransaction
 {
-    internal sealed class GetTransactionQueryHandler(IApplicationDbContext context, 
+    internal sealed class GetTransactionQueryHandler(IApplicationDbContext context,
         ILogger<GetTransactionQueryHandler> logger)
         : IQueryHandler<GetTransactionQuery, TransactionDto>
     {

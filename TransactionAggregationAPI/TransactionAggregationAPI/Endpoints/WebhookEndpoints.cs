@@ -15,9 +15,8 @@ public static class WebhookEndpoints
                       .WithApiVersionSet()
                       .WithTags("Webhooks")
                       .RequireRateLimiting("FixedWindow")
-                      // No JWT here — this is a server-to-server call from the aggregator, not
-                      // a logged-in user. ApiKeyEndpointFilter is what actually guards it.
-                      .AllowAnonymous();
+
+.AllowAnonymous();
 
         group.MapPost("/bank-aggregator/transactions", ReceiveBankTransactions)
              .WithName("ReceiveBankAggregatorTransactions")
@@ -36,9 +35,7 @@ public static class WebhookEndpoints
         [FromBody] BankTransactionsWebhookRequest request,
         CancellationToken cancellationToken)
     {
-        // Set by ApiKeyEndpointFilter once it matches the request's key against an active
-        // WebhookSource row — always present by the time we get here, since the filter runs
-        // first and rejects anything that didn't match.
+
         var sourceName = (string)httpContext.Items[ApiKeyEndpointFilter.SourceNameItemKey]!;
 
         var transactions = request.Transactions
@@ -59,8 +56,6 @@ public static class WebhookEndpoints
         if (result.IsFailure)
             return CustomResults.Problem(result);
 
-        // Accepted, not Ok — the payload is queued, not yet processed. BankLink resolution,
-        // dedup, and persistence all happen asynchronously; see InboxDispatcherBackgroundService.
         return Results.Accepted(value: new { InboxMessageId = result.Value });
     }
 }

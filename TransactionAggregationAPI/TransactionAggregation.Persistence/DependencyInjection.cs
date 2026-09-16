@@ -14,8 +14,6 @@ namespace TransactionAggregation.Persistence
             services.AddScoped<IApplicationDbContext>(provider =>
                 provider.GetRequiredService<ApplicationDbContext>());
 
-            services.AddScoped<IUnitOfWork, UnitOfWork>();
-
             return services;
         }
     }

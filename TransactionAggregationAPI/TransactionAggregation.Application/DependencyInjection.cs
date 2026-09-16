@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using Mapster;
 using MapsterMapper;
 using MediatR;
@@ -25,15 +25,14 @@ namespace TransactionAggregation.Application
 
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
-            services.AddMediatR(cfg => {
+            services.AddMediatR(cfg =>
+            {
                 cfg.RegisterServicesFromAssembly(typeof(GetTransactionsQueryHandler).Assembly);
                 cfg.RegisterServicesFromAssembly(Assembly.GetExecutingAssembly());
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(PerformanceBehavior<,>));
                 cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(CachingBehavior<,>));
-                //cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(TransactionBehavior<,>));
-                cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(IdempotencyBehavior<,>));
             });
 
             var config = TypeAdapterConfig.GlobalSettings;
@@ -43,7 +42,6 @@ namespace TransactionAggregation.Application
             config.Scan(typeof(TransactionProfile).Assembly);
             services.AddScoped<IMapper, ServiceMapper>();
 
-            // Add validators
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());
 
             return services;

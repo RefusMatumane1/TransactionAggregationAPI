@@ -33,12 +33,10 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Proc
 
                 var incomingExternalIds = request.Transactions.Select(t => t.Id).ToHashSet();
 
-                // Scoped to this customer — SourceExternalId is only unique per customer, so an
-                // aggregator that reuses ids across customers must not collide with someone else's.
                 var existingExternalIds = await context.Transactions
-                    .Where(t => t.CustomerId == link.CustomerId && incomingExternalIds.Contains(t.Source.ExternalId))
-                    .Select(t => t.Source.ExternalId)
-                    .ToHashSetAsync(cancellationToken);
+                                    .Where(t => t.CustomerId == link.CustomerId && incomingExternalIds.Contains(t.Source.ExternalId))
+                                    .Select(t => t.Source.ExternalId)
+                                    .ToHashSetAsync(cancellationToken);
 
                 var newTransactions = new List<Transaction>();
 
@@ -68,11 +66,6 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Proc
 
                 await context.Transactions.AddRangeAsync(newTransactions, cancellationToken);
 
-                // Enqueued pre-save (not published after SaveChangesAsync returns) so the sync
-                // side effect — cache invalidation/analytics — is written in the same DB
-                // transaction as the transactions themselves. If the process dies right after
-                // commit, the outbox row is already durable and the dispatcher will pick it up;
-                // the old post-save publish had no such guarantee.
                 foreach (var transaction in newTransactions)
                 {
                     var payload = new TransactionSyncedOutboxPayload(
@@ -87,12 +80,10 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Proc
                 }
                 catch (DbUpdateException ex) when (ex.InnerException?.Message.Contains("23505") == true)
                 {
-                    // A redelivered/overlapping inbox message raced our existence check — the
-                    // transactions are already persisted from an earlier one. Idempotent
-                    // success, not a failure, so it doesn't retry forever.
+
                     logger.LogWarning(
-                        "Duplicate transaction external id processing inbound transactions from source {SourceName} for BankLink {BankLinkId} — already inserted by a concurrent call",
-                        request.SourceName, link.Id.Value);
+                                            "Duplicate transaction external id processing inbound transactions from source {SourceName} for BankLink {BankLinkId} — already inserted by a concurrent call",
+                                            request.SourceName, link.Id.Value);
                     return Result.Success(0);
                 }
 

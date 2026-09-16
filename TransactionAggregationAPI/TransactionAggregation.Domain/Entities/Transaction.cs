@@ -1,4 +1,4 @@
-﻿using TransactionAggregation.Domain.Common;
+using TransactionAggregation.Domain.Common;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events;
@@ -9,7 +9,7 @@ namespace TransactionAggregation.Domain.Entities
 {
     public sealed class Transaction : BaseEntity
     {
-        private Transaction() { } // EF Core
+        private Transaction() { }
 
         private Transaction(
             TransactionId id,
@@ -33,7 +33,6 @@ namespace TransactionAggregation.Domain.Entities
             AddDomainEvent(new TransactionCreatedDomainEvent(this));
         }
 
-        // Properties
         public TransactionId Id { get; private set; }
         public CustomerId CustomerId { get; private set; }
         public AccountId? AccountId { get; private set; }
@@ -47,15 +46,14 @@ namespace TransactionAggregation.Domain.Entities
         public TransactionStatus Status { get; private set; }
         public Dictionary<string, string> Metadata { get; private set; } = new();
 
-
         public static Transaction Create(
-            CustomerId customerId,
-            Money amount,
-            string description,
-            TransactionCategory category,
-            TransactionSource source,
-            AccountId? accountId = null,
-            DateTime? date = null)
+                    CustomerId customerId,
+                    Money amount,
+                    string description,
+                    TransactionCategory category,
+                    TransactionSource source,
+                    AccountId? accountId = null,
+                    DateTime? date = null)
         {
             return new Transaction(
                 TransactionId.Create(),
@@ -67,7 +65,6 @@ namespace TransactionAggregation.Domain.Entities
                 source,
                 date ?? DateTime.UtcNow);
         }
-
 
         public void Categorize(TransactionCategory newCategory, bool isAuto = false)
         {
@@ -98,7 +95,6 @@ namespace TransactionAggregation.Domain.Entities
             AddDomainEvent(new TransactionApprovedDomainEvent(this, oldStatus, approvedBy));
         }
 
-        //UpdateStatus
         public void UpdateStatus(TransactionStatus newStatus, string reason)
         {
             if (Status == newStatus)
@@ -107,7 +103,7 @@ namespace TransactionAggregation.Domain.Entities
             var oldStatus = Status;
             Status = newStatus;
             UpdatedAt = DateTime.UtcNow;
-           // AddDomainEvent(new TransactionStatusUpdatedDomainEvent(this, oldStatus, newStatus, reason));
+
         }
 
         public void Reject(string reason, string rejectedBy = "System")

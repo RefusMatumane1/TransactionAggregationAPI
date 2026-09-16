@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Events.Transaction;
@@ -18,16 +18,14 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 notification.ApprovedBy,
                 notification.ApprovedAt);
 
-            // Invalidate caches
             await _cacheService.RemoveByPatternAsync(
-                $"transactions:{notification.Transaction.CustomerId.Value}*",
-                cancellationToken);
+                            $"transactions:{notification.Transaction.CustomerId.Value}*",
+                            cancellationToken);
 
             await _cacheService.RemoveByPatternAsync(
                 $"summary:{notification.Transaction.CustomerId.Value}*",
                 cancellationToken);
 
-            // Send notification if transaction is large
             if (notification.Transaction.Amount.AbsoluteAmount > 10000)
             {
                 await _notificationService.SendHighValueTransactionAlertAsync(

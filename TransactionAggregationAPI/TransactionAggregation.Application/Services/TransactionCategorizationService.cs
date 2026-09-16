@@ -27,7 +27,6 @@ namespace TransactionAggregation.Application.Services
                     return Task.FromResult(category);
             }
 
-            // Fall back to sign-based categorization
             if (transaction.Amount.Amount > 0)
                 return Task.FromResult(TransactionCategory.Income);
 

@@ -4,12 +4,6 @@ using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregationAPI.Endpoints
 {
-    /// <summary>
-    /// Verifies the X-Api-Key header on inbound webhook calls against the active WebhookSource
-    /// rows in the database (managed live via WebhookSourceEndpoints/the admin UI — not static
-    /// config) by an indexed hash lookup, so an admin's rotation or deactivation takes effect
-    /// on the very next call with no caching/invalidation to get wrong.
-    /// </summary>
     public sealed class ApiKeyEndpointFilter(IApplicationDbContext context) : IEndpointFilter
     {
         private const string HeaderName = "X-Api-Key";

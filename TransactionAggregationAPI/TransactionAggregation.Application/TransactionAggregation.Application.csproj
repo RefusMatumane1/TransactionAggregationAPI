@@ -4,8 +4,9 @@
 		<PackageReference Include="MediatR" />
 		<PackageReference Include="Mapster" />
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-		<PackageReference Include="Microsoft.Extensions.Http" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
 		<PackageReference Include="Serilog" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" />
 	</ItemGroup>

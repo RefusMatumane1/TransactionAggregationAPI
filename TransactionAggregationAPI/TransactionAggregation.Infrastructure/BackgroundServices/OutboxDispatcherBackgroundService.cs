@@ -13,14 +13,6 @@ using TransactionAggregation.Domain.Outbox;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
-    /// <summary>
-    /// Claims and processes OutboxMessage rows written in the same transaction as the business
-    /// data they describe (see ApplicationDbContext.SaveChangesAsync, TransactionCreatedEventHandler,
-    /// TransactionCategorizedEventHandler, ReceiveBankTransactionsCommandHandler).
-    ///
-    /// Claiming uses Postgres `FOR UPDATE SKIP LOCKED` rather than a single-leader lock, so
-    /// multiple replicas can drain the queue in parallel instead of serializing through one.
-    /// </summary>
     public sealed class OutboxDispatcherBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
@@ -166,7 +158,6 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             await analytics.TrackTransactionCategorizedAsync(
                 transaction, payload.OldCategory, payload.NewCategory, payload.IsAutoCategorized, cancellationToken);
 
-            // Notify on manual recategorization so the customer knows their category was changed
             if (!payload.IsAutoCategorized)
             {
                 await notifications.SendTransactionNotificationAsync(
@@ -204,7 +195,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
 
         private static TimeSpan ComputeBackoff(int attempts)
         {
-            var seconds = Math.Min(Math.Pow(2, attempts + 1), 300); // cap at 5 minutes
+            var seconds = Math.Min(Math.Pow(2, attempts + 1), 300);
             return TimeSpan.FromSeconds(seconds);
         }
     }

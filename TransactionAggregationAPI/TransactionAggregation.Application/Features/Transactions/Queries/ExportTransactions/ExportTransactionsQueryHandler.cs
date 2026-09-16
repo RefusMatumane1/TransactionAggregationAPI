@@ -104,8 +104,7 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
             return csv.ToString();
         }
 
-        // Always wraps in quotes and escapes embedded quotes by doubling them (RFC 4180)
         private static string Quote(string value) =>
-            $"\"{value.Replace("\"", "\"\"")}\"";
+                    $"\"{value.Replace("\"", "\"\"")}\"";
     }
 }

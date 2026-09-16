@@ -12,16 +12,6 @@ using TransactionAggregation.Domain.Inbox;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
-    /// <summary>
-    /// Claims and processes InboxMessage rows written by ReceiveBankTransactionsCommandHandler —
-    /// the raw, not-yet-validated-against-business-state payload a webhook call queued. This is
-    /// where BankLink resolution, dedup, categorization, and persistence actually happen, via
-    /// ProcessInboundTransactionsCommand, so the webhook response itself stays cheap regardless
-    /// of batch size.
-    ///
-    /// Structurally identical to OutboxDispatcherBackgroundService — same Postgres
-    /// `FOR UPDATE SKIP LOCKED` claim so multiple replicas can drain the queue in parallel.
-    /// </summary>
     public sealed class InboxDispatcherBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
@@ -119,7 +109,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
 
         private static TimeSpan ComputeBackoff(int attempts)
         {
-            var seconds = Math.Min(Math.Pow(2, attempts + 1), 300); // cap at 5 minutes
+            var seconds = Math.Min(Math.Pow(2, attempts + 1), 300);
             return TimeSpan.FromSeconds(seconds);
         }
     }

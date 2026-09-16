@@ -65,8 +65,6 @@ public class ProcessInboundTransactionsCommandHandlerTests
         Date = DateTime.UtcNow
     };
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ActiveBankLink_PersistsTransactionsForTheLinkedCustomer()
     {
@@ -118,10 +116,7 @@ public class ProcessInboundTransactionsCommandHandlerTests
     [Fact]
     public async Task Handle_CategorizationServiceReturnsCategory_MarksTheCategorizationAsAutomatic()
     {
-        // Uses its own context/mediator (rather than InMemoryDbContextFactory) so the test can
-        // observe the TransactionCategorizedDomainEvent raised by Transaction.Categorize —
-        // regression test for a bug where the ingestion path called Categorize without isAuto:
-        // true, so an ingest-time auto-categorization looked like a manual one downstream.
+
         var mediator = Substitute.For<IMediator>();
         mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -158,8 +153,6 @@ public class ProcessInboundTransactionsCommandHandlerTests
         payload.CustomerId.Should().Be(customer.Id.Value);
         payload.SyncSource.Should().Be(link.Institution.ToString());
     }
-
-    // ── Unknown / inactive link ──────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_UnknownExternalAccountId_ReturnsNotFound()
@@ -204,8 +197,6 @@ public class ProcessInboundTransactionsCommandHandlerTests
         result.Error.Type.Should().Be(ErrorType.NotFound);
         context.Transactions.Should().BeEmpty();
     }
-
-    // ── Idempotency ───────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_RedeliveredTransaction_IsSkippedNotDuplicated()

@@ -42,13 +42,9 @@ public static class BankLinkEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        // Not under the customer-scoped/authenticated group above: this is the aggregator
-        // redirecting the customer's own browser back to us, so it carries no JWT — the
-        // one-time `state` value (see InitiateBankLinkCommandHandler) is what proves which
-        // customer/institution this belongs to, not the caller's identity.
         var callbackGroup = app.MapGroup("/api/v{version:apiVersion}/bank-links")
-            .WithApiVersionSet()
-            .WithTags("BankLinks");
+                    .WithApiVersionSet()
+                    .WithTags("BankLinks");
 
         callbackGroup.MapGet("/callback", CompleteBankLink)
             .WithName("CompleteBankLink")

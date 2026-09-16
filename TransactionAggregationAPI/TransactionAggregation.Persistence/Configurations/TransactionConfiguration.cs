@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text.Json;
@@ -12,19 +12,18 @@ namespace TransactionAggregation.Persistence.Configurations
         public void Configure(EntityTypeBuilder<Transaction> builder)
         {
             builder.ToTable("Transactions");
-            
+
             builder.HasKey(t => t.Id);
             builder.Property(t => t.Id)
                 .HasConversion(
                     id => id.Value,
                     value => TransactionId.CreateFrom(value));
 
-      
             builder.Property(t => t.CustomerId)
-                .HasConversion(
-                    id => id.Value,
-                    value => CustomerId.CreateFrom(value))
-                .IsRequired();
+                            .HasConversion(
+                                id => id.Value,
+                                value => CustomerId.CreateFrom(value))
+                            .IsRequired();
 
             builder.Property(t => t.AccountId)
                 .HasConversion(
@@ -48,48 +47,36 @@ namespace TransactionAggregation.Persistence.Configurations
                     .IsRequired();
             });
 
-       
             builder.OwnsOne(t => t.Source, source =>
-            {
-                source.Property(s => s.Name)
-                    .HasColumnName("SourceName")
-                    .HasMaxLength(50)
-                    .IsRequired();
+                        {
+                            source.Property(s => s.Name)
+                                .HasColumnName("SourceName")
+                                .HasMaxLength(50)
+                                .IsRequired();
 
-                source.Property(s => s.ExternalId)
-                    .HasColumnName("SourceExternalId")
-                    .HasMaxLength(100)
-                    .IsRequired();
+                            source.Property(s => s.ExternalId)
+                                .HasColumnName("SourceExternalId")
+                                .HasMaxLength(100)
+                                .IsRequired();
 
-                source.Property(s => s.Provider)
-                    .HasColumnName("SourceProvider")
-                    .HasMaxLength(100);
+                            source.Property(s => s.Provider)
+                                .HasColumnName("SourceProvider")
+                                .HasMaxLength(100);
 
-                source.Property(s => s.Version)
-                    .HasColumnName("SourceVersion")
-                    .HasMaxLength(20);
+                            source.Property(s => s.Version)
+                                .HasColumnName("SourceVersion")
+                                .HasMaxLength(20);
 
-                source.Property(s => s.LastSyncDate)
-                    .HasColumnName("SourceLastSyncDate");
+                            source.Property(s => s.LastSyncDate)
+                                .HasColumnName("SourceLastSyncDate");
 
-                source.HasIndex(s => s.ExternalId)
-                    .HasDatabaseName("IX_Transactions_SourceExternalId");
-            });
+                            source.HasIndex(s => s.ExternalId)
+                                .HasDatabaseName("IX_Transactions_SourceExternalId");
+                        });
 
-            // A composite UNIQUE ("CustomerId", "SourceExternalId") index is created via raw
-            // SQL in migration AddCompositeUniqueTransactionSourceIndex — EF Core's fluent
-            // HasIndex() can't express an index spanning an owner property and an owned
-            // navigation's property (Source.ExternalId) mapped into the same table. It is
-            // the DB-level backstop against double-inserting the same transaction when the
-            // aggregator redelivers a webhook or two deliveries race each other (see
-            // ReceiveBankTransactionsCommandHandler): a given external id is only unique
-            // within one customer's feed (two customers, or two source banks, can legitimately
-            // reuse the same id — why the old single-column unique index above was dropped).
-
-      
             builder.Property(t => t.Description)
-                .HasMaxLength(500)
-                .IsRequired();
+                            .HasMaxLength(500)
+                            .IsRequired();
 
             builder.Property(t => t.Category)
                 .HasConversion<int>()
@@ -102,9 +89,8 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.Property(t => t.Date)
                 .IsRequired();
 
-            // Audit fields
             builder.Property(t => t.CreatedAt)
-                .IsRequired();
+                            .IsRequired();
 
             builder.Property(t => t.UpdatedAt);
 
@@ -113,20 +99,18 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.Property(t => t.ApprovedBy)
                 .HasMaxLength(100);
 
-            // Metadata as JSON
             builder.Property(t => t.Metadata)
-                .HasConversion(
-                    v => JsonSerializer.Serialize(v, new JsonSerializerOptions()),
-                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, new JsonSerializerOptions()) ?? new(),
-                    new ValueComparer<Dictionary<string, string>>(
-                        (c1, c2) => c1.SequenceEqual(c2),
-                        c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
-                        c => new Dictionary<string, string>(c)))
-                .HasColumnType("jsonb");
+                            .HasConversion(
+                                v => JsonSerializer.Serialize(v, new JsonSerializerOptions()),
+                                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, new JsonSerializerOptions()) ?? new(),
+                                new ValueComparer<Dictionary<string, string>>(
+                                    (c1, c2) => c1.SequenceEqual(c2),
+                                    c => c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                                    c => new Dictionary<string, string>(c)))
+                            .HasColumnType("jsonb");
 
-    
             builder.HasIndex(t => t.CustomerId)
-                .HasDatabaseName("IX_Transactions_CustomerId");
+                            .HasDatabaseName("IX_Transactions_CustomerId");
 
             builder.HasIndex(t => t.Date)
                 .HasDatabaseName("IX_Transactions_Date");
@@ -143,8 +127,6 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.HasIndex(t => new { t.CustomerId, t.Status })
                 .HasDatabaseName("IX_Transactions_Customer_Status");
 
-            // Query filter for soft delete (if needed)
-            // builder.HasQueryFilter(t => t.Status != TransactionStatus.Cancelled);
         }
     }
 }

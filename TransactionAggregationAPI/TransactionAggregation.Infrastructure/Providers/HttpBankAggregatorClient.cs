@@ -10,17 +10,6 @@ using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Infrastructure.Providers
 {
-    /// <summary>
-    /// OAuth2 (RFC 6749) client for the configured account-data aggregator. The
-    /// authorization-code/refresh-token exchange below is spec-standard; the account call is
-    /// written against a generic REST shape and is the part you must adapt to your chosen
-    /// aggregator's actual API (Stitch's public API, for example, is GraphQL — swap the
-    /// GetLinkedAccountAsync body for a POST with a GraphQL query if so). Transaction data
-    /// itself is never pulled through this client — the aggregator pushes it to
-    /// WebhookEndpoints instead. Resilience (retry/circuit-breaker/timeout) comes from the
-    /// standard handler registered app-wide in ServiceDefaults — this class doesn't need its
-    /// own Polly policy.
-    /// </summary>
     internal sealed class HttpBankAggregatorClient : IBankAggregatorClient
     {
         private readonly HttpClient _httpClient;
@@ -46,8 +35,7 @@ namespace TransactionAggregation.Infrastructure.Providers
                 ["response_type"] = "code",
                 ["scope"] = "accounts:read transactions:read",
                 ["state"] = state,
-                // Provider-specific institution hint — confirm the actual query param name
-                // your aggregator expects (Stitch calls this concept a "bank" in its consent UI).
+
                 ["institution"] = institution.ToString()
             };
 
@@ -136,20 +124,14 @@ namespace TransactionAggregation.Infrastructure.Providers
             if (response.StatusCode != HttpStatusCode.Unauthorized)
                 return;
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
             _logger.LogWarning("Aggregator rejected the request as unauthorized (token expired/revoked)");
-            throw new BankAggregatorUnauthorizedException($"Aggregator returned 401: {body}");
+            throw new BankAggregatorUnauthorizedException("Aggregator returned 401 Unauthorized");
         }
 
-        // ── Provider response DTOs ──────────────────────────────────────────────────
-        // OAuthTokenResponse follows RFC 6749 §5.1 and should hold for any spec-compliant
-        // provider. The account/transaction shapes below are illustrative — replace their
-        // field names to match your aggregator's actual response schema.
-
         private sealed record OAuthTokenResponse(
-            [property: JsonPropertyName("access_token")] string AccessToken,
-            [property: JsonPropertyName("refresh_token")] string RefreshToken,
-            [property: JsonPropertyName("expires_in")] int ExpiresInSeconds);
+                    [property: JsonPropertyName("access_token")] string AccessToken,
+                    [property: JsonPropertyName("refresh_token")] string RefreshToken,
+                    [property: JsonPropertyName("expires_in")] int ExpiresInSeconds);
 
         private sealed record AggregatorAccountResponse(
             [property: JsonPropertyName("id")] string Id,

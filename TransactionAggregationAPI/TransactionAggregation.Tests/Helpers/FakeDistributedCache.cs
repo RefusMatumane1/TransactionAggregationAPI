@@ -2,10 +2,6 @@ using Microsoft.Extensions.Caching.Distributed;
 
 namespace TransactionAggregation.Tests.Helpers;
 
-/// <summary>
-/// Minimal in-memory IDistributedCache for handlers that use IDistributedCache directly
-/// (e.g. the bank-link OAuth state cache) rather than through ICacheService.
-/// </summary>
 public sealed class FakeDistributedCache : IDistributedCache
 {
     private readonly Dictionary<string, byte[]> _store = new();

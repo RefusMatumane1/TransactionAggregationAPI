@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,8 +8,7 @@ namespace TransactionAggregation.Persistence
 {
     public static class MigrationExtensions
     {
-        // Arbitrary fixed key for Postgres advisory locking — any bigint works as long
-        // as it's unique to this purpose within the database.
+
         private const long MigrationLockId = 7_27_2024;
 
         public static async Task ApplyMigrationsAsync(this IHost host, CancellationToken cancellationToken = default)
@@ -22,20 +21,12 @@ namespace TransactionAggregation.Persistence
             {
                 var context = services.GetRequiredService<ApplicationDbContext>();
 
-                // When running under the integration-test WebApplicationFactory the context
-                // uses an InMemory database, so we call EnsureCreated instead — no locking
-                // needed since tests run a single in-process instance.
                 if (!context.Database.IsRelational())
                 {
                     await context.Database.EnsureCreatedAsync(cancellationToken);
                     return;
                 }
 
-                // Multiple API replicas (or the dedicated migration Job racing a rolling
-                // deploy) can call this concurrently. pg_advisory_lock serializes them at
-                // the database level regardless of deployment topology, so migrations are
-                // never applied twice in parallel even if operational discipline (running
-                // the Job before the Deployment) is skipped.
                 var connection = (NpgsqlConnection)context.Database.GetDbConnection();
                 await connection.OpenAsync(cancellationToken);
 
@@ -50,7 +41,7 @@ namespace TransactionAggregation.Persistence
                     }
 
                     logger.LogInformation("Applying database migrations...");
-                   // await context.Database.MigrateAsync(cancellationToken);
+
                     logger.LogInformation("Database migrations applied successfully");
                 }
                 finally

@@ -11,8 +11,6 @@ public class AccountEntityTests
 {
     private static CustomerId NewCustomerId() => CustomerId.Create();
 
-    // ── Create ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Create_WithValidParameters_SetsAllProperties()
     {
@@ -124,8 +122,6 @@ public class AccountEntityTests
         act.Should().NotThrow();
     }
 
-    // ── Credit ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Credit_PositiveAmount_IncreasesBalance()
     {
@@ -176,8 +172,6 @@ public class AccountEntityTests
                .Should().Throw<DomainException>()
                .WithMessage("*inactive*");
     }
-
-    // ── Debit ─────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Debit_PositiveAmount_DecreasesBalance()
@@ -231,8 +225,6 @@ public class AccountEntityTests
 
         account.Balance.Should().Be(-100m);
     }
-
-    // ── Deactivate / Reactivate ───────────────────────────────────────────────
 
     [Fact]
     public void Deactivate_SetsIsActiveFalse()

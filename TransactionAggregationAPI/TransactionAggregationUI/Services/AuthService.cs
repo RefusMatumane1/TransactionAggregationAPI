@@ -3,11 +3,6 @@ using TransactionAggregationUI.Models.Auth;
 
 namespace TransactionAggregationUI.Services;
 
-/// <summary>
-/// Registration only — login/logout/session state are handled by the OIDC library
-/// (Microsoft.AspNetCore.Components.WebAssembly.Authentication, wired up in Program.cs) talking
-/// to Keycloak directly, not by this app.
-/// </summary>
 public class AuthService
 {
     private readonly IHttpClientFactory _factory;

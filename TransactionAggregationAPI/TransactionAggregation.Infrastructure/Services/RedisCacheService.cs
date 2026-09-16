@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Text.Json;
@@ -78,7 +78,6 @@ namespace TransactionAggregation.Infrastructure.Services
 
                 var server = _redis.GetServer(endpoints[0]);
 
-                // SCAN for keys matching pattern (more efficient than KEYS)
                 await foreach (var key in server.KeysAsync(pattern: pattern, pageSize: 100))
                 {
                     await _database.KeyDeleteAsync(key);

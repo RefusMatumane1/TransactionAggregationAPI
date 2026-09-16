@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using TransactionAggregation.Application.Common.Interfaces;
@@ -46,7 +46,7 @@ namespace TransactionAggregation.Persistence
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
-            // Update audit fields
+
             foreach (var entry in ChangeTracker.Entries<BaseEntity>())
             {
                 switch (entry.State)
@@ -71,9 +71,6 @@ namespace TransactionAggregation.Persistence
             var pending = (int)OutboxMessageStatus.Pending;
             var processing = (int)OutboxMessageStatus.Processing;
 
-            // One atomic UPDATE ... RETURNING: the row selection and the Status flip happen in a
-            // single statement, so SKIP LOCKED lets concurrent callers each grab a disjoint batch
-            // instead of blocking on each other or double-claiming the same rows.
             return OutboxMessages.FromSqlInterpolated($@"
                 UPDATE ""OutboxMessages""
                 SET ""Status"" = {processing}, ""ClaimedAt"" = {now}
@@ -86,7 +83,7 @@ namespace TransactionAggregation.Persistence
                     FOR UPDATE SKIP LOCKED
                 )
                 RETURNING *;")
-                .ToListAsync(cancellationToken);
+                            .ToListAsync(cancellationToken);
         }
 
         public Task<List<InboxMessage>> ClaimInboxMessagesAsync(int batchSize, CancellationToken cancellationToken = default)
@@ -95,8 +92,6 @@ namespace TransactionAggregation.Persistence
             var pending = (int)InboxMessageStatus.Pending;
             var processing = (int)InboxMessageStatus.Processing;
 
-            // Same atomic claim shape as ClaimOutboxMessagesAsync — one UPDATE ... RETURNING with
-            // SKIP LOCKED so concurrent callers each claim a disjoint batch.
             return InboxMessages.FromSqlInterpolated($@"
                 UPDATE ""InboxMessages""
                 SET ""Status"" = {processing}, ""ClaimedAt"" = {now}
@@ -109,7 +104,7 @@ namespace TransactionAggregation.Persistence
                     FOR UPDATE SKIP LOCKED
                 )
                 RETURNING *;")
-                .ToListAsync(cancellationToken);
+                            .ToListAsync(cancellationToken);
         }
 
         private async Task DispatchDomainEvents()

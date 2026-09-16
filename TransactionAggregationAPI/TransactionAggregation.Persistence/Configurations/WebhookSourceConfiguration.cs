@@ -26,11 +26,9 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.HasIndex(s => s.Name)
                 .IsUnique();
 
-            // The lookup the webhook auth filter actually runs on every call — hash the
-            // presented key, then find the (single) row whose KeyHash matches.
             builder.Property(s => s.KeyHash)
-                .HasMaxLength(64) // SHA-256, hex-encoded, is always exactly 64 chars
-                .IsRequired();
+                            .HasMaxLength(64)
+                            .IsRequired();
 
             builder.HasIndex(s => s.KeyHash)
                 .IsUnique();

@@ -18,8 +18,7 @@ namespace TransactionAggregation.Application.Commands.BankLink.InitiateBankLink
         ILogger<InitiateBankLinkCommandHandler> logger)
         : ICommandHandler<InitiateBankLinkCommand, string>
     {
-        // One-time-use CSRF token for the OAuth callback; short-lived since the consent flow
-        // is a single interactive browser round-trip.
+
         private static readonly TimeSpan StateTtl = TimeSpan.FromMinutes(10);
 
         public async Task<Result<string>> Handle(InitiateBankLinkCommand request, CancellationToken cancellationToken)

@@ -17,8 +17,6 @@ public class TransactionEntityTests
             TransactionCategory.Uncategorized,
             TransactionSource.Create("TestSource", Guid.NewGuid().ToString()));
 
-    // ── Categorize ────────────────────────────────────────────────────────────
-
     [Fact]
     public void Categorize_ChangesCategory_AndRaisesEvent()
     {
@@ -35,11 +33,8 @@ public class TransactionEntityTests
         var tx = CreatePending();
         tx.Categorize(TransactionCategory.Uncategorized);
 
-        // No event raised for no-op
         tx.DomainEvents.Should().NotContain(e => e.GetType().Name == "TransactionCategorizedDomainEvent");
     }
-
-    // ── Approve ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void Approve_FromPending_SetsStatusAndRaisesEvent()
@@ -59,7 +54,7 @@ public class TransactionEntityTests
         tx.Approve();
         var eventCountBefore = tx.DomainEvents.Count;
 
-        tx.Approve(); // second call
+        tx.Approve();
 
         tx.DomainEvents.Count.Should().Be(eventCountBefore);
     }
@@ -73,8 +68,6 @@ public class TransactionEntityTests
         tx.Invoking(t => t.Approve())
           .Should().Throw<DomainException>();
     }
-
-    // ── Reject ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Reject_FromPending_SetsRejectedStatus()
@@ -95,8 +88,6 @@ public class TransactionEntityTests
           .Should().Throw<DomainException>();
     }
 
-    // ── Refund ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Refund_WhenApproved_SetsRefundedStatus()
     {
@@ -116,8 +107,6 @@ public class TransactionEntityTests
           .Should().Throw<DomainException>();
     }
 
-    // ── Metadata ──────────────────────────────────────────────────────────────
-
     [Fact]
     public void AddMetadata_StoresKeyValue()
     {
@@ -136,8 +125,6 @@ public class TransactionEntityTests
 
         tx.Metadata.Should().NotContainKey("invoiceId");
     }
-
-    // ── Helper properties ─────────────────────────────────────────────────────
 
     [Fact]
     public void IsExpense_ForNegativeAmount_IsTrue()

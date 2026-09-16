@@ -1,4 +1,4 @@
-﻿namespace TransactionAggregation.Application.Common.Models
+namespace TransactionAggregation.Application.Common.Models
 {
     public sealed class PaginatedResponse<T>
     {
@@ -10,7 +10,6 @@
         public bool HasPreviousPage => PageNumber > 1;
         public bool HasNextPage => PageNumber < TotalPages;
 
-        // Metadata
         public DateTime GeneratedAt { get; init; } = DateTime.UtcNow;
         public string? NextPageUrl { get; init; }
         public string? PreviousPageUrl { get; init; }

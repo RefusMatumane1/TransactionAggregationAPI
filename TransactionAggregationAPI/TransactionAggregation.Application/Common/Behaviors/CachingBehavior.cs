@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
@@ -25,7 +25,7 @@ namespace TransactionAggregation.Application.Common.Behaviors
             RequestHandlerDelegate<TResponse> next,
             CancellationToken cancellationToken)
         {
-            // Check if request is cacheable
+
             if (request is not ICacheableQuery cacheableQuery)
                 return await next();
 
@@ -41,11 +41,6 @@ namespace TransactionAggregation.Application.Common.Behaviors
             _logger.LogInformation("Cache miss for key: {CacheKey}", cacheKey);
             var response = await next();
 
-            // Never cache failure results:
-            // 1. Result<T>.Value throws InvalidOperationException when IsSuccess == false,
-            //    so JSON serialisation would crash immediately.
-            // 2. Caching a failure would serve stale error responses to future requests
-            //    that may succeed (e.g. after the underlying data is created).
             if (response is Result { IsFailure: true })
                 return response;
 
@@ -64,11 +59,6 @@ namespace TransactionAggregation.Application.Common.Behaviors
             var bytes = Encoding.UTF8.GetBytes(json);
             var base64 = Convert.ToBase64String(bytes);
 
-            // A request that owns customer/entity-scoped data (e.g. transactions) uses that
-            // prefix instead of its type name, so the outbox dispatcher's cache-invalidation
-            // step (OutboxDispatcherBackgroundService) can invalidate every cached variant for
-            // that entity via RemoveByPatternAsync("{prefix}:*") — a plain type-name prefix
-            // has no entity id in it for a pattern to match against.
             var prefix = request is ICacheKeyPrefix prefixed ? prefixed.CachePrefix : typeof(TRequest).Name;
             return $"{prefix}:{base64}";
         }

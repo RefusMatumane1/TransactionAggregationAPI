@@ -23,8 +23,6 @@ public class BankLinkEntityTests
         return link;
     }
 
-    // ── Create ────────────────────────────────────────────────────────────────
-
     [Fact]
     public void Create_WithValidParameters_SetsAllProperties()
     {
@@ -41,8 +39,6 @@ public class BankLinkEntityTests
         link.EncryptedRefreshToken.Should().BeNull();
         link.TokenExpiresAt.Should().BeNull();
     }
-
-    // ── Activate ──────────────────────────────────────────────────────────────
 
     [Fact]
     public void Activate_FromPendingAuthorization_SetsActiveAndTokenFields()
@@ -73,8 +69,6 @@ public class BankLinkEntityTests
         act.Should().Throw<DomainException>()
            .WithMessage("*revoked*");
     }
-
-    // ── UpdateTokens ──────────────────────────────────────────────────────────
 
     [Fact]
     public void UpdateTokens_OnActiveLink_ReplacesTokenFieldsAndKeepsActive()
@@ -113,8 +107,6 @@ public class BankLinkEntityTests
            .WithMessage("*revoked*");
     }
 
-    // ── MarkNeedsReauthorization ──────────────────────────────────────────────
-
     [Fact]
     public void MarkNeedsReauthorization_OnActiveLink_SetsStatus()
     {
@@ -135,8 +127,6 @@ public class BankLinkEntityTests
 
         link.Status.Should().Be(BankLinkStatus.Revoked);
     }
-
-    // ── ResetForReauthorization ───────────────────────────────────────────────
 
     [Fact]
     public void ResetForReauthorization_OnRevokedLink_ReturnsToPendingAndClearsTokens()
@@ -177,8 +167,6 @@ public class BankLinkEntityTests
         act.Should().Throw<DomainException>()
            .WithMessage("*already*");
     }
-
-    // ── Revoke ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Revoke_ClearsTokensAndSetsRevokedStatus()

@@ -13,6 +13,6 @@
         Income = 8,
         Transfer = 9,
         Shopping = 10,
-       Subscriptions = 11
+        Subscriptions = 11
     }
 }

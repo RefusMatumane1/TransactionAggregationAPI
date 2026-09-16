@@ -7,17 +7,6 @@ using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace TransactionAggregation.Tests.Integration;
 
-/// <summary>
-/// Stands in for the real Keycloak-issued JwtBearer scheme in integration tests, so they need
-/// no live Keycloak. Authenticates a request as whichever customer id is passed in the
-/// X-Test-UserId header (mirroring the "sub" claim a real Keycloak token would carry) — a
-/// request without that header is treated as anonymous, exactly like a request with no bearer
-/// token. An optional, comma-separated X-Test-Roles header adds role claims (e.g. "admin") for
-/// tests exercising RequireAuthorization("Admin") — uses ClaimTypes.Role, the default
-/// RoleClaimType for a ClaimsIdentity built without an explicit one, independent of the
-/// "roles"-named claim the real JwtBearer scheme is configured for (see Program.cs) since this
-/// is a wholly separate, test-only authentication scheme.
-/// </summary>
 public sealed class TestAuthHandler(
     IOptionsMonitor<AuthenticationSchemeOptions> options,
     ILoggerFactory logger,

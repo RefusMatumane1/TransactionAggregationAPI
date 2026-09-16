@@ -24,18 +24,18 @@ public class TransactionCreatedEventHandlerTests
     {
         Keywords = new Dictionary<string, string>
         {
-            ["walmart"]    = "Groceries",
-            ["grocery"]    = "Groceries",
-            ["kroger"]     = "Groceries",
+            ["walmart"] = "Groceries",
+            ["grocery"] = "Groceries",
+            ["kroger"] = "Groceries",
             ["restaurant"] = "Dining",
-            ["starbucks"]  = "Dining",
-            ["uber"]       = "Transportation",
-            ["lyft"]       = "Transportation",
-            ["netflix"]    = "Entertainment",
-            ["spotify"]    = "Entertainment",
-            ["electric"]   = "Utilities",
-            ["rent"]       = "Housing",
-            ["mortgage"]   = "Housing",
+            ["starbucks"] = "Dining",
+            ["uber"] = "Transportation",
+            ["lyft"] = "Transportation",
+            ["netflix"] = "Entertainment",
+            ["spotify"] = "Entertainment",
+            ["electric"] = "Utilities",
+            ["rent"] = "Housing",
+            ["mortgage"] = "Housing",
         }
     };
 
@@ -56,20 +56,18 @@ public class TransactionCreatedEventHandlerTests
             categorization ?? new TransactionCategorizationService(Options.Create(DefaultOptions)),
             context);
 
-    // ── Auto-categorisation ───────────────────────────────────────────────────
-
     [Theory]
-    [InlineData("walmart weekly shop",    TransactionCategory.Groceries)]
-    [InlineData("kroger checkout",        TransactionCategory.Groceries)]
-    [InlineData("uber ride home",         TransactionCategory.Transportation)]
-    [InlineData("lyft to airport",        TransactionCategory.Transportation)]
-    [InlineData("netflix subscription",   TransactionCategory.Entertainment)]
-    [InlineData("spotify premium",        TransactionCategory.Entertainment)]
-    [InlineData("electric company",       TransactionCategory.Utilities)]
-    [InlineData("rent payment",           TransactionCategory.Housing)]
-    [InlineData("mortgage instalment",    TransactionCategory.Housing)]
-    [InlineData("restaurant dinner",      TransactionCategory.Dining)]
-    [InlineData("starbucks morning",      TransactionCategory.Dining)]
+    [InlineData("walmart weekly shop", TransactionCategory.Groceries)]
+    [InlineData("kroger checkout", TransactionCategory.Groceries)]
+    [InlineData("uber ride home", TransactionCategory.Transportation)]
+    [InlineData("lyft to airport", TransactionCategory.Transportation)]
+    [InlineData("netflix subscription", TransactionCategory.Entertainment)]
+    [InlineData("spotify premium", TransactionCategory.Entertainment)]
+    [InlineData("electric company", TransactionCategory.Utilities)]
+    [InlineData("rent payment", TransactionCategory.Housing)]
+    [InlineData("mortgage instalment", TransactionCategory.Housing)]
+    [InlineData("restaurant dinner", TransactionCategory.Dining)]
+    [InlineData("starbucks morning", TransactionCategory.Dining)]
     public async Task Handle_AutoCategorisesFromDescription(string description, TransactionCategory expected)
     {
         var context = InMemoryDbContextFactory.Create();
@@ -105,13 +103,10 @@ public class TransactionCreatedEventHandlerTests
         transaction.Category.Should().Be(TransactionCategory.Uncategorized);
     }
 
-    // ── Already-categorized transactions are left alone ───────────────────────
-
     [Fact]
     public async Task Handle_AlreadyCategorizedTransaction_DoesNotOverwriteIt()
     {
-        // Description would auto-categorize as Transportation if this ran — proves the
-        // pre-set category wins, not just that the result happens to match.
+
         var context = InMemoryDbContextFactory.Create();
         var transaction = MakeTransaction(-100m, "uber ride home", TransactionCategory.Groceries);
         var handler = BuildHandler(context);
@@ -146,8 +141,6 @@ public class TransactionCreatedEventHandlerTests
 
         context.OutboxMessages.Should().ContainSingle(m => m.Type == OutboxMessageTypes.TransactionCreated);
     }
-
-    // ── Side-effects ──────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_EnqueuesTransactionCreatedOutboxMessageWithCorrectPayload()

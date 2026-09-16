@@ -62,9 +62,7 @@ public class ReceiveBankTransactionsCommandHandlerTests
     [Fact]
     public async Task Handle_DoesNotResolveBankLinkOrPersistTransactions()
     {
-        // Business validation (does this BankLink even exist?) is deliberately deferred to
-        // ProcessInboundTransactionsCommand, run later by InboxDispatcherBackgroundService — this
-        // handler only writes the raw payload, regardless of whether "never-linked" is real.
+
         var context = InMemoryDbContextFactory.Create();
         var handler = BuildHandler(context);
 

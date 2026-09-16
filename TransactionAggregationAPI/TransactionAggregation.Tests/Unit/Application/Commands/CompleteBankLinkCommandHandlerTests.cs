@@ -71,8 +71,6 @@ public class CompleteBankLinkCommandHandlerTests
         return state;
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ValidStateAndCode_ActivatesLinkAndReturnsAccountId()
     {
@@ -147,8 +145,6 @@ public class CompleteBankLinkCommandHandlerTests
         replay.Error.Type.Should().Be(ErrorType.Validation);
     }
 
-    // ── Invalid / expired state ───────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_UnknownState_ReturnsValidationFailure()
     {
@@ -168,8 +164,7 @@ public class CompleteBankLinkCommandHandlerTests
         var customer = await SeedCustomerAsync(context);
         var cache = new FakeDistributedCache();
         var state = await SeedPendingStateAsync(cache, context, customer.Id, Institution.FNB);
-        // Simulate the link having already moved past PendingAuthorization (e.g. a second,
-        // still-cached callback replay racing a legitimate completion).
+
         var link = context.BankLinks.Single();
         link.Activate(AccountId.Create(), "ext-1", "enc-a", "enc-r", DateTime.UtcNow.AddHours(1));
         await context.SaveChangesAsync();
@@ -202,8 +197,6 @@ public class CompleteBankLinkCommandHandlerTests
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
 
-    // ── Re-linking an account number the customer already has ────────────────
-
     [Fact]
     public async Task Handle_ReLinkingPreviouslyKnownAccountNumber_ReusesExistingAccountInsteadOfFailing()
     {
@@ -225,8 +218,6 @@ public class CompleteBankLinkCommandHandlerTests
         result.Value.Should().Be(existingAccount.Id.Value);
         context.Customers.Include(c => c.Accounts).Single().Accounts.Should().ContainSingle();
     }
-
-    // ── Account-type mapping ──────────────────────────────────────────────────
 
     [Theory]
     [InlineData("savings", AccountType.Savings)]

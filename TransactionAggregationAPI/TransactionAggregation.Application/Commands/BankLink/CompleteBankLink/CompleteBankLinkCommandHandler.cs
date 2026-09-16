@@ -30,7 +30,6 @@ namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
                 if (statePayloadJson is null)
                     return Result.Failure<Guid>(Error.Validation("Authorization state is invalid or has expired. Please try linking again."));
 
-                // One-time use — remove immediately so the same callback can't be replayed.
                 await _cache.RemoveAsync(cacheKey, cancellationToken);
 
                 var statePayload = JsonSerializer.Deserialize<InitiateBankLinkCommandHandler.StatePayload>(statePayloadJson)!;
@@ -65,8 +64,7 @@ namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
                 }
                 catch (DomainException)
                 {
-                    // Customer re-linking an account they'd previously linked (and possibly
-                    // revoked) — reuse the existing Account instead of failing.
+
                     account = customer.Accounts.First(a => a.AccountNumber == linkedAccount.AccountNumber);
                 }
 

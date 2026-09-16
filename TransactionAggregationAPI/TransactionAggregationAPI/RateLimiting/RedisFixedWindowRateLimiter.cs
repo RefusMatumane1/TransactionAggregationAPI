@@ -4,16 +4,6 @@ using System.Threading.RateLimiting;
 
 namespace TransactionAggregationAPI.RateLimiting;
 
-/// <summary>
-/// A fixed-window rate limiter backed by Redis.
-/// All counter state lives in Redis, so the limit is enforced consistently
-/// across every replica in the cluster.
-///
-/// Algorithm: atomic INCR + PEXPIRE via Lua script.
-/// The script increments a key and sets its TTL on first access (count == 1).
-/// A second PTTL guard covers the rare case where a key was created without
-/// an expiry due to a previous failed PEXPIRE call.
-/// </summary>
 internal class RedisFixedWindowRateLimiter : RateLimiter
 {
     private readonly IDatabase _db;
@@ -21,8 +11,6 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
     private readonly RedisRateLimiterOptions _options;
     private readonly ILogger? _logger;
 
-    // Prepared script is compiled once and SHA-cached by StackExchange.Redis.
-    // Redis executes it atomically; no MULTI/EXEC needed.
     private static readonly LuaScript AtomicIncrScript = LuaScript.Prepare("""
         local count = redis.call('INCR', @key)
         if count == 1 then
@@ -53,14 +41,8 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
 
     public override TimeSpan? IdleDuration => null;
 
-    // GetAvailablePermits is a best-effort hint; the real value is in Redis.
     public int GetAvailablePermits() => _options.PermitLimit;
 
-    // Async path — the ASP.NET Core RateLimitingMiddleware calls AcquireAsync(),
-    // which calls this override. It must actually await the Redis round-trip
-    // (ScriptEvaluateAsync) rather than delegate to the synchronous script
-    // evaluation below — doing the latter blocks a thread-pool thread on network
-    // I/O for every single request, which starves the pool under load.
     protected override async ValueTask<RateLimitLease> AcquireAsyncCore(int permitCount, CancellationToken cancellationToken)
     {
         try
@@ -89,9 +71,6 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
         }
     }
 
-    // Synchronous path — used only if a caller invokes Acquire() directly instead
-    // of AcquireAsync(). StackExchange.Redis has a synchronous ScriptEvaluate
-    // overload so this avoids blocking via .GetAwaiter().GetResult() on the async path.
     protected override RateLimitLease AttemptAcquireCore(int permitCount)
     {
         try
@@ -123,8 +102,6 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
     protected override void Dispose(bool disposing) { }
 }
 
-// ── Lease implementations ────────────────────────────────────────────────────
-
 file sealed class SuccessfulLease : RateLimitLease
 {
     public static readonly SuccessfulLease Instance = new();
@@ -147,10 +124,8 @@ file sealed class FailedLease : RateLimitLease
 
     public override bool IsAcquired => false;
 
-    // Surfacing RetryAfter lets the RateLimitingMiddleware add a Retry-After
-    // header to the 429 response automatically.
     public override IEnumerable<string> MetadataNames =>
-        ["retry-after"];
+            ["retry-after"];
 
     public override bool TryGetMetadata(string metadataName, out object? metadata)
     {

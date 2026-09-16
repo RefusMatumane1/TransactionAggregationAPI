@@ -1,4 +1,4 @@
-﻿using MapsterMapper;
+using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -36,22 +36,17 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTr
                     .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
                     .AsNoTracking();
 
-                // Apply filters
                 query = ApplyFilters(query, request);
 
-                // Apply sorting
                 query = ApplySorting(query, request);
 
-                // Get total count
                 var totalCount = await query.CountAsync(cancellationToken);
 
-                // Apply pagination
                 var items = await query
-                    .Skip((request.PageNumber - 1) * request.PageSize)
-                    .Take(request.PageSize)
-                    .ToListAsync(cancellationToken);
+                                    .Skip((request.PageNumber - 1) * request.PageSize)
+                                    .Take(request.PageSize)
+                                    .ToListAsync(cancellationToken);
 
-                // Map to DTOs
                 var dtos = _mapper.Map<List<TransactionDto>>(items);
 
                 var response = PaginatedResponse<TransactionDto>.Create(

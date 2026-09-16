@@ -41,8 +41,6 @@ namespace TransactionAggregation.Tests.Integration
             return link;
         }
 
-        /// <summary>Seeds a real, active WebhookSource row (the DB-backed replacement for the
-        /// old config-based key) and returns the one-time plaintext key it authenticates with.</summary>
         private async Task<string> SeedActiveWebhookSourceAsync(string name)
         {
             using var scope = _factory.Services.CreateScope();
@@ -76,8 +74,6 @@ namespace TransactionAggregation.Tests.Integration
             return request;
         }
 
-        // ── Auth ──────────────────────────────────────────────────────────────
-
         [Fact]
         public async Task ReceiveTransactions_MissingApiKey_Returns401()
         {
@@ -92,8 +88,7 @@ namespace TransactionAggregation.Tests.Integration
         [Fact]
         public async Task ReceiveTransactions_WrongApiKey_Returns401()
         {
-            // A real, active source exists — proves this 401 is genuinely "key doesn't match
-            // any source", not just "no sources configured yet".
+
             await SeedActiveWebhookSourceAsync("some-other-source");
 
             using var request = BuildRequest(
@@ -122,9 +117,6 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         }
 
-        // ── Receipt (business validation is deferred to the worker — see
-        // ProcessInboundTransactionsCommandHandlerTests for BankLink-resolution/dedup coverage) ──
-
         [Fact]
         public async Task ReceiveTransactions_ValidKeyAndActiveLink_Returns202AndQueuesInboxMessage()
         {
@@ -151,9 +143,7 @@ namespace TransactionAggregation.Tests.Integration
         [Fact]
         public async Task ReceiveTransactions_RedeliveredPayload_QueuesASeparateInboxMessageEachTime()
         {
-            // The webhook layer no longer dedupes — that guarantee now lives in
-            // ProcessInboundTransactionsCommandHandler, which runs later against both queued
-            // rows. See ProcessInboundTransactionsCommandHandlerTests.Handle_RedeliveredTransaction_IsSkippedNotDuplicated.
+
             var link = await SeedActiveBankLinkAsync("ext-webhook-2");
             var apiKey = await SeedActiveWebhookSourceAsync("source-2");
             var payload = new { ExternalAccountId = link.ExternalAccountId, Transactions = new[] { SampleTransaction("txn-webhook-2") } };
@@ -169,16 +159,10 @@ namespace TransactionAggregation.Tests.Integration
             context.InboxMessages.Count(m => m.SourceName == "source-2").Should().Be(2);
         }
 
-        // ── Unknown link ──────────────────────────────────────────────────────
-
         [Fact]
         public async Task ReceiveTransactions_UnknownExternalAccountId_StillReturns202AndQueuesForProcessing()
         {
-            // BankLink existence is business state, not payload shape — checking it moved out of
-            // the synchronous webhook path entirely, into ProcessInboundTransactionsCommand. See
-            // ProcessInboundTransactionsCommandHandlerTests.Handle_UnknownExternalAccountId_ReturnsNotFound
-            // for where an unresolvable account id is actually surfaced (to the dispatcher, as a
-            // retry/dead-letter, not synchronously to the caller).
+
             var apiKey = await SeedActiveWebhookSourceAsync("source-3");
 
             using var request = BuildRequest(
@@ -193,8 +177,6 @@ namespace TransactionAggregation.Tests.Integration
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
             context.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-3");
         }
-
-        // ── Batch-size cap ───────────────────────────────────────────────────
 
         [Fact]
         public async Task ReceiveTransactions_MoreThanFiveHundredTransactions_Returns400()

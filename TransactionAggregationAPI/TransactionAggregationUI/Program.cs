@@ -12,9 +12,6 @@ var apiBaseUrl = builder.Configuration["ApiBaseUrl"];
 if (string.IsNullOrEmpty(apiBaseUrl))
     apiBaseUrl = builder.HostEnvironment.BaseAddress;
 
-// Keycloak-backed OIDC login (Authorization Code + PKCE) — see wwwroot/appsettings*.json's
-// "Keycloak" section for Authority/ClientId. This registers AuthenticationStateProvider,
-// AddAuthorizationCore, and AuthorizationMessageHandler for us.
 builder.Services.AddOidcAuthentication(options =>
 {
     builder.Configuration.Bind("Keycloak", options.ProviderOptions);
@@ -23,15 +20,9 @@ builder.Services.AddOidcAuthentication(options =>
     options.ProviderOptions.DefaultScopes.Add("profile");
     options.ProviderOptions.DefaultScopes.Add("email");
 
-    // Matches the "roles" claim the transaction-ui client's realm-role protocol mapper adds
-    // to the token (see keycloak/realm-export.json) — lets AuthorizeView Roles="admin" /
-    // [Authorize(Roles = "admin")] work client-side the same way RequireRole("admin") does
-    // on the API (see Program.cs there).
     options.UserOptions.RoleClaim = "roles";
 });
 
-// AuthorizationMessageHandler attaches the signed-in user's access token to every request this
-// client makes — only to apiBaseUrl, never to Keycloak itself or any other origin.
 builder.Services.AddHttpClient("api", client => client.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler(sp => sp.GetRequiredService<AuthorizationMessageHandler>()
         .ConfigureHandler(authorizedUrls: [apiBaseUrl]));

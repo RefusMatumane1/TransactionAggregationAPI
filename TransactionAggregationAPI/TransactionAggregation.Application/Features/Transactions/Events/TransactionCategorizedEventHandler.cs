@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using TransactionAggregation.Application.Common.Interfaces;
@@ -22,15 +22,12 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 notification.NewCategory,
                 notification.IsAutoCategorized);
 
-            // Cache invalidation/analytics/notification are outboxed rather than called in-line
-            // here — see TransactionCreatedEventHandler for why (this also runs pre-save inside
-            // SaveChangesAsync). The dispatcher decides whether to notify based on IsAutoCategorized.
             var payload = new TransactionCategorizedOutboxPayload(
-                notification.Transaction.Id.Value,
-                notification.Transaction.CustomerId.Value,
-                notification.OldCategory,
-                notification.NewCategory,
-                notification.IsAutoCategorized);
+                            notification.Transaction.Id.Value,
+                            notification.Transaction.CustomerId.Value,
+                            notification.OldCategory,
+                            notification.NewCategory,
+                            notification.IsAutoCategorized);
 
             _context.OutboxMessages.Add(OutboxMessage.Create(
                 OutboxMessageTypes.TransactionCategorized, JsonSerializer.Serialize(payload)));

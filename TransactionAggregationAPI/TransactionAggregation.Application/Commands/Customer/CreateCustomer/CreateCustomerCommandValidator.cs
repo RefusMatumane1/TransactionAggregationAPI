@@ -14,7 +14,7 @@ namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
             RuleFor(x => x.Name)
                 .NotEmpty().WithMessage("Name is required")
                 .MaximumLength(200).WithMessage("Name must not exceed 200 characters");
-            
+
             RuleFor(c => c.Password).NotEmpty().MinimumLength(8);
         }
     }

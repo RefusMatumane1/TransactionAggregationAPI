@@ -3,11 +3,6 @@ using TransactionAggregation.Application.Abstractions.Authentication;
 
 namespace TransactionAggregation.Tests.Helpers;
 
-/// <summary>
-/// In-memory stand-in for Keycloak's Admin API, used wherever a real IKeycloakAdminClient would
-/// otherwise require a live Keycloak (integration tests). Mimics the one behavior callers
-/// actually depend on: rejecting a second user with the same email.
-/// </summary>
 public sealed class FakeKeycloakAdminClient : IKeycloakAdminClient
 {
     private readonly ConcurrentDictionary<string, Guid> _usersByEmail = new(StringComparer.OrdinalIgnoreCase);

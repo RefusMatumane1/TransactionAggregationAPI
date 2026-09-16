@@ -5,12 +5,10 @@ namespace TransactionAggregation.Application.Common.DTOs
         string RefreshToken,
         DateTime ExpiresAtUtc);
 
-    /// <summary>The specific external account the customer consented to share, as returned
-    /// by the aggregator right after the OAuth exchange.</summary>
     public sealed record AggregatorLinkedAccountResult(
-        string ExternalAccountId,
-        string AccountNumber,
-        string AccountName,
-        string AccountType,
-        string Currency);
+    string ExternalAccountId,
+    string AccountNumber,
+    string AccountName,
+    string AccountType,
+    string Currency);
 }

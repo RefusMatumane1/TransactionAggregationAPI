@@ -1,4 +1,4 @@
-﻿using TransactionAggregation.Domain.Enums;
+using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Features.Transactions.DTOs
 {
@@ -20,7 +20,6 @@ namespace TransactionAggregation.Application.Features.Transactions.DTOs
         public DateTime CreatedAt { get; init; }
         public Dictionary<string, string> Metadata { get; init; } = new();
 
-        // Helper properties
         public bool IsExpense => Amount < 0;
         public bool IsIncome => Amount > 0;
         public string Age => GetAge();

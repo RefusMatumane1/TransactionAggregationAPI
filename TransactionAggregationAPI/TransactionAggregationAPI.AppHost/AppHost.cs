@@ -19,9 +19,6 @@ var seq = builder.AddSeq("seq")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithEnvironment("ACCEPT_EULA", "Y");
 
-// Fixed on host port 8081 (matching docker-compose and appsettings.Development.json's
-// Keycloak:Authority/PublicIssuer, both "http://localhost:8081/...") so the API doesn't need
-// AppHost-specific config overrides to find it.
 var keycloak = builder
     .AddContainer("keycloak", "quay.io/keycloak/keycloak")
     .WithImageTag("26.0")

@@ -19,7 +19,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         TransactionCategory category = TransactionCategory.Uncategorized,
         TransactionStatus status = TransactionStatus.Settled)
     {
-        // Transaction.Create always stamps Date = DateTime.UtcNow
+
         var tx = Transaction.Create(
             customerId,
             Money.Create(amount, "ZAR"),
@@ -35,8 +35,6 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         ApplicationDbContext context)
         => new(context, NullLogger<GetCustomerWithTransactionsQueryHandler>.Instance);
 
-    // ── Not found ─────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_CustomerNotFound_ReturnsNotFoundError()
     {
@@ -50,8 +48,6 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
 
-    // ── TotalTransactions = overall count, not page size (bug fix regression) ─
-
     [Fact]
     public async Task Handle_TotalTransactionsReflectsAllPages_NotJustCurrentPage()
     {
@@ -59,7 +55,6 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test");
         context.Customers.Add(customer);
 
-        // Add 25 transactions but request page size = 5
         for (int i = 1; i <= 25; i++)
             context.Transactions.Add(MakeTransaction(customer.Id, -(i * 10m)));
 
@@ -71,11 +66,9 @@ public class GetCustomerWithTransactionsQueryHandlerTests
             CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
-        result.Value.TotalTransactions.Should().Be(25);      // all 25, not 5
-        result.Value.Transactions.Should().HaveCount(5);     // only current page
+        result.Value.TotalTransactions.Should().Be(25);
+        result.Value.Transactions.Should().HaveCount(5);
     }
-
-    // ── Category filter ───────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_CategoryFilter_ReturnsOnlyMatchingTransactions()
@@ -85,10 +78,10 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         context.Customers.Add(customer);
 
         context.Transactions.AddRange(
-            MakeTransaction(customer.Id, -50m,   TransactionCategory.Groceries),
-            MakeTransaction(customer.Id, -30m,   TransactionCategory.Groceries),
-            MakeTransaction(customer.Id, -20m,   TransactionCategory.Transportation),
-            MakeTransaction(customer.Id, 2500m,  TransactionCategory.Income));
+            MakeTransaction(customer.Id, -50m, TransactionCategory.Groceries),
+            MakeTransaction(customer.Id, -30m, TransactionCategory.Groceries),
+            MakeTransaction(customer.Id, -20m, TransactionCategory.Transportation),
+            MakeTransaction(customer.Id, 2500m, TransactionCategory.Income));
 
         await context.SaveChangesAsync();
 
@@ -104,8 +97,6 @@ public class GetCustomerWithTransactionsQueryHandlerTests
             t => t.Category.Should().Be(TransactionCategory.Groceries));
     }
 
-    // ── Date filter ───────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_DateRangeIncludingNow_ReturnsAllTransactions()
     {
@@ -113,10 +104,9 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         var customer = Customer.Create(CustomerId.Create(), "date@example.com", "Date Test");
         context.Customers.Add(customer);
 
-        // Transaction.Create stamps Date = UtcNow, so a range around now includes them
         context.Transactions.AddRange(
-            MakeTransaction(customer.Id, -100m),
-            MakeTransaction(customer.Id, -200m));
+                    MakeTransaction(customer.Id, -100m),
+                    MakeTransaction(customer.Id, -200m));
 
         await context.SaveChangesAsync();
 
@@ -125,7 +115,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
             new GetCustomerWithTransactionsQuery(
                 customer.Id.Value,
                 StartDate: DateTime.UtcNow.AddMinutes(-1),
-                EndDate:   DateTime.UtcNow.AddMinutes(1)),
+                EndDate: DateTime.UtcNow.AddMinutes(1)),
             CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
@@ -138,7 +128,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         var context = InMemoryDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "past@example.com", "Past Test");
         context.Customers.Add(customer);
-        context.Transactions.Add(MakeTransaction(customer.Id, -100m)); // stamped UtcNow
+        context.Transactions.Add(MakeTransaction(customer.Id, -100m));
         await context.SaveChangesAsync();
 
         var handler = BuildHandler(context);
@@ -146,14 +136,12 @@ public class GetCustomerWithTransactionsQueryHandlerTests
             new GetCustomerWithTransactionsQuery(
                 customer.Id.Value,
                 StartDate: DateTime.UtcNow.AddDays(-30),
-                EndDate:   DateTime.UtcNow.AddDays(-1)),  // ends before now
+                EndDate: DateTime.UtcNow.AddDays(-1)),
             CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.TotalTransactions.Should().Be(0);
     }
-
-    // ── Income / expense summary ──────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_SummaryCalculatesIncomeAndExpenses_ForSettledTransactions()
@@ -163,11 +151,11 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         context.Customers.Add(customer);
 
         context.Transactions.AddRange(
-            MakeTransaction(customer.Id,  3000m, status: TransactionStatus.Settled),
+            MakeTransaction(customer.Id, 3000m, status: TransactionStatus.Settled),
             MakeTransaction(customer.Id, -1000m, status: TransactionStatus.Settled),
-            MakeTransaction(customer.Id,  -500m, status: TransactionStatus.Settled),
-            // Pending transaction should NOT be counted in totals
-            MakeTransaction(customer.Id,  -200m, status: TransactionStatus.Pending));
+            MakeTransaction(customer.Id, -500m, status: TransactionStatus.Settled),
+
+            MakeTransaction(customer.Id, -200m, status: TransactionStatus.Pending));
 
         await context.SaveChangesAsync();
 
@@ -180,8 +168,6 @@ public class GetCustomerWithTransactionsQueryHandlerTests
         result.Value.TotalExpenses.Should().Be(1500m);
         result.Value.NetBalance.Should().Be(1500m);
     }
-
-    // ── Returns customer metadata alongside transactions ───────────────────────
 
     [Fact]
     public async Task Handle_ReturnsCorrectCustomerInfo()

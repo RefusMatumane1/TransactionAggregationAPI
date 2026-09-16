@@ -24,18 +24,17 @@ try
 {
     var builder = WebApplication.CreateBuilder(args);
 
-
     builder.Logging.ClearProviders();
 
     builder.AddServiceDefaults();
 
     Log.Logger = new LoggerConfiguration()
         .ReadFrom.Configuration(builder.Configuration)
+        .Destructure.With<TransactionAggregationAPI.Logging.SensitiveDataDestructuringPolicy>()
         .Enrich.FromLogContext()
         .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
         .CreateLogger();
 
-    
     builder.Logging.AddSerilog(Log.Logger, dispose: true);
 
     builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
@@ -61,26 +60,17 @@ try
             options.EnableSensitiveDataLogging();
         }
     });
-    
+
     builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
 
     builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
 
-    // Bank-link OAuth tokens are encrypted with Data Protection before being persisted (see
-    // BankLinkCredentialProtector). The key ring itself must be shared across replicas and
-    // survive pod restarts, or tokens encrypted by one pod become undecryptable after a
-    // restart/rolling deploy — so it's persisted to Redis rather than the per-machine default.
-    // A dedicated connection (rather than the shared IConnectionMultiplexer above) sidesteps
-    // DI-ordering issues, since Data Protection needs a live connection at registration time.
     var redisConnectionString = builder.Configuration.GetConnectionString("redis");
     if (!string.IsNullOrEmpty(redisConnectionString))
     {
         try
         {
-            // AbortOnConnectFail = false (matching REDIS_CONNECTION_STRING elsewhere in this
-            // app) so a Redis that's briefly unreachable at startup doesn't crash the whole
-            // API — this is a bolt-on feature, not core to auth working. Data Protection will
-            // just use ephemeral keys until Redis becomes reachable.
+
             var dpRedisOptions = ConfigurationOptions.Parse(redisConnectionString);
             dpRedisOptions.AbortOnConnectFail = false;
 
@@ -104,9 +94,6 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddPersistence();
 
-    // Keycloak is the sole identity provider — the API only validates the tokens it issues,
-    // it never signs its own. Fail fast at startup if any of this is missing rather than
-    // booting with an auth pipeline that will reject every request.
     var keycloakAuthority = builder.Configuration["Keycloak:Authority"];
     var keycloakRealm = builder.Configuration["Keycloak:Realm"];
     var keycloakPublicIssuer = builder.Configuration["Keycloak:PublicIssuer"];
@@ -120,18 +107,11 @@ try
         .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         .AddJwtBearer(options =>
         {
-            // MetadataAddress (not Authority) is set explicitly so the API fetches Keycloak's
-            // signing keys from the internal/in-cluster address — reliable, no dependency on
-            // host DNS — while still validating each token's `iss` claim against PublicIssuer,
-            // the externally-reachable URL the browser actually used to sign in. These two
-            // addresses point at the same realm but are rarely the same string in
-            // docker-compose/k8s, where the API and the browser reach Keycloak differently.
+
             options.MetadataAddress =
-                $"{keycloakAuthority.TrimEnd('/')}/realms/{keycloakRealm}/.well-known/openid-configuration";
+                            $"{keycloakAuthority.TrimEnd('/')}/realms/{keycloakRealm}/.well-known/openid-configuration";
             options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
 
-            // Keep Keycloak's raw claim names ("sub", "preferred_username", ...) instead of
-            // ASP.NET Core's legacy inbound remapping to long XML-namespaced ClaimTypes.
             options.MapInboundClaims = false;
 
             options.TokenValidationParameters = new TokenValidationParameters
@@ -142,11 +122,7 @@ try
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = keycloakPublicIssuer,
                 ValidAudience = keycloakAudience,
-                // Keycloak realm roles arrive as a "roles" claim (see the transaction-ui
-                // client's realm-role protocol mapper in keycloak/realm-export.json) — a
-                // JSON-array-valued claim, which the JWT handler already expands into one
-                // Claim("roles", <role>) per entry. Naming it here is what makes
-                // RequireRole/[Authorize(Roles=...)] read the right claim.
+
                 RoleClaimType = "roles"
             };
         });
@@ -191,13 +167,10 @@ try
             }
             else
             {
-                // Production origins come from configuration (Cors:AllowedOrigins), not a
-                // hardcoded localhost list — the previous "DevCors" policy was applied
-                // unconditionally, which meant CORS silently never allowed the real,
-                // deployed SPA origin.
+
                 var allowedOrigins = builder.Configuration
-                    .GetSection("Cors:AllowedOrigins")
-                    .Get<string[]>() ?? [];
+                                    .GetSection("Cors:AllowedOrigins")
+                                    .Get<string[]>() ?? [];
 
                 policy.WithOrigins(allowedOrigins)
                       .AllowAnyHeader()
@@ -213,20 +186,13 @@ try
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
 
-   
-    // The app always sits behind a reverse proxy (nginx in front of the UI container in
-    // docker-compose; the Traefik ingress in k8s), so Connection.RemoteIpAddress is the
-    // proxy's IP, not the client's, unless we read X-Forwarded-For/-Proto. Without this,
-    // per-IP rate limiting collapses all anonymous traffic behind the proxy into one bucket.
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    {
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-        // The proxy is always the previous hop inside the same docker/k8s network, not an
-        // arbitrary internet host, so trust it unconditionally rather than maintaining an
-        // explicit allow-list of proxy IPs that changes with every pod restart.
-        options.KnownIPNetworks.Clear();
-        options.KnownProxies.Clear();
-    });
+        {
+            options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+            options.KnownIPNetworks.Clear();
+            options.KnownProxies.Clear();
+        });
 
     builder.Services.AddOptions<RateLimiterOptions>()
         .Configure<IConnectionMultiplexer, ILoggerFactory>((options, redis, loggerFactory) =>
@@ -236,11 +202,10 @@ try
             options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
                 context =>
                 {
-                    // See RedisFixedWindowPolicy for why the "sub" claim (not Identity.Name)
-                    // is the correct authenticated-user key here.
+
                     var key = context.User.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                        ?? context.Connection.RemoteIpAddress?.ToString()
-                        ?? "anonymous";
+                                            ?? context.Connection.RemoteIpAddress?.ToString()
+                                            ?? "anonymous";
 
                     return RateLimitPartition.Get<string>(
                         key,
@@ -267,14 +232,13 @@ try
         app.MapScalarApiReference();
     }
 
-    // Must run first so RemoteIpAddress/Scheme are corrected before anything downstream
-    // (rate limiting, HTTPS redirection) reads them.
     app.UseForwardedHeaders();
 
-    // Must run before UseBlazorFrameworkFiles / UseStaticFiles so that Blazor's
-    // MapFallbackToFile("index.html") cannot intercept the /metrics path first.
     app.UseMetricServer();
     app.UseHttpMetrics();
+
+    if (!app.Environment.IsDevelopment())
+        app.UseHsts();
 
     app.UseHttpsRedirection();
     app.UseResponseCompression();
@@ -306,23 +270,12 @@ try
 
     app.MapFallbackToFile("index.html");
 
-    // --migrate-only: apply pending migrations and exit with code 0.
-    // Used by the Kubernetes pre-deploy Job (k8s/api/migration-job.yaml) so migrations
-    // are applied once before any API replica starts, instead of every replica racing to
-    // migrate on its own startup. This was previously commented out, which meant the Job's
-    // `dotnet TransactionAggregationAPI.dll --migrate-only` command silently ignored the
-    // flag and started the full web server instead of exiting — the Job would just hang
-    // until activeDeadlineSeconds and fail.
     if (args.Contains("--migrate-only"))
     {
         await app.ApplyMigrationsAsync();
         return;
     }
 
-    // ApplyMigrationsAsync() also runs on normal startup (needed for docker-compose, which
-    // has no separate migration Job) — it's now safe to call from multiple replicas
-    // concurrently because it takes a Postgres advisory lock internally (see
-    // MigrationExtensions.ApplyMigrationsAsync).
     await app.ApplyMigrationsAsync();
 
     await SeedData.SeedDatabaseAsync(app.Services);
@@ -338,5 +291,4 @@ finally
     Log.CloseAndFlush();
 }
 
-// Expose Program to the integration test assembly
 public partial class Program { }

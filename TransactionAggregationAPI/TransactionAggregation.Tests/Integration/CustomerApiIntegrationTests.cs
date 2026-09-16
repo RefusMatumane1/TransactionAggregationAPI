@@ -21,14 +21,8 @@ namespace TransactionAggregation.Tests.Integration
             _client = factory.CreateClient();
         }
 
-        /// <summary>
-        /// Seeds a transaction directly via the DbContext. Transactions no longer have an
-        /// HTTP-creatable path of their own — all transaction data comes through the bank
-        /// aggregator webhook (see WebhookApiIntegrationTests) — so tests that just need some
-        /// transaction data to exist for a customer seed it directly like this instead.
-        /// </summary>
         private async Task<Transaction> SeedTransactionAsync(
-            Guid customerId, decimal amount = -150.00m, string description = "grocery store purchase")
+    Guid customerId, decimal amount = -150.00m, string description = "grocery store purchase")
         {
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -45,12 +39,6 @@ namespace TransactionAggregation.Tests.Integration
             return transaction;
         }
 
-        /// <summary>
-        /// Creates a customer and authenticates the client as them for subsequent requests.
-        /// Login itself is Keycloak's job (not this API's, post-migration) — TestAuthHandler
-        /// stands in for a real bearer token, so this just sets the test-only identity header
-        /// to the id the API returned. Returns the new customer's ID.
-        /// </summary>
         private async Task<Guid> CreateAndAuthenticateAsync(string email)
         {
             var createRequest = new { Email = email, Name = "Test User", Password = "Password1" };
@@ -63,8 +51,6 @@ namespace TransactionAggregation.Tests.Integration
 
             return customerId;
         }
-
-        // ── Customer CRUD ─────────────────────────────────────────────────────
 
         [Fact]
         public async Task CreateCustomer_WithValidData_Returns201AndId()
@@ -106,7 +92,6 @@ namespace TransactionAggregation.Tests.Integration
         {
             await CreateAndAuthenticateAsync("unknown@example.com");
 
-            // A random GUID that does not match the authenticated user's ID
             var response = await _client.GetAsync($"/api/v1/customers/{Guid.NewGuid()}");
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -122,11 +107,6 @@ namespace TransactionAggregation.Tests.Integration
 
             response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         }
-
-        // ── Transactions ──────────────────────────────────────────────────────
-        // Transactions have no HTTP-creatable path of their own anymore — all transaction data
-        // comes through the bank aggregator webhook (see WebhookApiIntegrationTests) — so these
-        // tests seed data directly via SeedTransactionAsync instead of an API call.
 
         [Fact]
         public async Task FilterTransactions_ReturnsPagedResult()
@@ -164,7 +144,7 @@ namespace TransactionAggregation.Tests.Integration
             var customerId = await CreateAndAuthenticateAsync("cat@example.com");
             var transaction = await SeedTransactionAsync(customerId, amount: -50.00m, description: "mystery purchase");
 
-            var catRequest = new { Category = 2 }; // Dining = 2
+            var catRequest = new { Category = 2 };
             var response = await _client.PatchAsJsonAsync(
                 $"/api/v1/transactions/{transaction.Id.Value}/categorize", catRequest);
 

@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Abstractions;
@@ -35,8 +35,6 @@ namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
                 customer.Update(request.Email, request.Name);
                 await _context.SaveChangesAsync(cancellationToken);
 
-                // GetCustomerQuery caches under the "customer:{CustomerId}" prefix (see
-                // ICacheKeyPrefix) precisely so it can be invalidated here on update.
                 await _cacheService.RemoveByPatternAsync($"customer:{request.CustomerId}*", cancellationToken);
 
                 logger.LogInformation("Customer with ID {CustomerId} updated successfully", customerId);

@@ -1,11 +1,8 @@
-﻿using TransactionAggregation.Domain.Entities;
+using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Common.Interfaces;
 
-/// <summary>
-/// Service for tracking analytics and business metrics
-/// </summary>
 public interface IAnalyticsService
 {
     Task TrackTransactionCreatedAsync(Transaction transaction, CancellationToken cancellationToken = default);

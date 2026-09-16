@@ -42,9 +42,8 @@ namespace TransactionAggregation.Persistence.Configurations
             builder.Property(m => m.LastError)
                 .HasMaxLength(2000);
 
-            // What InboxDispatcherBackgroundService's claim query filters/orders on.
             builder.HasIndex(m => new { m.Status, m.NextAttemptAt })
-                .HasDatabaseName("IX_InboxMessages_Status_NextAttemptAt");
+                            .HasDatabaseName("IX_InboxMessages_Status_NextAttemptAt");
         }
     }
 }

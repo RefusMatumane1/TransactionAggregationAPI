@@ -36,8 +36,6 @@ public class InitiateBankLinkCommandHandlerTests
         return customer;
     }
 
-    // ── New link ──────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_NewInstitution_ReturnsAuthorizationUrlFromClient()
     {
@@ -95,8 +93,6 @@ public class InitiateBankLinkCommandHandlerTests
         payload.Institution.Should().Be(Institution.StandardBank);
     }
 
-    // ── Conflicts with an in-progress/active link ────────────────────────────
-
     [Fact]
     public async Task Handle_InstitutionAlreadyActive_ReturnsConflict()
     {
@@ -129,8 +125,6 @@ public class InitiateBankLinkCommandHandlerTests
         result.Error.Type.Should().Be(ErrorType.Conflict);
     }
 
-    // ── Re-linking a revoked / needs-reauth institution reuses the row ───────
-
     [Theory]
     [InlineData(BankLinkStatus.Revoked)]
     [InlineData(BankLinkStatus.NeedsReauthorization)]
@@ -157,8 +151,6 @@ public class InitiateBankLinkCommandHandlerTests
         stored.Status.Should().Be(BankLinkStatus.PendingAuthorization);
     }
 
-    // ── Different institutions for the same customer are independent ────────
-
     [Fact]
     public async Task Handle_DifferentInstitutionForSameCustomer_Succeeds()
     {
@@ -173,8 +165,6 @@ public class InitiateBankLinkCommandHandlerTests
         result.IsSuccess.Should().BeTrue();
         context.BankLinks.Should().HaveCount(2);
     }
-
-    // ── Unexpected failure ────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_AggregatorClientThrows_ReturnsUnexpectedError()

@@ -10,9 +10,6 @@ using TransactionAggregationAPI.Infrastructure;
 
 namespace TransactionAggregationAPI.Endpoints;
 
-/// <summary>Admin-only management of WebhookSource rows — who's allowed to push transactions
-/// via /api/v1/webhooks/bank-aggregator/transactions and with what key. Every route requires
-/// the "Admin" policy (the Keycloak "admin" realm role) — see Program.cs.</summary>
 public static class WebhookSourceEndpoints
 {
     public static WebApplication MapWebhookSourceEndpoints(this WebApplication app)

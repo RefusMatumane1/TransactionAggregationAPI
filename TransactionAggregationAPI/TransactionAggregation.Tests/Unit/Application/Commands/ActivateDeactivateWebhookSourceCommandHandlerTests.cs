@@ -29,8 +29,6 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
         return source;
     }
 
-    // ── Deactivate ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Deactivate_ExistingActiveSource_SetsIsActiveFalse()
     {
@@ -57,8 +55,6 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
-
-    // ── Activate ──────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Activate_DeactivatedSource_SetsIsActiveTrue()

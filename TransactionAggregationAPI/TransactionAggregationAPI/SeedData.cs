@@ -9,32 +9,24 @@ namespace TransactionAggregationAPI;
 
 public static class SeedData
 {
-    // ── Definitions ──────────────────────────────────────────────────────────
 
-    // TxPerMonth = variable transactions added on top of the guaranteed monthly anchors
     private record AccountDef(string Number, string Name, AccountType Type, int TxPerMonth);
 
     private record CustomerDef(string Email, string FullName, AccountDef[] Accounts);
 
-    /// <summary>
-    /// Per-customer spending profile. Index must match CustomerDefs.
-    /// SubIndices: which entries from CreditCardSubscriptions this customer pays each month.
-    /// </summary>
     private record CustomerProfile(
-        int SalaryMin,       int SalaryMax,
-        bool HasMortgage,
-        int HousingMin,      int HousingMax,
-        int SalaryDay,       int HousingDay,
-        string[] GroceryStores,
-        string[] DiningPlaces,
-        string PrimarySource,
-        int[] SubIndices);
-
-    // ── Customer definitions ──────────────────────────────────────────────────
+    int SalaryMin, int SalaryMax,
+    bool HasMortgage,
+    int HousingMin, int HousingMax,
+    int SalaryDay, int HousingDay,
+    string[] GroceryStores,
+    string[] DiningPlaces,
+    string PrimarySource,
+    int[] SubIndices);
 
     private static readonly CustomerDef[] CustomerDefs =
-    [
-        new("thabo.mokoena@example.co.za", "Thabo Mokoena",
+        [
+            new("thabo.mokoena@example.co.za", "Thabo Mokoena",
         [
             new("ZA0010000001", "Thabo Cheque Account",      AccountType.Checking,   5),
             new("ZA0010000002", "Thabo Savings Account",     AccountType.Savings,    2),
@@ -96,77 +88,64 @@ public static class SeedData
         ]),
     ];
 
-    // ── Per-customer profiles (index matches CustomerDefs) ────────────────────
-
     private static readonly CustomerProfile[] Profiles =
-    [
-        // 0 — Thabo: middle class, rents, budget-moderate
-        new(32000, 38000, false,  8500, 11000, 25, 1,
+        [
+
+            new(32000, 38000, false,  8500, 11000, 25, 1,
             ["Shoprite groceries", "Pick n Pay groceries"],
             ["Nandos dinner", "KFC meal"],
             "BankA", []),
 
-        // 1 — Lerato: professional, rents, heavy diner & shopper
-        new(45000, 52000, false, 12000, 15000, 28, 1,
+new(45000, 52000, false, 12000, 15000, 28, 1,
             ["Woolworths food", "Food Lovers Market"],
             ["Tashas restaurant", "Ocean Basket dinner"],
-            "BankB", [0, 1, 2]),          // Netflix, Spotify, DStv
+            "BankB", [0, 1, 2]),
 
-        // 2 — Pieter: high income, mortgage, investor
-        new(58000, 68000, true,  14000, 18000, 25, 1,
+new(58000, 68000, true,  14000, 18000, 25, 1,
             ["Woolworths food", "Pick n Pay groceries"],
             ["The Hussar Grill", "Mugg & Bean breakfast"],
             "BankA", []),
 
-        // 3 — Nomvula: entry level, rents, very budget-conscious
-        new(18000, 24000, false,  5500,  7500, 25, 1,
+new(18000, 24000, false,  5500,  7500, 25, 1,
             ["Shoprite groceries", "Checkers weekly shop"],
             ["Steers restaurant", "KFC meal"],
             "BankB", []),
 
-        // 4 — Sipho: freelancer (variable income), credit-card-heavy
-        new(15000, 45000, false,  6000,  8000, 15, 3,
+new(15000, 45000, false,  6000,  8000, 15, 3,
             ["Pick n Pay groceries", "Shoprite groceries"],
             ["Mugg & Bean breakfast", "Nandos dinner"],
-            "BankA", [0, 1, 4]),          // Netflix, Spotify, Planet Fitness
+            "BankA", [0, 1, 4]),
 
-        // 5 — Zanele: working class, rents, practical spender
-        new(26000, 31000, false,  7000,  9500, 25, 1,
+new(26000, 31000, false,  7000,  9500, 25, 1,
             ["Shoprite groceries", "Checkers weekly shop"],
             ["Steers restaurant", "KFC meal"],
             "BankB", []),
 
-        // 6 — Johan: senior professional, mortgage, investor
-        new(52000, 62000, true,  13000, 16000, 28, 1,
+new(52000, 62000, true,  13000, 16000, 28, 1,
             ["Woolworths food", "Pick n Pay groceries"],
             ["The Hussar Grill", "Ocean Basket dinner"],
             "BankA", []),
 
-        // 7 — Ayanda: entrepreneur, variable income, lifestyle spender
-        new(35000, 48000, false,  9000, 13000, 20, 3,
+new(35000, 48000, false,  9000, 13000, 20, 3,
             ["Food Lovers Market", "Woolworths food"],
             ["Tashas restaurant", "Sushi King dinner"],
-            "BankB", [0, 2, 4]),          // Netflix, DStv, Planet Fitness
+            "BankB", [0, 2, 4]),
 
-        // 8 — Mpho: junior/graduate, minimal spending
-        new(15000, 20000, false,  4500,  6000, 25, 1,
+new(15000, 20000, false,  4500,  6000, 25, 1,
             ["Shoprite groceries", "Checkers weekly shop"],
             ["KFC meal", "Steers restaurant"],
             "BankA", []),
 
-        // 9 — Fatima: small-business owner, mixed income
-        new(40000, 55000, false, 10000, 14000, 28, 1,
+new(40000, 55000, false, 10000, 14000, 28, 1,
             ["Checkers weekly shop", "Food Lovers Market"],
             ["Mugg & Bean breakfast", "Ocean Basket dinner"],
-            "BankB", [1, 2, 3]),          // Spotify, DStv, Microsoft 365
+            "BankB", [1, 2, 3]),
     ];
 
-    // ── Transaction templates ─────────────────────────────────────────────────
-
     private static readonly (string Desc, TransactionCategory Cat, int AbsMin, int AbsMax, bool IsExpense)[]
-        CheckingVariableTemplates =
-        [
-            ("Shoprite groceries",         TransactionCategory.Groceries,         300,  2500, true),
+            CheckingVariableTemplates =
+            [
+                ("Shoprite groceries",         TransactionCategory.Groceries,         300,  2500, true),
             ("Checkers weekly shop",       TransactionCategory.Groceries,         400,  2200, true),
             ("Pick n Pay groceries",       TransactionCategory.Groceries,         250,  1800, true),
             ("Woolworths food",            TransactionCategory.Groceries,         500,  3000, true),
@@ -193,7 +172,7 @@ public static class SeedData
             ("Game electronics",           TransactionCategory.Shopping,          200,  5000, true),
             ("Dis-Chem pharmacy",          TransactionCategory.Healthcare,         50,   800, true),
             ("Clicks pharmacy",            TransactionCategory.Healthcare,         50,   600, true),
-        ];
+            ];
 
     private static readonly (string Desc, TransactionCategory Cat, int AbsMin, int AbsMax, bool IsExpense)[]
         SavingsTemplates =
@@ -206,11 +185,10 @@ public static class SeedData
             ("Partial savings withdrawal",   TransactionCategory.Transfer,   500,  3000, true),
         ];
 
-    // Credit card variable purchases (always expenses)
     private static readonly (string Desc, TransactionCategory Cat, int AbsMin, int AbsMax)[]
-        CreditCardVariableTemplates =
-        [
-            ("Takealot online order",    TransactionCategory.Shopping,       100,  3500),
+            CreditCardVariableTemplates =
+            [
+                ("Takealot online order",    TransactionCategory.Shopping,       100,  3500),
             ("Woolworths clothing",      TransactionCategory.Shopping,       200,  2500),
             ("Zara clothing",            TransactionCategory.Shopping,       300,  2000),
             ("iStore purchase",          TransactionCategory.Shopping,       500,  8000),
@@ -224,18 +202,17 @@ public static class SeedData
             ("Dis-Chem pharmacy",        TransactionCategory.Healthcare,      50,   800),
             ("Doctor consultation",      TransactionCategory.Healthcare,     350,  1200),
             ("Dentist appointment",      TransactionCategory.Healthcare,     500,  2500),
-        ];
+            ];
 
-    // Fixed monthly subscriptions — index into this array is used by CustomerProfile.SubIndices
     private static readonly (string Desc, TransactionCategory Cat, int Amount)[]
-        CreditCardSubscriptions =
-        [
-            ("Netflix subscription",      TransactionCategory.Subscriptions, 199),   // 0
-            ("Spotify premium",           TransactionCategory.Subscriptions,  60),   // 1
-            ("DStv subscription",         TransactionCategory.Subscriptions, 699),   // 2
-            ("Microsoft 365",             TransactionCategory.Subscriptions, 149),   // 3
-            ("Planet Fitness membership", TransactionCategory.Subscriptions, 399),   // 4
-        ];
+            CreditCardSubscriptions =
+            [
+                ("Netflix subscription",      TransactionCategory.Subscriptions, 199),
+            ("Spotify premium",           TransactionCategory.Subscriptions,  60),
+            ("DStv subscription",         TransactionCategory.Subscriptions, 699),
+            ("Microsoft 365",             TransactionCategory.Subscriptions, 149),
+            ("Planet Fitness membership", TransactionCategory.Subscriptions, 399),
+            ];
 
     private static readonly (string Desc, TransactionCategory Cat, int AbsMin, int AbsMax, bool IsExpense)[]
         InvestmentTemplates =
@@ -249,10 +226,9 @@ public static class SeedData
             ("Partial portfolio withdrawal",    TransactionCategory.Transfer,  2000, 15000, true),
         ];
 
-    // Weighted status pool: 50% Settled, some Approved/Pending, few edge cases
     private static readonly TransactionStatus[] StatusPool =
-    [
-        TransactionStatus.Settled,  TransactionStatus.Settled,  TransactionStatus.Settled,
+        [
+            TransactionStatus.Settled,  TransactionStatus.Settled,  TransactionStatus.Settled,
         TransactionStatus.Settled,  TransactionStatus.Settled,  TransactionStatus.Settled,
         TransactionStatus.Approved, TransactionStatus.Approved,
         TransactionStatus.Pending,
@@ -263,14 +239,12 @@ public static class SeedData
 
     private static readonly string[] Sources = ["BankA", "BankB", "Internal"];
 
-    // ── Entry point ───────────────────────────────────────────────────────────
-
     public static async Task SeedDatabaseAsync(IServiceProvider serviceProvider)
     {
-        using var scope  = serviceProvider.CreateScope();
-        var context      = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        var logger       = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        var keycloak     = scope.ServiceProvider.GetRequiredService<IKeycloakAdminClient>();
+        using var scope = serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        var keycloak = scope.ServiceProvider.GetRequiredService<IKeycloakAdminClient>();
 
         if (await context.Customers.AnyAsync()
             || await context.Accounts.AnyAsync()
@@ -282,26 +256,19 @@ public static class SeedData
         var rng = new Random(42);
         const string demoPassword = "Test@12345";
 
-        // ── Seed window: Jan 2025 → Apr 2026 (16 months) ─────────────────────
-        // Covers a complete "last year" (2025) and "this year to date" (2026),
-        // so every date-range filter the UI can produce returns results.
         var seedStart = new DateTime(2025, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var seedEnd   = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc); // exclusive (today)
-        var months    = new List<DateTime>();
+        var seedEnd = new DateTime(2026, 5, 1, 0, 0, 0, DateTimeKind.Utc);
+        var months = new List<DateTime>();
         for (var m = seedStart; m < seedEnd; m = m.AddMonths(1))
             months.Add(m);
 
-        // ── Build customers + accounts ────────────────────────────────────────
-        var customers   = new List<Customer>();
+        var customers = new List<Customer>();
         var accountWork = new List<(Account Account, AccountType Type, int TxPerMonth, int ProfileIndex)>();
 
         for (var ci = 0; ci < CustomerDefs.Length; ci++)
         {
             var def = CustomerDefs[ci];
 
-            // Demo customers are provisioned in Keycloak too (not just the local DB) so they
-            // can actually log in. If the realm already has this user (e.g. the database was
-            // reset but Keycloak wasn't), reuse their existing id instead of failing.
             Guid keycloakUserId;
             try
             {
@@ -328,13 +295,11 @@ public static class SeedData
         await context.Customers.AddRangeAsync(customers);
         await context.SaveChangesAsync();
 
-        // ── Build transactions month-by-month ─────────────────────────────────
         var transactions = new List<Transaction>();
-        var seqNum       = 0;
+        var seqNum = 0;
 
-        // Local helpers — capture rng and seqNum via closure (avoids ref in async method)
         Transaction MakeTx(Account acct, Money money, string desc, TransactionCategory cat,
-                           string src, DateTime date)
+                                   string src, DateTime date)
         {
             var source = TransactionSource.Create(src, $"seed-{acct.Id.Value:N}-{seqNum:D6}");
             seqNum++;
@@ -352,7 +317,7 @@ public static class SeedData
         Transaction MakeRandomStatusTx(Account acct, Money money, string desc, TransactionCategory cat,
                                        string src, DateTime date)
         {
-            var tx     = MakeTx(acct, money, desc, cat, src, date);
+            var tx = MakeTx(acct, money, desc, cat, src, date);
             var status = StatusPool[rng.Next(StatusPool.Length)];
             if (status != TransactionStatus.Pending)
                 tx.UpdateStatus(status, "Seed data");
@@ -369,44 +334,39 @@ public static class SeedData
 
         foreach (var (account, type, txPerMonth, pi) in accountWork)
         {
-            var p           = Profiles[pi];
-            var diningPool  = p.DiningPlaces;
+            var p = Profiles[pi];
+            var diningPool = p.DiningPlaces;
             var groceryPool = p.GroceryStores;
 
             foreach (var month in months)
             {
-                var dim       = DateTime.DaysInMonth(month.Year, month.Month);
-                var isQEnd    = month.Month is 3 or 6 or 9 or 12;
+                var dim = DateTime.DaysInMonth(month.Year, month.Month);
+                var isQEnd = month.Month is 3 or 6 or 9 or 12;
 
-                // ── Checking ──────────────────────────────────────────────────
                 if (type == AccountType.Checking)
                 {
-                    // 1 — Salary (always on salary day, Settled)
-                    var salaryDay  = Math.Min(p.SalaryDay, dim);
+
+                    var salaryDay = Math.Min(p.SalaryDay, dim);
                     var salaryDate = new DateTime(month.Year, month.Month, salaryDay, 8, 0, 0, DateTimeKind.Utc);
-                    var salary     = (decimal)rng.Next(p.SalaryMin, p.SalaryMax + 1);
+                    var salary = (decimal)rng.Next(p.SalaryMin, p.SalaryMax + 1);
                     transactions.Add(MakeSettledTx(account, Money.Create(salary),
                         "Monthly salary", TransactionCategory.Income, p.PrimarySource, salaryDate));
 
-                    // 2 — Housing (rent or mortgage, Settled)
-                    var housingDay  = Math.Min(p.HousingDay, dim);
+                    var housingDay = Math.Min(p.HousingDay, dim);
                     var housingDate = new DateTime(month.Year, month.Month, housingDay, 9, 0, 0, DateTimeKind.Utc);
-                    var housingAmt  = -(decimal)rng.Next(p.HousingMin, p.HousingMax + 1);
+                    var housingAmt = -(decimal)rng.Next(p.HousingMin, p.HousingMax + 1);
                     var housingDesc = p.HasMortgage ? "Home loan instalment" : "Monthly rent payment";
                     transactions.Add(MakeSettledTx(account, Money.Create(housingAmt),
                         housingDesc, TransactionCategory.Housing, p.PrimarySource, housingDate));
 
-                    // 3 — Electricity (Settled, mid-month)
                     transactions.Add(MakeSettledTx(account, Money.Create(-(decimal)rng.Next(400, 2800)),
-                        "Eskom electricity", TransactionCategory.Utilities, p.PrimarySource,
-                        new DateTime(month.Year, month.Month, Math.Min(15, dim), 7, 0, 0, DateTimeKind.Utc)));
+                                            "Eskom electricity", TransactionCategory.Utilities, p.PrimarySource,
+                                            new DateTime(month.Year, month.Month, Math.Min(15, dim), 7, 0, 0, DateTimeKind.Utc)));
 
-                    // 4 — Grocery shop (customer's preferred store, Settled)
                     transactions.Add(MakeSettledTx(account, Money.Create(-(decimal)rng.Next(300, 2200)),
-                        groceryPool[rng.Next(groceryPool.Length)], TransactionCategory.Groceries,
-                        p.PrimarySource, RandDate(month, 3, 10)));
+                                            groceryPool[rng.Next(groceryPool.Length)], TransactionCategory.Groceries,
+                                            p.PrimarySource, RandDate(month, 3, 10)));
 
-                    // 5 — Variable transactions for the month
                     for (var t = 0; t < txPerMonth; t++)
                     {
                         var (desc, cat, absMin, absMax, isExp) = CheckingVariableTemplates[rng.Next(CheckingVariableTemplates.Length)];
@@ -415,7 +375,6 @@ public static class SeedData
                             Sources[rng.Next(Sources.Length)], RandDate(month, 1, dim)));
                     }
 
-                    // 6 — Occasional dining (60% of months, customer's preferred place)
                     if (rng.Next(10) < 6)
                     {
                         transactions.Add(MakeRandomStatusTx(account, Money.Create(-(decimal)rng.Next(80, 900)),
@@ -424,22 +383,19 @@ public static class SeedData
                     }
                 }
 
-                // ── Savings ───────────────────────────────────────────────────
                 else if (type == AccountType.Savings)
                 {
-                    // 1 — Monthly savings transfer (2-3 days after salary day, Settled)
-                    var depositDay  = Math.Min(p.SalaryDay + 2, dim);
+
+                    var depositDay = Math.Min(p.SalaryDay + 2, dim);
                     var depositDate = new DateTime(month.Year, month.Month, depositDay, 10, 0, 0, DateTimeKind.Utc);
                     transactions.Add(MakeSettledTx(account, Money.Create((decimal)rng.Next(1000, 5000)),
                         "Transfer from cheque account", TransactionCategory.Transfer,
                         p.PrimarySource, depositDate));
 
-                    // 2 — Interest (last day of month, Settled)
                     var interestDate = new DateTime(month.Year, month.Month, dim, 23, 0, 0, DateTimeKind.Utc);
                     transactions.Add(MakeSettledTx(account, Money.Create((decimal)rng.Next(50, 600)),
                         "Interest earned", TransactionCategory.Income, "Internal", interestDate));
 
-                    // 3 — Variable (occasional extra deposits or withdrawals)
                     for (var t = 0; t < txPerMonth; t++)
                     {
                         var (desc, cat, absMin, absMax, isExp) = SavingsTemplates[rng.Next(SavingsTemplates.Length)];
@@ -449,10 +405,9 @@ public static class SeedData
                     }
                 }
 
-                // ── Credit card ───────────────────────────────────────────────
                 else if (type == AccountType.CreditCard)
                 {
-                    // 1 — Fixed monthly subscriptions on the 1st (Settled)
+
                     foreach (var si in p.SubIndices)
                     {
                         var (subDesc, subCat, subAmount) = CreditCardSubscriptions[si];
@@ -462,13 +417,11 @@ public static class SeedData
                             subDesc, subCat, "Internal", subDate));
                     }
 
-                    // 2 — Monthly credit card payment (Settled, near end of month)
                     var payDate = new DateTime(month.Year, month.Month, Math.Min(28, dim),
-                                              7, 0, 0, DateTimeKind.Utc);
+                                                                  7, 0, 0, DateTimeKind.Utc);
                     transactions.Add(MakeSettledTx(account, Money.Create((decimal)rng.Next(2000, 10000)),
                         "Credit card payment", TransactionCategory.Transfer, p.PrimarySource, payDate));
 
-                    // 3 — Variable purchases (shopping, dining, entertainment, health)
                     for (var t = 0; t < txPerMonth; t++)
                     {
                         var (desc, cat, absMin, absMax) = CreditCardVariableTemplates[rng.Next(CreditCardVariableTemplates.Length)];
@@ -478,16 +431,14 @@ public static class SeedData
                     }
                 }
 
-                // ── Investment ────────────────────────────────────────────────
                 else if (type == AccountType.Investment)
                 {
-                    // 1 — Monthly contribution (Settled, start of month)
+
                     transactions.Add(MakeSettledTx(account, Money.Create((decimal)rng.Next(2000, 10000)),
                         "Monthly investment contribution", TransactionCategory.Transfer,
                         p.PrimarySource,
                         new DateTime(month.Year, month.Month, 1, 9, 0, 0, DateTimeKind.Utc)));
 
-                    // 2 — Quarterly return (end of Mar, Jun, Sep, Dec — Settled)
                     if (isQEnd)
                     {
                         transactions.Add(MakeSettledTx(account, Money.Create((decimal)rng.Next(1000, 8000)),
@@ -496,7 +447,6 @@ public static class SeedData
                             new DateTime(month.Year, month.Month, dim, 12, 0, 0, DateTimeKind.Utc)));
                     }
 
-                    // 3 — Variable (dividends, top-ups, occasional withdrawals)
                     for (var t = 0; t < txPerMonth; t++)
                     {
                         var (desc, cat, absMin, absMax, isExp) = InvestmentTemplates[rng.Next(InvestmentTemplates.Length)];

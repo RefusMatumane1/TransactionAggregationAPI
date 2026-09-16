@@ -26,14 +26,11 @@ public class CreateCustomerCommandHandlerTests
     private static IKeycloakAdminClient BuildKeycloakAdminClient(Guid? userId = null)
     {
         var client = Substitute.For<IKeycloakAdminClient>();
-        // A fresh Guid per call (not one captured at setup time) — otherwise every customer
-        // created through this substitute in a test would collide on the same CustomerId.
+
         client.CreateUserAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(_ => userId ?? Guid.NewGuid());
+                    .Returns(_ => userId ?? Guid.NewGuid());
         return client;
     }
-
-    // ── Happy path ────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_ValidCommand_CreatesCustomerAndReturnsId()
@@ -89,8 +86,6 @@ public class CreateCustomerCommandHandlerTests
         context.Customers.Single().Id.Value.Should().Be(keycloakUserId);
     }
 
-    // ── Keycloak provisioning conflict ──────────────────────────────────────────
-
     [Fact]
     public async Task Handle_KeycloakReportsUserAlreadyExists_ReturnsConflictFailure()
     {
@@ -108,8 +103,6 @@ public class CreateCustomerCommandHandlerTests
         result.Error.Type.Should().Be(ErrorType.Conflict);
         context.Customers.Should().BeEmpty();
     }
-
-    // ── Duplicate email ───────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_DuplicateEmail_ReturnsConflictFailure()
@@ -141,8 +134,6 @@ public class CreateCustomerCommandHandlerTests
 
         context.Customers.Should().HaveCount(1);
     }
-
-    // ── Multiple customers ────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_TwoDistinctEmails_BothSucceed()

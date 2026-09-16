@@ -22,8 +22,6 @@ namespace TransactionAggregation.Application.Commands.BankLink.RevokeBankLink
                 var link = await _context.BankLinks
                     .FirstOrDefaultAsync(b => b.Id == bankLinkId, cancellationToken);
 
-                // Ownership check on the loaded entity, not just the path — see AccountEndpoints
-                // for the class of bug this pattern avoids.
                 if (link is null || link.CustomerId != customerId)
                     return Result.Failure(Error.NotFound("BankLink", request.BankLinkId));
 

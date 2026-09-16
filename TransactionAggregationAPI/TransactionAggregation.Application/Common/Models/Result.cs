@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics.CodeAnalysis;
 using TransactionAggregation.Application.Common.Enums;
 
 namespace TransactionAggregation.Application.Common.Models
@@ -20,7 +20,6 @@ namespace TransactionAggregation.Application.Common.Models
         public bool IsSuccess { get; }
 
         public bool IsFailure => !IsSuccess;
-
 
         public Error Error { get; }
 
@@ -57,7 +56,6 @@ namespace TransactionAggregation.Application.Common.Models
             new(default, false, error);
     }
 
-
     public record Error
     {
         public static readonly Error None = new(string.Empty, string.Empty, ErrorType.Failure);
@@ -79,9 +77,8 @@ namespace TransactionAggregation.Application.Common.Models
 
         public ErrorType Type { get; }
 
-
         public static readonly Error InvalidOperation =
-            new("Error.InvalidOperation", "The operation is invalid.", ErrorType.Problem);
+                    new("Error.InvalidOperation", "The operation is invalid.", ErrorType.Problem);
 
         public static readonly Error Unauthorized =
             new("Error.Unauthorized", "You are not authorized to perform this action.", ErrorType.Problem);

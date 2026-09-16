@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Abstractions;
 using TransactionAggregation.Application.Common.DTOs;
@@ -52,7 +52,6 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                 if (request.Category.HasValue)
                     transactionQuery = transactionQuery.Where(t => t.Category == request.Category.Value);
 
-                // Count all matching transactions BEFORE applying pagination
                 var totalTransactionCount = await transactionQuery.CountAsync(cancellationToken);
 
                 var transactions = await transactionQuery
@@ -72,10 +71,9 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     t.Source.Name,
                     t.AccountId != null ? t.AccountId.Value : null));
 
-                // Income/expenses are computed across the current page only (used for the page summary)
                 var totalIncome = transactions
-                    .Where(t => t.Amount.Amount > 0 && t.Status == TransactionStatus.Settled)
-                    .Sum(t => t.Amount.Amount);
+                                    .Where(t => t.Amount.Amount > 0 && t.Status == TransactionStatus.Settled)
+                                    .Sum(t => t.Amount.Amount);
 
                 var totalExpenses = transactions
                     .Where(t => t.Amount.Amount < 0 && t.Status == TransactionStatus.Settled)
@@ -88,7 +86,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                     customer.CreatedAt,
                     customer.UpdatedAt,
                     transactionDtos,
-                    totalTransactionCount,   // total across all pages, not just current page
+                    totalTransactionCount,
                     totalIncome,
                     totalExpenses,
                     totalIncome - totalExpenses);

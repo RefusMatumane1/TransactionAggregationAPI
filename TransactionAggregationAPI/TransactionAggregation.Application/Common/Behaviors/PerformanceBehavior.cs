@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -29,7 +29,7 @@ namespace TransactionAggregation.Application.Common.Behaviors
 
             var elapsedMilliseconds = _timer.ElapsedMilliseconds;
 
-            if (elapsedMilliseconds > 500) // Log slow requests (>500ms)
+            if (elapsedMilliseconds > 500)
             {
                 var requestName = typeof(TRequest).Name;
                 _logger.LogWarning(

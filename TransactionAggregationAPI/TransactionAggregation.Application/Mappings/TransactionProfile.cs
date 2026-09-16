@@ -1,4 +1,4 @@
-﻿using Mapster;
+using Mapster;
 using TransactionAggregation.Application.Features.Transactions.DTOs;
 using TransactionAggregation.Domain.Entities;
 
@@ -23,7 +23,7 @@ namespace TransactionAggregation.Application.Mappings
                 .Map(dest => dest.Metadata, src => src.Metadata)
                 .AfterMapping((src, dest) =>
                 {
-                    // Additional post-mapping logic if needed
+
                 });
         }
     }

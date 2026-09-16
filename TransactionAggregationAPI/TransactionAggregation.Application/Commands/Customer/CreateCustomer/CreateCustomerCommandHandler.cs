@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TransactionAggregation.Application.Abstractions;
 using TransactionAggregation.Application.Abstractions.Authentication;
@@ -23,8 +23,6 @@ namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
                 if (emailExists)
                     return Result.Failure<Guid>(Error.Conflict("Customer with this email already exists"));
 
-                // Keycloak is the sole credential store — it owns the password and hands back
-                // the id we use as CustomerId, so identity has exactly one source of truth.
                 Guid keycloakUserId;
                 try
                 {

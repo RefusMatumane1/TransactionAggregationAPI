@@ -1,13 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Domain.Exceptions
 {
-    /// <summary>
-    /// Exception thrown when a domain rule is violated
-    /// </summary>
     public class DomainException : Exception
     {
         public string ErrorCode { get; }
@@ -50,9 +47,8 @@ namespace TransactionAggregation.Domain.Exceptions
             OccurredAt = DateTime.UtcNow;
         }
 
-        // Common domain exceptions factory methods
         public static DomainException InvalidAmount(string reason) =>
-            new("INVALID_AMOUNT", $"Invalid transaction amount: {reason}");
+                    new("INVALID_AMOUNT", $"Invalid transaction amount: {reason}");
 
         public static DomainException InvalidDate(string reason) =>
             new("INVALID_DATE", $"Invalid transaction date: {reason}");

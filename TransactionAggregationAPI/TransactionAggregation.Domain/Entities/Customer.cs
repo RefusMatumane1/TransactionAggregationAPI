@@ -19,9 +19,6 @@ namespace TransactionAggregation.Domain.Entities
 
         private Customer() { }
 
-        // Id is the same id Keycloak issued for this customer when they were provisioned there
-        // (see IKeycloakAdminClient) — Keycloak is the sole credential store, so this entity
-        // never holds a password or password hash.
         public static Customer Create(CustomerId id, string email, string name)
         {
             var customer = new Customer
@@ -31,7 +28,6 @@ namespace TransactionAggregation.Domain.Entities
                 Name = name
             };
 
-           // customer.AddDomainEvent(new CustomerCreatedEvent(customer));
             return customer;
         }
 
@@ -41,7 +37,6 @@ namespace TransactionAggregation.Domain.Entities
             Email = newEmail;
             UpdatedAt = DateTime.UtcNow;
 
-           // AddDomainEvent(new CustomerUpdatedEvent(Id, email, name));
         }
 
         public void AddTransaction(Transaction transaction)

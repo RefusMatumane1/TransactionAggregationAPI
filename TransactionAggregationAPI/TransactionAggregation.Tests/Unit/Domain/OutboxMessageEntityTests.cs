@@ -6,7 +6,6 @@ namespace TransactionAggregation.Tests.Unit.Domain;
 
 public class OutboxMessageEntityTests
 {
-    // ── Create ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Create_SetsPendingStatusWithZeroAttempts()
@@ -22,8 +21,6 @@ public class OutboxMessageEntityTests
         message.LastError.Should().BeNull();
     }
 
-    // ── MarkProcessed ─────────────────────────────────────────────────────────
-
     [Fact]
     public void MarkProcessed_SetsStatusAndProcessedAtAndClearsClaimedAt()
     {
@@ -35,8 +32,6 @@ public class OutboxMessageEntityTests
         message.ProcessedAt.Should().NotBeNull();
         message.ClaimedAt.Should().BeNull();
     }
-
-    // ── MarkFailed ────────────────────────────────────────────────────────────
 
     [Fact]
     public void MarkFailed_UnderMaxAttempts_StaysPendingWithBackoffAndIncrementsAttempts()

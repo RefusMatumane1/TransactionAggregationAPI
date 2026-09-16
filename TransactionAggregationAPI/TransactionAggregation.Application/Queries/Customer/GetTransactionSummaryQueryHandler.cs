@@ -20,8 +20,8 @@ namespace TransactionAggregation.Application.Queries.Customer
             try
             {
                 var customerId = CustomerId.CreateFrom(request.CustomerId);
-                var startDate  = DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc);
-                var endDate    = DateTime.SpecifyKind(request.EndDate,   DateTimeKind.Utc);
+                var startDate = DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc);
+                var endDate = DateTime.SpecifyKind(request.EndDate, DateTimeKind.Utc);
 
                 var transactions = await _context.Transactions
                     .Where(t =>

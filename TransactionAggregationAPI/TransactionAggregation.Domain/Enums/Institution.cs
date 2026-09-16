@@ -1,6 +1,5 @@
 namespace TransactionAggregation.Domain.Enums
 {
-    /// <summary>South African banks a customer can link via the account-aggregator integration.</summary>
     public enum Institution
     {
         FNB = 0,

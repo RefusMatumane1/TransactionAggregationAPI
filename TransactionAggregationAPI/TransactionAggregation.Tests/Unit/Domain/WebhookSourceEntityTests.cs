@@ -6,7 +6,6 @@ namespace TransactionAggregation.Tests.Unit.Domain;
 
 public class WebhookSourceEntityTests
 {
-    // ── Create ────────────────────────────────────────────────────────────────
 
     [Fact]
     public void Create_SetsNameAndActivatesTheSource()
@@ -34,8 +33,6 @@ public class WebhookSourceEntityTests
 
         keyA.Should().NotBe(keyB);
     }
-
-    // ── RotateKey ─────────────────────────────────────────────────────────────
 
     [Fact]
     public void RotateKey_ReturnsANewKeyThatDoesNotMatchTheOldHash()
@@ -69,8 +66,6 @@ public class WebhookSourceEntityTests
         WebhookSource.HashKey(originalKey).Should().NotBe(source.KeyHash);
     }
 
-    // ── Activate / Deactivate ─────────────────────────────────────────────────
-
     [Fact]
     public void Deactivate_SetsIsActiveFalse()
     {
@@ -92,8 +87,6 @@ public class WebhookSourceEntityTests
         source.IsActive.Should().BeTrue();
     }
 
-    // ── RecordUsage ───────────────────────────────────────────────────────────
-
     [Fact]
     public void RecordUsage_SetsLastUsedAt()
     {
@@ -104,8 +97,6 @@ public class WebhookSourceEntityTests
         source.LastUsedAt.Should().NotBeNull();
         source.LastUsedAt.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromSeconds(5));
     }
-
-    // ── HashKey ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void HashKey_IsDeterministic_SameInputSameOutput()

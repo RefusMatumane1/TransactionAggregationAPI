@@ -8,25 +8,17 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture;
 
-/// <summary>
-/// Enforces clean-architecture layer dependencies:
-///   Domain  ←  Application  ←  Infrastructure
-///                           ←  Persistence
-/// No inner layer may reference an outer layer.
-/// </summary>
 public class LayerDependencyTests
 {
-    private static readonly Assembly DomainAssembly         = typeof(Transaction).Assembly;
-    private static readonly Assembly ApplicationAssembly    = typeof(TransactionAggregation.Application.DependencyInjection).Assembly;
+    private static readonly Assembly DomainAssembly = typeof(Transaction).Assembly;
+    private static readonly Assembly ApplicationAssembly = typeof(TransactionAggregation.Application.DependencyInjection).Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof(TransactionAggregation.Infrastructure.DependencyInjection).Assembly;
-    private static readonly Assembly PersistenceAssembly    = typeof(ApplicationDbContext).Assembly;
+    private static readonly Assembly PersistenceAssembly = typeof(ApplicationDbContext).Assembly;
 
-    private const string DomainNs         = "TransactionAggregation.Domain";
-    private const string ApplicationNs    = "TransactionAggregation.Application";
+    private const string DomainNs = "TransactionAggregation.Domain";
+    private const string ApplicationNs = "TransactionAggregation.Application";
     private const string InfrastructureNs = "TransactionAggregation.Infrastructure";
-    private const string PersistenceNs    = "TransactionAggregation.Persistence";
-
-    // ── Domain layer isolation ─────────────────────────────────────────────────
+    private const string PersistenceNs = "TransactionAggregation.Persistence";
 
     [Fact]
     public void Domain_ShouldNot_DependOn_Application()
@@ -61,8 +53,6 @@ public class LayerDependencyTests
             because: "Domain must not depend on Persistence");
     }
 
-    // ── Application layer isolation ────────────────────────────────────────────
-
     [Fact]
     public void Application_ShouldNot_DependOn_Infrastructure()
     {
@@ -85,8 +75,6 @@ public class LayerDependencyTests
             because: "Application must not depend on Persistence; use IApplicationDbContext instead");
     }
 
-    // ── Infrastructure layer isolation ─────────────────────────────────────────
-
     [Fact]
     public void Infrastructure_ShouldNot_DependOn_Persistence()
     {
@@ -97,8 +85,6 @@ public class LayerDependencyTests
         result.IsSuccessful.Should().BeTrue(
             because: "Infrastructure must not depend on Persistence");
     }
-
-    // ── Naming conventions ─────────────────────────────────────────────────────
 
     [Fact]
     public void CommandHandlers_ShouldHaveNameEndingWith_CommandHandler()
@@ -135,8 +121,6 @@ public class LayerDependencyTests
         result.IsSuccessful.Should().BeTrue(
             because: "All interfaces in Application.Common.Interfaces must follow the I-prefix convention");
     }
-
-    // ── Domain structural rules ────────────────────────────────────────────────
 
     [Fact]
     public void DomainEntities_ShouldBeSealed()

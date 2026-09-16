@@ -29,8 +29,6 @@ public class GetAccountByIdQueryHandlerTests
         return account;
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ExistingAccount_ReturnsMappedDto()
     {
@@ -83,8 +81,6 @@ public class GetAccountByIdQueryHandlerTests
         result.Value.IsActive.Should().BeFalse();
     }
 
-    // ── Not found ─────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_NonExistentAccount_ReturnsNotFound()
     {
@@ -97,8 +93,6 @@ public class GetAccountByIdQueryHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
-
-    // ── Multiple accounts ─────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_WithMultipleAccounts_ReturnsCorrectOne()
@@ -115,8 +109,6 @@ public class GetAccountByIdQueryHandlerTests
         result.Value.AccountNumber.Should().Be("ACC-002");
         result.Value.AccountName.Should().Be("Second");
     }
-
-    // ── CreatedAt in DTO ──────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_ExistingAccount_MapsCreatedAtCorrectly()

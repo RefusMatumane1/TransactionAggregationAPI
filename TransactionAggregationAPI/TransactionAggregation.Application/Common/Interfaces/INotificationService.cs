@@ -1,11 +1,8 @@
-﻿using TransactionAggregation.Domain.Entities;
+using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Common.Interfaces
 {
-    /// <summary>
-    /// Service for sending notifications (email, SMS, push, webhook)
-    /// </summary>
     public interface INotificationService
     {
         Task SendTransactionNotificationAsync(Transaction transaction, NotificationType type, CancellationToken cancellationToken = default);

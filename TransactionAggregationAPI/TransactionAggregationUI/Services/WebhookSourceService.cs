@@ -3,8 +3,6 @@ using TransactionAggregationUI.Models.WebhookSources;
 
 namespace TransactionAggregationUI.Services;
 
-/// <summary>Admin-only — every call here hits an endpoint gated behind RequireAuthorization
-/// ("Admin") on the API, so this only works for a signed-in user with the "admin" realm role.</summary>
 public class WebhookSourceService
 {
     private readonly IHttpClientFactory _factory;

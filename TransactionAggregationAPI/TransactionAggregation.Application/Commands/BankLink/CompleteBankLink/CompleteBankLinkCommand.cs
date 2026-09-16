@@ -1,7 +1,9 @@
 using TransactionAggregation.Application.Abstractions;
+using TransactionAggregation.Application.Common.Attributes;
 
 namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
 {
-    /// <summary>Handles the aggregator's OAuth redirect back to us; returns the linked AccountId.</summary>
-    public sealed record CompleteBankLinkCommand(string Code, string State) : ICommand<Guid>;
+    public sealed record CompleteBankLinkCommand(
+    [property: Sensitive] string Code,
+    [property: Sensitive] string State) : ICommand<Guid>;
 }

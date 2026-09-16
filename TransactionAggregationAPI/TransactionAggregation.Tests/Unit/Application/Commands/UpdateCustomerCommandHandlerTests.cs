@@ -25,8 +25,6 @@ public class UpdateCustomerCommandHandlerTests
         return customer;
     }
 
-    // ── Happy path ────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_ValidUpdate_UpdatesEmailAndName()
     {
@@ -73,8 +71,6 @@ public class UpdateCustomerCommandHandlerTests
         context.Customers.Single().Name.Should().Be("New Name");
     }
 
-    // ── Not found ─────────────────────────────────────────────────────────────
-
     [Fact]
     public async Task Handle_NonExistentCustomer_ReturnsNotFound()
     {
@@ -88,8 +84,6 @@ public class UpdateCustomerCommandHandlerTests
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
     }
-
-    // ── Email conflict ────────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_EmailAlreadyUsedByOtherCustomer_ReturnsConflict()
@@ -119,9 +113,8 @@ public class UpdateCustomerCommandHandlerTests
             new UpdateCustomerCommand(customerToUpdate.Id.Value, "taken@example.com", "New Name"),
             CancellationToken.None);
 
-        // Name should remain unchanged
         context.Customers
-            .Single(c => c.Email == "original@example.com")
-            .Name.Should().Be("Original Name");
+                    .Single(c => c.Email == "original@example.com")
+                    .Name.Should().Be("Original Name");
     }
 }

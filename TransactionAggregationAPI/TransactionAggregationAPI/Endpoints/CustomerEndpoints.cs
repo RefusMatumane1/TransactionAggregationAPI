@@ -1,4 +1,4 @@
-﻿using Mapster;
+using Mapster;
 using MapsterMapper;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
@@ -27,13 +27,12 @@ public static class CustomerEndpoints
                       .RequireRateLimiting("FixedWindow")
                       .RequireAuthorization();
 
-        // GET endpoints
         group.MapGet("/{customerId:guid}", GetCustomerById)
-            .WithName("GetCustomerById")
-            .WithSummary("Get a specific customer by ID")
-            .Produces<CustomerResponse>(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
-            .Produces(StatusCodes.Status429TooManyRequests);
+                    .WithName("GetCustomerById")
+                    .WithSummary("Get a specific customer by ID")
+                    .Produces<CustomerResponse>(StatusCodes.Status200OK)
+                    .Produces(StatusCodes.Status404NotFound)
+                    .Produces(StatusCodes.Status429TooManyRequests);
 
         group.MapGet("/{customerId:guid}/transactions", GetCustomerWithTransactions)
             .WithName("GetCustomerWithTransactions")
@@ -49,34 +48,31 @@ public static class CustomerEndpoints
              .Produces(StatusCodes.Status404NotFound)
              .Produces(StatusCodes.Status429TooManyRequests);
 
-        // POST endpoints
         group.MapPost("/", CreateCustomer)
-             .WithName("CreateCustomer")
-             .WithSummary("Create a new customer")
-             .Accepts<CreateCustomerRequest>("application/json")
-             .Produces<Guid>(StatusCodes.Status201Created)
-             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
-             .Produces(StatusCodes.Status409Conflict)
-             .Produces(StatusCodes.Status429TooManyRequests)
-             .AllowAnonymous();
+                     .WithName("CreateCustomer")
+                     .WithSummary("Create a new customer")
+                     .Accepts<CreateCustomerRequest>("application/json")
+                     .Produces<Guid>(StatusCodes.Status201Created)
+                     .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
+                     .Produces(StatusCodes.Status409Conflict)
+                     .Produces(StatusCodes.Status429TooManyRequests)
+                     .AllowAnonymous();
 
-        // PUT endpoints
         group.MapPut("/{customerId:guid}", UpdateCustomer)
-             .WithName("UpdateCustomer")
-             .WithSummary("Update an existing customer")
-             .Accepts<UpdateCustomerRequest>("application/json")
-             .Produces(StatusCodes.Status204NoContent)
-             .Produces(StatusCodes.Status404NotFound)
-             .Produces(StatusCodes.Status400BadRequest)
-             .Produces(StatusCodes.Status429TooManyRequests);
+                     .WithName("UpdateCustomer")
+                     .WithSummary("Update an existing customer")
+                     .Accepts<UpdateCustomerRequest>("application/json")
+                     .Produces(StatusCodes.Status204NoContent)
+                     .Produces(StatusCodes.Status404NotFound)
+                     .Produces(StatusCodes.Status400BadRequest)
+                     .Produces(StatusCodes.Status429TooManyRequests);
 
-        // Transaction sub-resources
         group.MapGet("/{customerId:guid}/transactions/filter", FilterTransactions)
-             .WithName("FilterCustomerTransactions")
-             .WithSummary("Get paginated transactions with rich filtering: date range, category, status, amount, source, search")
-             .Produces<PaginatedResponse<TransactionAggregation.Application.Features.Transactions.DTOs.TransactionDto>>(StatusCodes.Status200OK)
-             .Produces(StatusCodes.Status404NotFound)
-             .Produces(StatusCodes.Status429TooManyRequests);
+                     .WithName("FilterCustomerTransactions")
+                     .WithSummary("Get paginated transactions with rich filtering: date range, category, status, amount, source, search")
+                     .Produces<PaginatedResponse<TransactionAggregation.Application.Features.Transactions.DTOs.TransactionDto>>(StatusCodes.Status200OK)
+                     .Produces(StatusCodes.Status404NotFound)
+                     .Produces(StatusCodes.Status429TooManyRequests);
 
         group.MapGet("/{customerId:guid}/transactions/summary", GetTransactionSummary)
              .WithName("GetCustomerTransactionSummary")
@@ -167,8 +163,6 @@ public static class CustomerEndpoints
         if (result.IsFailure)
             return CustomResults.Problem(result);
 
-        // A customer may only resolve their own record by email — otherwise
-        // this endpoint would let any authenticated user enumerate the customer table.
         if (result.Value.Id != userContext.UserId)
             return Results.NotFound();
 

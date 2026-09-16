@@ -26,7 +26,9 @@ FROM nginx:alpine AS final
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
 # nginx.conf uses ${API_UPSTREAM} — processed at startup by the entrypoint script below
 COPY TransactionAggregationUI/nginx.conf /etc/nginx/templates/default.conf.template
-# Entrypoint script: runs envsubst on the nginx template before nginx starts
+# Entrypoint scripts: run envsubst on the nginx template and on the published
+# appsettings.json (Keycloak authority) before nginx starts.
 COPY TransactionAggregationUI/docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/10-api-upstream.sh
-RUN chmod +x /docker-entrypoint.d/10-api-upstream.sh
+COPY TransactionAggregationUI/docker-entrypoint.d/20-keycloak-authority.sh /docker-entrypoint.d/20-keycloak-authority.sh
+RUN chmod +x /docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/20-keycloak-authority.sh
 EXPOSE 80

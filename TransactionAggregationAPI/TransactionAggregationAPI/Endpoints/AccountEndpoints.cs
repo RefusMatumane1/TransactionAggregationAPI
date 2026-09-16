@@ -92,6 +92,9 @@ public static class AccountEndpoints
         if (result.IsFailure)
             return CustomResults.Problem(result);
 
+        if (result.Value.CustomerId != customerId)
+            return Results.NotFound();
+
         var response = result.Value.Adapt<AccountResponse>(mapper.Config);
         return Results.Ok(response);
     }
@@ -131,6 +134,16 @@ public static class AccountEndpoints
     {
         if (customerId != userContext.UserId)
             return Results.NotFound();
+
+        var ownershipQuery = new GetAccountByIdQuery(accountId);
+        var ownershipResult = await sender.Send(ownershipQuery, cancellationToken);
+
+        if (ownershipResult.IsFailure)
+            return CustomResults.Problem(ownershipResult);
+
+        if (ownershipResult.Value.CustomerId != customerId)
+            return Results.NotFound();
+
         var command = new DeactivateAccountCommand(accountId);
         var result = await sender.Send(command, cancellationToken);
 

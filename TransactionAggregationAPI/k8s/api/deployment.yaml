@@ -109,29 +109,28 @@ spec:
                   name: transaction-api-config
                   key: SEQ_URL
 
-            - name: Jwt__Secret
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-api-secrets
-                  key: jwt-secret
+            # Keycloak__Authority/PublicIssuer/Realm/Audience (non-secret) come from
+            # transaction-api-config via envFrom above.
+            - name: Keycloak__AdminClientId
+              value: transaction-admin
 
-            - name: Jwt__Issuer
+            - name: Keycloak__AdminClientSecret
               valueFrom:
                 secretKeyRef:
                   name: transaction-api-secrets
-                  key: jwt-issuer
+                  key: keycloak-admin-client-secret
 
-            - name: Jwt__Audience
+            - name: BankAggregator__ClientId
               valueFrom:
                 secretKeyRef:
                   name: transaction-api-secrets
-                  key: jwt-audience
+                  key: bank-aggregator-client-id
 
-            - name: Jwt__ExpirationInMinutes
+            - name: BankAggregator__ClientSecret
               valueFrom:
                 secretKeyRef:
                   name: transaction-api-secrets
-                  key: jwt-expiration-minutes
+                  key: bank-aggregator-client-secret
 
           # ── Resource limits ────────────────────────────────────────────
           resources:

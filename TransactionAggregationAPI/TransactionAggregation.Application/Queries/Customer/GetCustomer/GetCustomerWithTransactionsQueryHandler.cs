@@ -25,6 +25,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                 var customerId = CustomerId.CreateFrom(request.CustomerId);
 
                 var customer = await _context.Customers
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
                 if (customer is null)
@@ -32,6 +33,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                         Error.NotFound("Customer", request.CustomerId));
 
                 var transactionQuery = _context.Transactions
+                    .AsNoTracking()
                     .Where(t => t.CustomerId == customerId)
                     .AsQueryable();
 

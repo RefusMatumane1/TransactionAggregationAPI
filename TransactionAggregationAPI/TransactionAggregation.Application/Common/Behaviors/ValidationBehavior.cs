@@ -40,8 +40,17 @@ namespace TransactionAggregation.Application.Common.Behaviors
             if (responseType.IsGenericType && responseType.GetGenericTypeDefinition() == typeof(Result<>))
             {
                 var error = Error.Validation(string.Join("; ", failures.Select(f => f.ErrorMessage)));
-                var resultType = typeof(Result<>).MakeGenericType(responseType.GetGenericArguments()[0]);
-                return (TResponse)Activator.CreateInstance(resultType, error)!;
+
+                // Result<T> has no single-Error constructor (it takes value/isSuccess/error), so
+                // this goes through the static Result.Failure<T>(Error) factory instead of
+                // Activator.CreateInstance(resultType, error) — that overload doesn't exist and
+                // throws MissingMethodException at runtime.
+                var failureMethod = typeof(Result)
+                    .GetMethods()
+                    .Single(m => m.Name == nameof(Result.Failure) && m.IsGenericMethodDefinition)
+                    .MakeGenericMethod(responseType.GetGenericArguments()[0]);
+
+                return (TResponse)failureMethod.Invoke(null, [error])!;
             }
 
             throw new ValidationException(failures);

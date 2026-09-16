@@ -1,14 +1,18 @@
-﻿
-
-using System.Security.Claims;
+﻿using System.Security.Claims;
+using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace TransactionAggregation.Infrastructure.Authentication
 {
     internal static class ClaimsPrincipalExtensions
     {
+        // Keycloak-issued tokens carry the user id as the raw "sub" claim. Program.cs sets
+        // JwtBearerOptions.MapInboundClaims = false, so ASP.NET Core no longer remaps "sub" to
+        // ClaimTypes.NameIdentifier the way it did for the old self-signed tokens — read it
+        // directly instead. Keycloak's sub is also the same id used as CustomerId (see
+        // IKeycloakAdminClient/CreateCustomerCommandHandler), so this is the customer's id.
         public static Guid GetUserId(this ClaimsPrincipal? principal)
         {
-            string? userId = principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+            string? userId = principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
 
             return Guid.TryParse(userId, out Guid parsedUserId) ?
                 parsedUserId :

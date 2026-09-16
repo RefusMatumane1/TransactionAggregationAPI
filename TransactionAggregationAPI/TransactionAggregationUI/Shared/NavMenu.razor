@@ -16,4 +16,13 @@
             <i class="bi bi-bar-chart-line"></i> Summary
         </NavLink>
     </li>
+    <AuthorizeView Roles="admin">
+        <Authorized>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="/admin/webhook-sources">
+                    <i class="bi bi-key"></i> Webhook Sources
+                </NavLink>
+            </li>
+        </Authorized>
+    </AuthorizeView>
 </ul>

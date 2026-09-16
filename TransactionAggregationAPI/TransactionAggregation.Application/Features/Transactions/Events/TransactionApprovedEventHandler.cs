@@ -23,8 +23,8 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
                 $"transactions:{notification.Transaction.CustomerId.Value}*",
                 cancellationToken);
 
-            await _cacheService.RemoveAsync(
-                $"summary:{notification.Transaction.CustomerId.Value}",
+            await _cacheService.RemoveByPatternAsync(
+                $"summary:{notification.Transaction.CustomerId.Value}*",
                 cancellationToken);
 
             // Send notification if transaction is large

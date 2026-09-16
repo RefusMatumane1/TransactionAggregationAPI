@@ -9,9 +9,9 @@ namespace TransactionAggregation.Tests.Unit.Domain;
 
 public class CustomerEntityTests
 {
-    private static Customer MakeCustomer(string email = "test@example.com", string name = "Test User", string passwordHash = "hashedpassword")
+    private static Customer MakeCustomer(string email = "test@example.com", string name = "Test User")
     {
-        return Customer.Create(CustomerId.Create(), email, name, passwordHash);
+        return Customer.Create(CustomerId.Create(), email, name);
     }
 
     private static Transaction MakeTransaction(CustomerId customerId, decimal amount = -100m)
@@ -30,7 +30,7 @@ public class CustomerEntityTests
     public void Create_SetsAllProperties()
     {
         var id = CustomerId.Create();
-        var customer = Customer.Create(id, "user@example.com", "Alice", "hashedpassword");
+        var customer = Customer.Create(id, "user@example.com", "Alice");
 
         customer.Id.Should().Be(id);
         customer.Email.Should().Be("user@example.com");

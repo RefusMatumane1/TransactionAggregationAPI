@@ -1,5 +1,8 @@
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.JsonWebTokens;
 using StackExchange.Redis;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 
 namespace TransactionAggregationAPI.RateLimiting;
@@ -13,14 +16,22 @@ namespace TransactionAggregationAPI.RateLimiting;
 /// The framework resolves this type via HttpContext.RequestServices when
 /// processing each request through the rate-limiting middleware.
 /// </summary>
-internal sealed class RedisFixedWindowPolicy(IConnectionMultiplexer redis) : IRateLimiterPolicy<string>
+internal sealed class RedisFixedWindowPolicy(IConnectionMultiplexer redis, ILoggerFactory loggerFactory) : IRateLimiterPolicy<string>
 {
+    private readonly ILogger _logger = loggerFactory.CreateLogger<RedisFixedWindowRateLimiter>();
+
     // Returning null uses the global OnRejected handler configured on RateLimiterOptions.
     public Func<OnRejectedContext, CancellationToken, ValueTask>? OnRejected => null;
 
     public RateLimitPartition<string> GetPartition(HttpContext httpContext)
     {
-        var key = httpContext.User.Identity?.Name
+        // NOTE: Identity.Name reflects Keycloak's "preferred_username" claim only if a
+        // ClaimsMap adds it — using it here would silently fall back to RemoteIpAddress for
+        // everyone, collapsing all traffic behind a shared ingress into one bucket. The "sub"
+        // claim (the user's own id) is always present on an authenticated request instead.
+        // Program.cs sets JwtBearerOptions.MapInboundClaims = false, so read "sub" directly
+        // rather than the ClaimTypes.NameIdentifier remap ASP.NET Core no longer applies.
+        var key = httpContext.User.FindFirstValue(JwtRegisteredClaimNames.Sub)
             ?? httpContext.Connection.RemoteIpAddress?.ToString()
             ?? "anonymous";
 
@@ -37,6 +48,7 @@ internal sealed class RedisFixedWindowPolicy(IConnectionMultiplexer redis) : IRa
                     PermitLimit = 60,
                     Window = TimeSpan.FromMinutes(1),
                     AllowRequestOnRedisFailure = true
-                }));
+                },
+                _logger));
     }
 }

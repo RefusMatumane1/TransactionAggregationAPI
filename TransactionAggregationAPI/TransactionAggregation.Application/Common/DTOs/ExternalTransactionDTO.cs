@@ -1,9 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace TransactionAggregation.Application.Common.DTOs
 {
+    /// <summary>A single transaction as pushed to us by the account aggregator's webhook — see
+    /// ReceiveBankTransactionsCommand. The owning BankLink (looked up by ExternalAccountId)
+    /// supplies which internal Account/institution it belongs to, so this DTO only carries the
+    /// transaction's own data.</summary>
     public record ExternalTransactionDTO
     {
         public string Id { get; init; } = null!;

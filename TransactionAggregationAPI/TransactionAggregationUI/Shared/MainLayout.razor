@@ -1,5 +1,4 @@
 @inherits LayoutComponentBase
-@inject AuthService AuthService
 @inject NavigationManager Nav
 
 <AuthorizeView>
@@ -36,9 +35,10 @@
 </AuthorizeView>
 
 @code {
-    private async Task Logout()
+    private void Logout()
     {
-        await AuthService.LogoutAsync();
-        Nav.NavigateTo("/login", forceLoad: true);
+        // RemoteAuthenticatorView (Pages/Authentication.razor) handles the actual redirect
+        // through Keycloak's end-session endpoint.
+        Nav.NavigateTo("authentication/logout", forceLoad: true);
     }
 }

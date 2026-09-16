@@ -3,13 +3,9 @@ using MapsterMapper;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Commands.CreateTransaction;
 using TransactionAggregation.Application.Commands.Customer.CreateCustomer;
-using TransactionAggregation.Application.Commands.Customer.DeleteCustomer;
-using TransactionAggregation.Application.Commands.Customer.Login;
 using TransactionAggregation.Application.Commands.Customer.UpdateCustomer;
 using TransactionAggregation.Application.Common.Models;
-using TransactionAggregation.Application.Features.Transactions.Commands.SyncTransactions;
 using TransactionAggregation.Application.Features.Transactions.Queries.ExportTransactions;
 using TransactionAggregation.Application.Features.Transactions.Queries.GetTransactions;
 using TransactionAggregation.Application.Queries.Customer;
@@ -46,12 +42,6 @@ public static class CustomerEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        group.MapGet("/", GetAllCustomers)
-             .WithName("GetAllCustomers")
-             .WithSummary("Get all customers with pagination")
-             .Produces<PagedResponse<CustomerResponse>>(StatusCodes.Status200OK)
-             .Produces(StatusCodes.Status429TooManyRequests);
-
         group.MapGet("/email/{email}", GetCustomerByEmail)
              .WithName("GetCustomerByEmail")
              .WithSummary("Get a customer by email address")
@@ -80,40 +70,7 @@ public static class CustomerEndpoints
              .Produces(StatusCodes.Status400BadRequest)
              .Produces(StatusCodes.Status429TooManyRequests);
 
-        // DELETE endpoints
-        group.MapDelete("/{customerId:guid}", DeleteCustomer)
-             .WithName("DeleteCustomer")
-             .WithSummary("Delete a customer")
-             .Produces(StatusCodes.Status204NoContent)
-             .Produces(StatusCodes.Status404NotFound)
-             .Produces(StatusCodes.Status400BadRequest)
-             .Produces(StatusCodes.Status429TooManyRequests);
-
-
-        group.MapPost("/login", Login)
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status404NotFound)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status429TooManyRequests)
-            .AllowAnonymous();
-
         // Transaction sub-resources
-        group.MapPost("/{customerId:guid}/transactions", CreateTransaction)
-             .WithName("CreateTransactionForCustomer")
-             .WithSummary("Create a new transaction for a customer")
-             .Accepts<CreateTransactionRequest>("application/json")
-             .Produces<Guid>(StatusCodes.Status201Created)
-             .Produces<ProblemDetails>(StatusCodes.Status400BadRequest)
-             .Produces(StatusCodes.Status404NotFound)
-             .Produces(StatusCodes.Status429TooManyRequests);
-
-        group.MapPost("/{customerId:guid}/transactions/sync", SyncTransactions)
-             .WithName("SyncCustomerTransactions")
-             .WithSummary("Aggregate and sync transactions from all external sources for a customer")
-             .Produces<SyncTransactionsResult>(StatusCodes.Status200OK)
-             .Produces(StatusCodes.Status404NotFound)
-             .Produces(StatusCodes.Status429TooManyRequests);
-
         group.MapGet("/{customerId:guid}/transactions/filter", FilterTransactions)
              .WithName("FilterCustomerTransactions")
              .WithSummary("Get paginated transactions with rich filtering: date range, category, status, amount, source, search")
@@ -197,31 +154,11 @@ public static class CustomerEndpoints
         return Results.Ok(response);
     }
 
-    private static async Task<IResult> GetAllCustomers(
-        ISender sender,
-        IMapper mapper,
-        int page = 1,
-        int pageSize = 20,
-        string? searchTerm = null,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new GetAllCustomersQuery(page, pageSize, searchTerm);
-        var result = await sender.Send(query, cancellationToken);
-
-        if (result.IsFailure)
-            return CustomResults.Problem(result);
-
-        var mappedItems = result.Value.Items.Adapt<IEnumerable<CustomerResponse>>(mapper.Config);
-        var pagedResult = new PagedResult<CustomerResponse>(mappedItems, result.Value.TotalCount, result.Value.CurrentPage, result.Value.PageSize);
-        var response = PagedResponse<CustomerResponse>.From(pagedResult);
-
-        return Results.Ok(response);
-    }
-
     private static async Task<IResult> GetCustomerByEmail(
         ISender sender,
         IMapper mapper,
         string email,
+        IUserContext userContext,
         CancellationToken cancellationToken)
     {
         var query = new GetCustomerByEmailQuery(email);
@@ -229,6 +166,11 @@ public static class CustomerEndpoints
 
         if (result.IsFailure)
             return CustomResults.Problem(result);
+
+        // A customer may only resolve their own record by email — otherwise
+        // this endpoint would let any authenticated user enumerate the customer table.
+        if (result.Value.Id != userContext.UserId)
+            return Results.NotFound();
 
         var response = result.Value.Adapt<CustomerResponse>(mapper.Config);
         return Results.Ok(response);
@@ -273,86 +215,6 @@ public static class CustomerEndpoints
             return CustomResults.Problem(result);
 
         return Results.NoContent();
-    }
-
-    private static async Task<IResult> DeleteCustomer(
-        ISender sender,
-        Guid customerId,
-        IUserContext userContext,
-        CancellationToken cancellationToken)
-    {
-        if (customerId != userContext.UserId)
-            return Results.NotFound();
-        var command = new DeleteCustomerCommand(customerId);
-        var result = await sender.Send(command, cancellationToken);
-
-        if (result.IsFailure)
-            return CustomResults.Problem(result);
-
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> Login(
-        ISender sender,
-        [FromBody] LoginRequest request,
-        CancellationToken cancellationToken)
-    {
-        var command = new LoginUserCommand(request.Username, request.Password);
-        var result = await sender.Send(command, cancellationToken);
-
-        if (result.IsFailure)
-            return CustomResults.Problem(result);
-
-        return Results.Ok(new { Token = result.Value });
-    }
-
-    private static async Task<IResult> CreateTransaction(
-        ISender sender,
-        Guid customerId,
-        IUserContext userContext,
-        [FromBody] CreateTransactionRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (customerId != userContext.UserId)
-            return Results.NotFound();
-        var command = new CreateTransactionCommand(
-            customerId,
-            request.Amount,
-            request.Currency,
-            request.TransactionDate,
-            request.Description,
-            request.SourceSystem,
-            request.AccountId);
-
-        var result = await sender.Send(command, cancellationToken);
-
-        if (result.IsFailure)
-            return CustomResults.Problem(result);
-
-        return Results.Created($"/api/v1/transactions/{result.Value}", result.Value);
-    }
-
-    private static async Task<IResult> SyncTransactions(
-        ISender sender,
-        Guid customerId,
-        IUserContext userContext,
-        string? idempotencyKey,
-        CancellationToken cancellationToken)
-    {
-        if (customerId != userContext.UserId)
-            return Results.NotFound();
-        var command = new SyncTransactionsCommand
-        {
-            CustomerId = customerId,
-            IdempotencyKey = idempotencyKey
-        };
-
-        var result = await sender.Send(command, cancellationToken);
-
-        //if (result.IsFailure)
-           // return CustomResults.Problem(result);
-
-        return Results.Ok();
     }
 
     private static async Task<IResult> FilterTransactions(

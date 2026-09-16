@@ -22,6 +22,7 @@ namespace TransactionAggregation.Application.Queries.Account.GetAccountById
                 var accountId = AccountId.CreateFrom(request.AccountId);
 
                 var account = await _context.Accounts
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
                 if (account is null)

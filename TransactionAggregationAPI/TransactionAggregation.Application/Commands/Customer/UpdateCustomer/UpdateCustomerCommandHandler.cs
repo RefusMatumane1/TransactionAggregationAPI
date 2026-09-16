@@ -9,6 +9,7 @@ using TransactionAggregation.Domain.Common.ValueObjects;
 namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
 {
     internal sealed class UpdateCustomerCommandHandler(IApplicationDbContext _context,
+        ICacheService _cacheService,
         ILogger<UpdateCustomerCommandHandler> logger)
         : ICommandHandler<UpdateCustomerCommand>
     {
@@ -33,6 +34,10 @@ namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
 
                 customer.Update(request.Email, request.Name);
                 await _context.SaveChangesAsync(cancellationToken);
+
+                // GetCustomerQuery caches under the "customer:{CustomerId}" prefix (see
+                // ICacheKeyPrefix) precisely so it can be invalidated here on update.
+                await _cacheService.RemoveByPatternAsync($"customer:{request.CustomerId}*", cancellationToken);
 
                 logger.LogInformation("Customer with ID {CustomerId} updated successfully", customerId);
 

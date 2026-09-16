@@ -1,14 +1,13 @@
 ﻿using MediatR;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using System.Text.Json;
+using TransactionAggregation.Application.Abstractions.Authentication;
 
 namespace TransactionAggregation.Application.Common.Behaviors
 {
     public class IdempotencyBehavior<TRequest, TResponse>(IDistributedCache _cache,
+        IUserContext _userContext,
         ILogger<IdempotencyBehavior<TRequest, TResponse>> _logger)
         : IPipelineBehavior<TRequest, TResponse>
         where TRequest : IRequest<TResponse>
@@ -26,7 +25,9 @@ namespace TransactionAggregation.Application.Common.Behaviors
             if (string.IsNullOrEmpty(rawKey))
                 return await next(cancellationToken);
 
-            var cacheKey = $"idempotent:{rawKey}";
+            // Scoped per caller so two customers can never collide on the same
+            // client-supplied key and read back each other's cached response.
+            var cacheKey = $"idempotent:{_userContext.UserId}:{rawKey}";
 
             var cachedResult = await _cache.GetStringAsync(cacheKey, cancellationToken);
             if (cachedResult != null)

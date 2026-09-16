@@ -25,17 +25,32 @@ data:
   # ── Seq structured logging ────────────────────────────────────────────
   SEQ_URL: "http://seq:80"
 
+  # ── Keycloak ───────────────────────────────────────────────────────────
+  # Authority: reached by the API itself — in-cluster service DNS, reliable, no dependency on
+  # host-file hostnames. PublicIssuer: reached by the browser via the Traefik ingress; this is
+  # what appears as the `iss` claim on every token, so it's validated separately from where the
+  # API fetches signing keys from. See Program.cs and k8s/keycloak/deployment.yaml (KC_HOSTNAME).
+  Keycloak__Authority: "http://keycloak:8080"
+  Keycloak__PublicIssuer: "http://keycloak.transaction.local/realms/transaction-aggregation"
+  Keycloak__Realm: "transaction-aggregation"
+  Keycloak__Audience: "transaction-ui"
+
   # ── OpenTelemetry (set endpoint for your collector, e.g. Jaeger/OTEL) ─
   # Uncomment and set when a collector is running in the cluster.
   # OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
   # OTEL_SERVICE_NAME: "transactionaggregationapi"
 
-  # ── Bank integration base URLs ─────────────────────────────────────────
-  BankA__BaseUrl: "https://api.banka.com"
-  BankB__BaseUrl: "https://api.bankb.com"
-
-  # ── Transaction sync interval ──────────────────────────────────────────
-  TransactionSync__IntervalMinutes: "60"
+  # ── Bank account aggregator (real FNB/Standard Bank/Absa/Capitec linking) ─
+  # Backs only the OAuth consent handshake (Initiate/CompleteBankLink) — the aggregator pushes
+  # transaction data to us via /api/v1/webhooks/bank-aggregator/transactions (see
+  # WebhookEndpoints), it isn't pulled through these endpoints. Confirm these paths against your
+  # chosen aggregator's current API docs. Webhook auth keys are no longer config at all — they're
+  # WebhookSource rows in the database, managed live via /api/v1/admin/webhook-sources (the admin
+  # UI) — see WebhookSourceEndpoints/ApiKeyEndpointFilter.
+  BankAggregator__AuthorizeEndpoint: ""
+  BankAggregator__TokenEndpoint: ""
+  BankAggregator__AccountEndpoint: ""
+  BankAggregator__RedirectUri: "https://api.transaction.local/api/v1/bank-links/callback"
 
   # ── Notification options ───────────────────────────────────────────────
   NotificationOptions__FraudTeamEmail: "fraud@yourcompany.com"
@@ -43,10 +58,20 @@ data:
   NotificationOptions__EnablePushNotifications: "true"
   NotificationOptions__SmsEnabled: "true"
 
-  # ── Transaction validation ─────────────────────────────────────────────
-  TransactionValidationOptions__MaxTransactionAmount: "50000"
-  TransactionValidationOptions__MaxTransactionAgeMonths: "36"
-  TransactionValidationOptions__DailySpendingLimit: "10000"
+  # ── Transactional outbox dispatcher ────────────────────────────────────
+  # Polls OutboxMessages for cache-invalidation/analytics/notification side effects queued by
+  # the ingestion path — see OutboxDispatcherBackgroundService. Safe to run multiple replicas;
+  # claiming uses Postgres FOR UPDATE SKIP LOCKED so they drain the queue in parallel.
+  Outbox__PollIntervalSeconds: "5"
+  Outbox__BatchSize: "50"
+  Outbox__MaxAttempts: "5"
+
+  # ── Inbound webhook inbox dispatcher ────────────────────────────────────
+  # Polls InboxMessages for raw webhook payloads queued by ReceiveBankTransactionsCommandHandler
+  # — see InboxDispatcherBackgroundService. Same multi-replica-safe claim as the outbox.
+  Inbox__PollIntervalSeconds: "5"
+  Inbox__BatchSize: "50"
+  Inbox__MaxAttempts: "5"
 
   # ── Serilog (minimal; code wires Seq from ConnectionStrings:seq) ───────
   Serilog__MinimumLevel__Default: "Information"

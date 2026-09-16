@@ -14,13 +14,23 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 public class CreateCustomerCommandHandlerTests
 {
     private static CreateCustomerCommandHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext? ctx = null)
+        TransactionAggregation.Persistence.ApplicationDbContext? ctx = null,
+        IKeycloakAdminClient? keycloakAdminClient = null)
     {
         ctx ??= InMemoryDbContextFactory.Create();
-        var passwordHasher = Substitute.For<IPasswordHasher>();
-        passwordHasher.Hash(Arg.Any<string>()).Returns("hashed");
-        return new CreateCustomerCommandHandler(ctx, passwordHasher,
+        keycloakAdminClient ??= BuildKeycloakAdminClient();
+        return new CreateCustomerCommandHandler(ctx, keycloakAdminClient,
             NullLogger<CreateCustomerCommandHandler>.Instance);
+    }
+
+    private static IKeycloakAdminClient BuildKeycloakAdminClient(Guid? userId = null)
+    {
+        var client = Substitute.For<IKeycloakAdminClient>();
+        // A fresh Guid per call (not one captured at setup time) — otherwise every customer
+        // created through this substitute in a test would collide on the same CustomerId.
+        client.CreateUserAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(_ => userId ?? Guid.NewGuid());
+        return client;
     }
 
     // ── Happy path ────────────────────────────────────────────────────────────
@@ -65,13 +75,47 @@ public class CreateCustomerCommandHandlerTests
         stored.Id.Value.Should().Be(result.Value);
     }
 
+    [Fact]
+    public async Task Handle_ValidCommand_UsesKeycloakUserIdAsCustomerId()
+    {
+        var context = InMemoryDbContextFactory.Create();
+        var keycloakUserId = Guid.NewGuid();
+        var handler = BuildHandler(context, BuildKeycloakAdminClient(keycloakUserId));
+        var command = new CreateCustomerCommand("dave@example.com", "Dave King", "password");
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.Value.Should().Be(keycloakUserId);
+        context.Customers.Single().Id.Value.Should().Be(keycloakUserId);
+    }
+
+    // ── Keycloak provisioning conflict ──────────────────────────────────────────
+
+    [Fact]
+    public async Task Handle_KeycloakReportsUserAlreadyExists_ReturnsConflictFailure()
+    {
+        var context = InMemoryDbContextFactory.Create();
+        var keycloakAdminClient = Substitute.For<IKeycloakAdminClient>();
+        keycloakAdminClient
+            .CreateUserAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns<Guid>(_ => throw new KeycloakUserConflictException("already exists in Keycloak"));
+        var handler = BuildHandler(context, keycloakAdminClient);
+        var command = new CreateCustomerCommand("eve@example.com", "Eve Adams", "password");
+
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Type.Should().Be(ErrorType.Conflict);
+        context.Customers.Should().BeEmpty();
+    }
+
     // ── Duplicate email ───────────────────────────────────────────────────────
 
     [Fact]
     public async Task Handle_DuplicateEmail_ReturnsConflictFailure()
     {
         var context = InMemoryDbContextFactory.Create();
-        var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "Existing User", "hashed");
+        var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "Existing User");
         context.Customers.Add(existing);
         await context.SaveChangesAsync();
 
@@ -88,7 +132,7 @@ public class CreateCustomerCommandHandlerTests
     public async Task Handle_DuplicateEmail_DoesNotPersistSecondCustomer()
     {
         var context = InMemoryDbContextFactory.Create();
-        var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "User A", "hashed");
+        var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "User A");
         context.Customers.Add(existing);
         await context.SaveChangesAsync();
 

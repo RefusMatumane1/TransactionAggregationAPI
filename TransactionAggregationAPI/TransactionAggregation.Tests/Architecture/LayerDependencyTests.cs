@@ -3,7 +3,6 @@ using FluentAssertions;
 using NetArchTest.Rules;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Infrastructure.Services;
 using TransactionAggregation.Persistence;
 using Xunit;
 
@@ -19,7 +18,7 @@ public class LayerDependencyTests
 {
     private static readonly Assembly DomainAssembly         = typeof(Transaction).Assembly;
     private static readonly Assembly ApplicationAssembly    = typeof(TransactionAggregation.Application.DependencyInjection).Assembly;
-    private static readonly Assembly InfrastructureAssembly = typeof(TransactionAggregator).Assembly;
+    private static readonly Assembly InfrastructureAssembly = typeof(TransactionAggregation.Infrastructure.DependencyInjection).Assembly;
     private static readonly Assembly PersistenceAssembly    = typeof(ApplicationDbContext).Assembly;
 
     private const string DomainNs         = "TransactionAggregation.Domain";

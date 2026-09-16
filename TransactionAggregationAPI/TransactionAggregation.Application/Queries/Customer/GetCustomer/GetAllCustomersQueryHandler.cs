@@ -20,7 +20,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                 logger.LogInformation("Handling GetAllCustomersQuery: Page {Page}, PageSize {PageSize}, SearchTerm {SearchTerm}",
                     request.Page, request.PageSize, request.SearchTerm);
 
-                var query = _context.Customers.AsQueryable();
+                var query = _context.Customers.AsNoTracking().AsQueryable();
 
                 if (!string.IsNullOrWhiteSpace(request.SearchTerm))
                 {

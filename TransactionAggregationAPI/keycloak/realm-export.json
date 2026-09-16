@@ -1,0 +1,111 @@
+{
+  "realm": "transaction-aggregation",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Staff/operator access to admin-only areas of the app (e.g. managing webhook sources) — not a customer role."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "transaction-ui",
+      "name": "Transaction Aggregation UI",
+      "description": "Public SPA client used by the Blazor WebAssembly UI for the Authorization Code + PKCE login flow. No client secret — browsers cannot keep one.",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:7200/authentication/login-callback",
+        "http://localhost:7200/authentication/logout-callback",
+        "http://ui.transaction.local/authentication/login-callback",
+        "http://ui.transaction.local/authentication/logout-callback"
+      ],
+      "webOrigins": [
+        "http://localhost:7200",
+        "http://ui.transaction.local"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-transaction-ui",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "transaction-ui",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "transaction-admin",
+      "name": "Transaction Aggregation Admin",
+      "description": "Confidential service-account client the backend uses (client-credentials grant) to provision customers via Keycloak's Admin REST API — see IKeycloakAdminClient. Never used by a browser.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-only-admin-client-secret"
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-transaction-admin",
+      "enabled": true,
+      "serviceAccountClientId": "transaction-admin",
+      "clientRoles": {
+        "realm-management": ["manage-users", "view-users"]
+      }
+    },
+    {
+      "username": "admin@transaction.local",
+      "email": "admin@transaction.local",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Staff",
+      "lastName": "Admin",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin@12345",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"]
+    }
+  ]
+}

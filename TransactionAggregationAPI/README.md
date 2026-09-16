@@ -27,7 +27,7 @@ ways to run it locally.
 
 - Aggregates transactions from multiple mock bank sources (BankA, BankB)
 - Categorises transactions automatically by keyword (Groceries, Dining, Transport …)
-- Exposes a versioned REST API (`/api/v1/…`) secured with JWT bearer tokens
+- Exposes a versioned REST API (`/api/v1/…`) secured with Keycloak-issued JWT bearer tokens
 - Caches query results in Redis to reduce database round-trips
 - Enforces distributed rate limiting across all replicas via Redis
 - Emits structured logs to Seq and traces via OpenTelemetry
@@ -49,7 +49,7 @@ ways to run it locally.
 | Structured logging | Serilog → Seq |
 | Traces | OpenTelemetry (ASP.NET Core + EF Core + Redis + HttpClient) |
 | Metrics | prometheus-net.AspNetCore → Prometheus → Grafana |
-| Auth | JWT Bearer tokens |
+| Auth | Keycloak (OIDC) — Authorization Code + PKCE |
 | API docs | Scalar (OpenAPI — Development only) |
 | Orchestration | Docker Compose · .NET Aspire · Kubernetes (k3s / Rancher Desktop) |
 
@@ -69,10 +69,10 @@ TransactionAggregationAPI/              ← solution root
 │   └── appsettings.json
 │
 ├── TransactionAggregationUI/           ← Blazor WASM frontend
-│   ├── Pages/                          ← Dashboard, Accounts, Transactions, Login …
+│   ├── Pages/                          ← Dashboard, Accounts, Transactions, Register, Authentication …
 │   ├── Services/                       ← HTTP clients for each API resource
-│   ├── Auth/                           ← JWT auth state provider
-│   ├── wwwroot/appsettings.json        ← ApiBaseUrl (empty = derive from host)
+│   ├── Auth/                           ← Claims helper for the OIDC-issued principal
+│   ├── wwwroot/appsettings.json        ← ApiBaseUrl, Keycloak:Authority (templated at container start)
 │   ├── nginx.conf                      ← Proxies /api/ to the API service
 │   └── Dockerfile                      ← nginx + published WASM static files
 │
@@ -134,6 +134,19 @@ Sample logins:
 | Pieter van der Merwe | `pieter.vandermerwe@example.co.za` |
 | Ayanda Zulu | `ayanda.zulu@example.co.za` |
 | Fatima Ismail | `fatima.ismail@example.co.za` |
+
+### Admin login
+
+A staff account with the `admin` realm role is baked into the Keycloak realm import (both
+docker-compose and k8s), so `/admin/webhook-sources` is reachable without hand-editing Keycloak:
+
+| Field | Value |
+|---|---|
+| Email | `admin@transaction.local` |
+| Password | `Admin@12345` |
+
+Rotate/replace this before anything beyond a local/ephemeral cluster — see
+`keycloak/realm-export.json`.
 
 ---
 
@@ -298,21 +311,22 @@ nerdctl --namespace k8s.io images | grep transaction
 
 ### Step 2 — Fill in secrets
 
-Open `k8s/secrets.yaml` and replace the three `CHANGE_ME_BASE64_ENCODED` values:
+Open `k8s/secrets.yaml` and replace the `CHANGE_ME_BEFORE_DEPLOY` values:
 
 ```bash
 # PostgreSQL password
 echo -n 'YourStrongPassword123!' | base64
 
-# JWT signing key (random, at least 32 chars)
-openssl rand -hex 32 | base64
+# Keycloak admin console password
+echo -n 'YourAdminPassword!' | base64
 
 # pgAdmin password
 echo -n 'YourAdminPassword!' | base64
 ```
 
-The other three values (`jwt-issuer`, `jwt-audience`, `jwt-expiration-minutes`)
-are already correct — leave them as-is.
+`keycloak-admin-client-secret` is already correct for a fresh local/ephemeral cluster — it
+matches the `transaction-admin` client secret baked into `k8s/keycloak/configmap.yaml`'s realm
+export. If you rotate one, rotate both (see the comment next to it in `secrets.yaml`).
 
 > **Never commit `secrets.yaml` with real values.**
 > Protect it: `git update-index --assume-unchanged k8s/secrets.yaml`
@@ -434,7 +448,8 @@ kubectl delete namespace transaction-aggregation
 
 ### Authentication
 
-All endpoints except registration and login require a JWT bearer token:
+Keycloak is the identity provider — this API never issues or verifies passwords itself, it only
+validates the JWTs Keycloak signs. All endpoints except registration require a bearer token:
 
 ```
 Authorization: Bearer <token>
@@ -453,20 +468,20 @@ Content-Type: application/json
 }
 ```
 
+This creates the user directly in Keycloak (via its Admin API, using the confidential
+`transaction-admin` service-account client) and a matching local `Customer` row using Keycloak's
+own user id — see `IKeycloakAdminClient`/`CreateCustomerCommandHandler`.
+
 **Log in:**
 
-```http
-POST /api/v1/customers/login
-Content-Type: application/json
-
-{
-  "username": "jane@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-The response body contains `{ "token": "eyJ..." }`. Include that value in
-the `Authorization` header for all subsequent requests.
+The API has no `/login` endpoint. The Blazor UI signs users in with Keycloak's own hosted login
+page via the Authorization Code + PKCE flow (redirecting to
+`http://localhost:8081/realms/transaction-aggregation/...` in the docker-compose setup, or
+`http://keycloak.transaction.local/...` in k8s). `transaction-ui` only allows that flow (no
+direct password grant, by design) — to call the API directly (a script, Postman, etc.) without a
+browser, complete that same redirect flow yourself (e.g. with a PKCE-capable HTTP client), or add
+a separate Keycloak client with direct access grants enabled for that purpose. Whatever token you
+end up with, put it in the `Authorization` header for subsequent requests.
 
 ---
 
@@ -478,8 +493,7 @@ All routes are prefixed with `/api/v1`.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/customers` | No | Register |
-| `POST` | `/customers/login` | No | Log in, receive JWT |
+| `POST` | `/customers` | No | Register (provisions the user in Keycloak too) |
 | `GET` | `/customers` | Yes | List all (paginated) |
 | `GET` | `/customers/{id}` | Yes | Get by ID |
 | `GET` | `/customers/email/{email}` | Yes | Get by email |
@@ -499,8 +513,6 @@ All routes are prefixed with `/api/v1`.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/customers/{id}/transactions` | Yes | Create transaction |
-| `POST` | `/customers/{id}/transactions/sync` | Yes | Sync from all bank sources |
 | `GET` | `/customers/{id}/transactions/filter` | Yes | Paginated + filtered list |
 | `GET` | `/customers/{id}/transactions/summary` | Yes | Income / expenses / monthly breakdown |
 | `GET` | `/customers/{id}/transactions/export` | Yes | Download as CSV |
@@ -511,6 +523,58 @@ All routes are prefixed with `/api/v1`.
 |---|---|---|---|
 | `GET` | `/transactions/{id}` | Yes | Get by ID |
 | `PATCH` | `/transactions/{id}/categorize` | Yes | Override category |
+
+#### Webhooks
+
+Transaction data is *received*, not polled — the account aggregator pushes new transactions to
+us as they happen, rather than the API asking it for updates. There is no user-facing "sync"
+button/endpoint.
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/webhooks/bank-aggregator/transactions` | API key (`X-Api-Key` header) | Aggregator pushes new transactions for one linked account |
+
+Auth is an API key, not a customer's JWT — this is a server-to-server call with no logged-in
+user involved. Sources and their keys are **database rows, not config** — a `WebhookSource` per
+source, managed live through the admin UI (`/admin/webhook-sources`, staff with the Keycloak
+`admin` realm role only) or its backing API (`/api/v1/admin/webhook-sources`). Only a SHA-256
+hash of each key is ever stored; the plaintext is shown exactly once, when it's created or
+rotated, and can't be retrieved afterwards. Keys are per-source, not one shared secret: if one
+source's key leaks, only that entry needs rotating (from the UI, no redeploy), and whichever key
+a request presents tells the API which source it actually came from (logged as `SourceName` on
+every ingest — see `ApiKeyEndpointFilter`/`ReceiveBankTransactionsCommand`), not just "someone
+with a valid key." The payload identifies the linked account by `externalAccountId`; the API
+resolves it to the matching (active) `BankLink` to find which customer/internal account it
+belongs to:
+
+```http
+POST /api/v1/webhooks/bank-aggregator/transactions
+X-Api-Key: <a key from /admin/webhook-sources>
+Content-Type: application/json
+
+{
+  "externalAccountId": "acc_123",
+  "transactions": [
+    { "id": "txn_abc", "amount": -150.00, "currency": "ZAR",
+      "description": "Woolworths", "category": "Groceries", "date": "2026-09-10T12:00:00Z" }
+  ]
+}
+```
+
+Redelivering the same transaction id is safe — it's treated as already-received, not duplicated.
+
+#### Admin — webhook sources
+
+Manages the `WebhookSource` rows above (who's allowed to call the webhook and with what key).
+Requires the Keycloak `admin` realm role — a customer JWT without it gets `403`.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/webhook-sources` | List sources (never includes key material) |
+| `POST` | `/admin/webhook-sources` | Create a source — response includes the API key once |
+| `POST` | `/admin/webhook-sources/{id}/rotate` | Replace the key — old one stops working immediately |
+| `POST` | `/admin/webhook-sources/{id}/activate` | Re-enable a deactivated source |
+| `POST` | `/admin/webhook-sources/{id}/deactivate` | Disable without deleting (key stops authenticating) |
 
 #### Health & Metrics
 
@@ -566,10 +630,11 @@ Environment variables use `__` as a section separator:
 | `ConnectionStrings:transactiondb` | PostgreSQL connection string | `Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=postgres` |
 | `ConnectionStrings:redis` | Redis connection string | `redis:6379` |
 | `ConnectionStrings:seq` | Seq ingestion URL | `http://seq:80` |
-| `Jwt:Secret` | Signing key — min 32 chars | Set in `appsettings.Development.json` |
-| `Jwt:Issuer` | JWT issuer claim | `TransactionAggregationAPI` |
-| `Jwt:Audience` | JWT audience claim | `TransactionAggregationAPIClients` |
-| `Jwt:ExpirationInMinutes` | Token lifetime | `60` |
+| `Keycloak:Authority` | Keycloak server root the API itself calls (in-cluster/compose service address) | `http://keycloak:8080` |
+| `Keycloak:PublicIssuer` | Full realm URL the browser uses — must match the `iss` claim on tokens | `http://localhost:8081/realms/transaction-aggregation` |
+| `Keycloak:Realm` | Keycloak realm name | `transaction-aggregation` |
+| `Keycloak:Audience` | Expected token audience | `transaction-ui` |
+| `Keycloak:AdminClientId` / `AdminClientSecret` | Confidential service-account client used to provision customers | Set in `appsettings.Development.json` / k8s Secret |
 | `ASPNETCORE_ENVIRONMENT` | `Development` / `Production` | `Development` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector for traces (optional) | not set |
 
@@ -728,9 +793,14 @@ Check the `Authorization` header is exactly:
 Authorization: Bearer eyJhbGciOiJI...
 ```
 
-Tokens expire after 60 minutes. Log in again to get a fresh token.
-In Kubernetes, verify `k8s/secrets.yaml` has correct base64 values for
-`jwt-secret`, `jwt-issuer`, and `jwt-audience`.
+Log in again through the UI to get a fresh token if it expired. If every request 401s
+regardless of the token, the API most likely can't validate against Keycloak — check:
+- `Keycloak:Authority` (or `Keycloak__Authority` in k8s/compose) actually resolves from inside
+  the API's container/pod (it's the in-cluster/compose address, not the browser-facing one).
+- `Keycloak:PublicIssuer` exactly matches the token's `iss` claim — decode a token at
+  jwt.io and compare, or check Keycloak's `KC_HOSTNAME` setting matches what you configured.
+- The realm actually imported — `http://localhost:8081/realms/transaction-aggregation` (or the
+  k8s ingress equivalent) should return realm metadata, not a 404.
 
 ### Rate limit 429 on every request
 

@@ -20,7 +20,7 @@ public class CreateAccountCommandHandlerTests
         TransactionAggregation.Persistence.ApplicationDbContext ctx,
         string email = "user@example.com")
     {
-        var customer = Customer.Create(CustomerId.Create(), email, "Test User", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), email, "Test User");
         ctx.Customers.Add(customer);
         await ctx.SaveChangesAsync();
         return customer;

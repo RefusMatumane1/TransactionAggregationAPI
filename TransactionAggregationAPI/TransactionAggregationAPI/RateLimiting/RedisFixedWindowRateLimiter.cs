@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Threading.RateLimiting;
 
@@ -18,6 +19,7 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
     private readonly IDatabase _db;
     private readonly string _partitionKey;
     private readonly RedisRateLimiterOptions _options;
+    private readonly ILogger? _logger;
 
     // Prepared script is compiled once and SHA-cached by StackExchange.Redis.
     // Redis executes it atomically; no MULTI/EXEC needed.
@@ -35,11 +37,13 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
     public RedisFixedWindowRateLimiter(
         IConnectionMultiplexer redis,
         string partitionKey,
-        RedisRateLimiterOptions options)
+        RedisRateLimiterOptions options,
+        ILogger? logger = null)
     {
         _db = redis.GetDatabase();
         _partitionKey = partitionKey;
         _options = options;
+        _logger = logger;
     }
 
     public override RateLimiterStatistics? GetStatistics()
@@ -52,14 +56,42 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
     // GetAvailablePermits is a best-effort hint; the real value is in Redis.
     public int GetAvailablePermits() => _options.PermitLimit;
 
-    // Synchronous path — used when callers invoke Acquire() instead of AcquireAsync().
-    // StackExchange.Redis has a synchronous ScriptEvaluate overload so we avoid
-    // blocking an async thread via .GetAwaiter().GetResult().
-    protected override ValueTask<RateLimitLease> AcquireAsyncCore(int permitCount, CancellationToken cancellationToken)
+    // Async path — the ASP.NET Core RateLimitingMiddleware calls AcquireAsync(),
+    // which calls this override. It must actually await the Redis round-trip
+    // (ScriptEvaluateAsync) rather than delegate to the synchronous script
+    // evaluation below — doing the latter blocks a thread-pool thread on network
+    // I/O for every single request, which starves the pool under load.
+    protected override async ValueTask<RateLimitLease> AcquireAsyncCore(int permitCount, CancellationToken cancellationToken)
     {
-      return ValueTask.FromResult(AttemptAcquireCore(permitCount));
+        try
+        {
+            var result = await _db.ScriptEvaluateAsync(AtomicIncrScript, new
+            {
+                key = (RedisKey)_partitionKey,
+                windowMs = (long)_options.Window.TotalMilliseconds
+            });
+
+            return (long)result <= _options.PermitLimit
+                ? SuccessfulLease.Instance
+                : new FailedLease(_options.Window);
+        }
+        catch (RedisException ex)
+        {
+            if (_options.AllowRequestOnRedisFailure)
+            {
+                _logger?.LogWarning(ex,
+                    "Rate limiter failing open for partition {PartitionKey} — Redis is unreachable, so this request is NOT being rate limited",
+                    _partitionKey);
+                return SuccessfulLease.Instance;
+            }
+
+            return new FailedLease(_options.Window);
+        }
     }
 
+    // Synchronous path — used only if a caller invokes Acquire() directly instead
+    // of AcquireAsync(). StackExchange.Redis has a synchronous ScriptEvaluate
+    // overload so this avoids blocking via .GetAwaiter().GetResult() on the async path.
     protected override RateLimitLease AttemptAcquireCore(int permitCount)
     {
         try
@@ -74,36 +106,17 @@ internal class RedisFixedWindowRateLimiter : RateLimiter
                 ? SuccessfulLease.Instance
                 : new FailedLease(_options.Window);
         }
-        catch (RedisException)
+        catch (RedisException ex)
         {
-            return _options.AllowRequestOnRedisFailure
-                ? SuccessfulLease.Instance
-                : new FailedLease(_options.Window);
-        }
-    }
-
-    // Async path — called by the ASP.NET Core RateLimitingMiddleware.
-    protected virtual async ValueTask<RateLimitLease> WaitAndAcquireAsyncCore(
-        int permitCount,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var result = await _db.ScriptEvaluateAsync(AtomicIncrScript, new
+            if (_options.AllowRequestOnRedisFailure)
             {
-                key = (RedisKey)_partitionKey,
-                windowMs = (long)_options.Window.TotalMilliseconds
-            });
+                _logger?.LogWarning(ex,
+                    "Rate limiter failing open for partition {PartitionKey} — Redis is unreachable, so this request is NOT being rate limited",
+                    _partitionKey);
+                return SuccessfulLease.Instance;
+            }
 
-            return (long)result <= _options.PermitLimit
-                ? SuccessfulLease.Instance
-                : new FailedLease(_options.Window);
-        }
-        catch (RedisException)
-        {
-            return _options.AllowRequestOnRedisFailure
-                ? SuccessfulLease.Instance
-                : new FailedLease(_options.Window);
+            return new FailedLease(_options.Window);
         }
     }
 

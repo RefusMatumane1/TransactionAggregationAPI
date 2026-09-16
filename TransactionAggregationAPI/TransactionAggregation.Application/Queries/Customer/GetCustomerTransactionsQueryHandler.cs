@@ -21,6 +21,7 @@ namespace TransactionAggregation.Application.Queries.Customer
             var customerId = CustomerId.CreateFrom(request.CustomerId);
 
             var query = _context.Transactions
+                .AsNoTracking()
                 .Where(t => t.CustomerId == customerId)
                 .AsQueryable();
 

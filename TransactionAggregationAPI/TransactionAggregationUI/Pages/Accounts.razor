@@ -1,6 +1,5 @@
 @page "/accounts"
 @attribute [Authorize]
-@inject AuthService AuthService
 @inject AccountService AccountService
 
 <PageTitle>Accounts</PageTitle>
@@ -113,6 +112,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private List<AccountModel> _accounts = [];
     private bool _loading = true;
     private bool _showCreateModal;
@@ -123,9 +124,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var userIdStr = AuthService.GetCurrentUserId();
-        if (Guid.TryParse(userIdStr, out _customerId))
+        var userId = AuthState is null ? null : (await AuthState).User.GetUserId();
+        if (userId is { } id)
+        {
+            _customerId = id;
             await LoadAccounts();
+        }
         _loading = false;
     }
 

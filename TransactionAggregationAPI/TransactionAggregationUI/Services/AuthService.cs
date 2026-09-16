@@ -1,40 +1,20 @@
 using System.Net.Http.Json;
-using TransactionAggregationUI.Auth;
 using TransactionAggregationUI.Models.Auth;
 
 namespace TransactionAggregationUI.Services;
 
+/// <summary>
+/// Registration only — login/logout/session state are handled by the OIDC library
+/// (Microsoft.AspNetCore.Components.WebAssembly.Authentication, wired up in Program.cs) talking
+/// to Keycloak directly, not by this app.
+/// </summary>
 public class AuthService
 {
     private readonly IHttpClientFactory _factory;
-    private readonly JwtAuthStateProvider _authProvider;
 
-    public AuthService(IHttpClientFactory factory, JwtAuthStateProvider authProvider)
+    public AuthService(IHttpClientFactory factory)
     {
         _factory = factory;
-        _authProvider = authProvider;
-    }
-
-    public async Task<(bool success, string? error)> LoginAsync(LoginRequest request)
-    {
-        try
-        {
-            var client = _factory.CreateClient("api");
-            var response = await client.PostAsJsonAsync("api/v1/customers/login", request);
-            if (!response.IsSuccessStatusCode)
-                return (false, $"Login failed ({(int)response.StatusCode})");
-
-            var result = await response.Content.ReadFromJsonAsync<LoginResponse>();
-            if (result?.Token is null)
-                return (false, "Invalid response from server");
-
-            await _authProvider.SetTokenAsync(result.Token);
-            return (true, null);
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
     }
 
     public async Task<(bool success, string? error)> RegisterAsync(RegisterRequest request)
@@ -56,11 +36,4 @@ public class AuthService
             return (false, ex.Message);
         }
     }
-
-    public async Task LogoutAsync()
-    {
-        await _authProvider.ClearTokenAsync();
-    }
-
-    public string? GetCurrentUserId() => _authProvider.GetUserId();
 }

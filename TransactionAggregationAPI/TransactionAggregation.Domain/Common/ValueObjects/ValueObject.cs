@@ -25,5 +25,23 @@
         {
             return Equals((object?)other);
         }
+
+        // Without these, `==`/`!=` on two ValueObject-derived instances (e.g. two separately
+        // constructed CustomerId wrapping the same Guid) fall back to reference equality —
+        // which silently breaks any client-side (non-LINQ-translated) ownership/equality
+        // check, such as `link.CustomerId != customerId` after the entity has already been
+        // materialized. See RevokeBankLinkCommandHandler for the bug this caused.
+        public static bool operator ==(ValueObject? left, ValueObject? right)
+        {
+            if (left is null && right is null)
+                return true;
+
+            if (left is null || right is null)
+                return false;
+
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(ValueObject? left, ValueObject? right) => !(left == right);
     }
 }

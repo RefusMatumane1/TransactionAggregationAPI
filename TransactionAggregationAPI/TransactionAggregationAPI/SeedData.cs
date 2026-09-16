@@ -14,7 +14,7 @@ public static class SeedData
     // TxPerMonth = variable transactions added on top of the guaranteed monthly anchors
     private record AccountDef(string Number, string Name, AccountType Type, int TxPerMonth);
 
-    private record CustomerDef(string Id, string Email, string FullName, AccountDef[] Accounts);
+    private record CustomerDef(string Email, string FullName, AccountDef[] Accounts);
 
     /// <summary>
     /// Per-customer spending profile. Index must match CustomerDefs.
@@ -34,61 +34,61 @@ public static class SeedData
 
     private static readonly CustomerDef[] CustomerDefs =
     [
-        new("e13ffb3d-ea72-45f6-b5a6-5da4c65eeb50", "thabo.mokoena@example.co.za", "Thabo Mokoena",
+        new("thabo.mokoena@example.co.za", "Thabo Mokoena",
         [
             new("ZA0010000001", "Thabo Cheque Account",      AccountType.Checking,   5),
             new("ZA0010000002", "Thabo Savings Account",     AccountType.Savings,    2),
         ]),
 
-        new("39af1512-f86d-4ae7-b68a-9664a6cd5d5b", "lerato.dlamini@example.co.za", "Lerato Dlamini",
+        new("lerato.dlamini@example.co.za", "Lerato Dlamini",
         [
             new("ZA0020000001", "Lerato Cheque Account",     AccountType.Checking,   6),
             new("ZA0020000002", "Lerato Credit Card",        AccountType.CreditCard, 7),
         ]),
 
-        new("ed3402d5-a33f-4d04-96c0-c0d76b5615b4", "pieter.vandermerwe@example.co.za", "Pieter van der Merwe",
+        new("pieter.vandermerwe@example.co.za", "Pieter van der Merwe",
         [
             new("ZA0030000001", "Pieter Cheque Account",     AccountType.Checking,   5),
             new("ZA0030000002", "Pieter Savings Account",    AccountType.Savings,    2),
             new("ZA0030000003", "Pieter Investment Account", AccountType.Investment,  2),
         ]),
 
-        new("a1b2c3d4-e5f6-7890-abcd-ef1234567890", "nomvula.khumalo@example.co.za", "Nomvula Khumalo",
+        new("nomvula.khumalo@example.co.za", "Nomvula Khumalo",
         [
             new("ZA0040000001", "Nomvula Cheque Account",    AccountType.Checking,   4),
         ]),
 
-        new("b2c3d4e5-f6a7-8901-bcde-f12345678901", "sipho.ndlovu@example.co.za", "Sipho Ndlovu",
+        new("sipho.ndlovu@example.co.za", "Sipho Ndlovu",
         [
             new("ZA0050000001", "Sipho Savings Account",     AccountType.Savings,    2),
             new("ZA0050000002", "Sipho Credit Card",         AccountType.CreditCard, 8),
         ]),
 
-        new("c3d4e5f6-a7b8-9012-cdef-123456789012", "zanele.motha@example.co.za", "Zanele Motha",
+        new("zanele.motha@example.co.za", "Zanele Motha",
         [
             new("ZA0060000001", "Zanele Cheque Account",     AccountType.Checking,   5),
             new("ZA0060000002", "Zanele Savings Account",    AccountType.Savings,    2),
         ]),
 
-        new("d4e5f6a7-b8c9-0123-def0-234567890123", "johan.botha@example.co.za", "Johan Botha",
+        new("johan.botha@example.co.za", "Johan Botha",
         [
             new("ZA0070000001", "Johan Cheque Account",      AccountType.Checking,   5),
             new("ZA0070000002", "Johan Investment Account",  AccountType.Investment,  2),
         ]),
 
-        new("e5f6a7b8-c9d0-1234-ef01-345678901234", "ayanda.zulu@example.co.za", "Ayanda Zulu",
+        new("ayanda.zulu@example.co.za", "Ayanda Zulu",
         [
             new("ZA0080000001", "Ayanda Cheque Account",     AccountType.Checking,   6),
             new("ZA0080000002", "Ayanda Credit Card",        AccountType.CreditCard, 8),
             new("ZA0080000003", "Ayanda Savings Account",    AccountType.Savings,    3),
         ]),
 
-        new("f6a7b8c9-d0e1-2345-f012-456789012345", "mpho.sithole@example.co.za", "Mpho Sithole",
+        new("mpho.sithole@example.co.za", "Mpho Sithole",
         [
             new("ZA0090000001", "Mpho Cheque Account",       AccountType.Checking,   4),
         ]),
 
-        new("a7b8c9d0-e1f2-3456-0123-567890123456", "fatima.ismail@example.co.za", "Fatima Ismail",
+        new("fatima.ismail@example.co.za", "Fatima Ismail",
         [
             new("ZA0100000001", "Fatima Cheque Account",     AccountType.Checking,   5),
             new("ZA0100000002", "Fatima Savings Account",    AccountType.Savings,    2),
@@ -270,7 +270,7 @@ public static class SeedData
         using var scope  = serviceProvider.CreateScope();
         var context      = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var logger       = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        var hasher       = scope.ServiceProvider.GetRequiredService<IPasswordHasher>();
+        var keycloak     = scope.ServiceProvider.GetRequiredService<IKeycloakAdminClient>();
 
         if (await context.Customers.AnyAsync()
             || await context.Accounts.AnyAsync()
@@ -279,8 +279,8 @@ public static class SeedData
 
         logger.LogInformation("Seeding database...");
 
-        var rng      = new Random(42);
-        var password = hasher.Hash("Test@12345");
+        var rng = new Random(42);
+        const string demoPassword = "Test@12345";
 
         // ── Seed window: Jan 2025 → Apr 2026 (16 months) ─────────────────────
         // Covers a complete "last year" (2025) and "this year to date" (2026),
@@ -297,10 +297,24 @@ public static class SeedData
 
         for (var ci = 0; ci < CustomerDefs.Length; ci++)
         {
-            var def      = CustomerDefs[ci];
-            var customer = Customer.Create(
-                CustomerId.CreateFrom(Guid.Parse(def.Id)),
-                def.Email, def.FullName, password);
+            var def = CustomerDefs[ci];
+
+            // Demo customers are provisioned in Keycloak too (not just the local DB) so they
+            // can actually log in. If the realm already has this user (e.g. the database was
+            // reset but Keycloak wasn't), reuse their existing id instead of failing.
+            Guid keycloakUserId;
+            try
+            {
+                keycloakUserId = await keycloak.CreateUserAsync(def.Email, def.FullName, demoPassword);
+            }
+            catch (KeycloakUserConflictException)
+            {
+                keycloakUserId = await keycloak.FindUserIdByEmailAsync(def.Email)
+                    ?? throw new InvalidOperationException(
+                        $"Keycloak reported '{def.Email}' as already existing but it could not be found by lookup.");
+            }
+
+            var customer = Customer.Create(CustomerId.CreateFrom(keycloakUserId), def.Email, def.FullName);
 
             foreach (var acct in def.Accounts)
             {

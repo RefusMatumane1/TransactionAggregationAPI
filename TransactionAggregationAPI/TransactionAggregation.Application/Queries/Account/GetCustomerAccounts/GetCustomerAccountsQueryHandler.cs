@@ -29,6 +29,7 @@ namespace TransactionAggregation.Application.Queries.Account.GetCustomerAccounts
                         Error.NotFound("Customer", request.CustomerId));
 
                 var accounts = await _context.Accounts
+                    .AsNoTracking()
                     .Where(a => a.CustomerId == customerId)
                     .ToListAsync(cancellationToken);
 

@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  selector:
+    app.kubernetes.io/name: keycloak
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

@@ -22,6 +22,7 @@ namespace TransactionAggregation.Application.Queries.Transaction.GetTransaction
                 var transactionId = TransactionId.CreateFrom(request.TransactionId);
 
                 var transaction = await context.Transactions
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(t => t.Id == transactionId, cancellationToken);
 
                 if (transaction is null)

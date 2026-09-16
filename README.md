@@ -46,7 +46,7 @@ A production-grade .NET 10 REST API that aggregates customer financial transacti
 │  Account                  │  │  TransactionAggregator        │
 │  Money / TransactionId /  │  │  RedisCacheService            │
 │  AccountId  (Value Objs)  │  │  TransactionSyncBackground-   │
-│  Domain Events            │  │    Service (scheduled worker) │
+│  Domain Events            │  │  Service (scheduled worker) │
 └──────────────┬────────────┘  └──────────┬───────────────────┘
                │                          │
 ┌──────────────▼──────────────────────────▼───────────────────┐
@@ -61,33 +61,33 @@ Supporting Services (docker-compose)
 
 **Layer responsibilities:**
 
-| Project | Responsibility |
-|---|---|
-| `Domain` | Entities, value objects, domain events, business rules |
-| `Application` | CQRS handlers, pipeline behaviors, service interfaces |
-| `Infrastructure` | External source adapters, aggregator, cache, background worker |
-| `Persistence` | EF Core context, configurations, migrations |
-| `TransactionAggregationAPI` | HTTP endpoints, middleware, DI wiring |
+| Project                     | Responsibility                                                 |
+| --------------------------- | -------------------------------------------------------------- |
+| `Domain`                    | Entities, value objects, domain events, business rules         |
+| `Application`               | CQRS handlers, pipeline behaviors, service interfaces          |
+| `Infrastructure`            | External source adapters, aggregator, cache, background worker |
+| `Persistence`               | EF Core context, configurations, migrations                    |
+| `TransactionAggregationAPI` | HTTP endpoints, middleware, DI wiring                          |
 
 ---
 
 ## Tech Stack
 
-| Concern | Choice | Rationale |
-|---|---|---|
-| Web framework | ASP.NET Core 10 Minimal APIs | Low ceremony, fast startup, CQRS-friendly endpoint mapping |
-| Mediator / CQRS | MediatR 14 | Clean command/query separation; composable pipeline behaviors for cross-cutting concerns |
-| ORM | EF Core 10 + Npgsql | First-class PostgreSQL support, owned entities for value objects, automatic migrations |
-| Database | PostgreSQL | ACID, JSONB for metadata, strong index options |
-| Cache | Redis via StackExchange.Redis | Shared cache for idempotency keys and read-query results |
-| Mapping | Mapster | Faster than AutoMapper; source-generator friendly |
-| Validation | FluentValidation | Declarative, testable rules; wired into MediatR pipeline automatically |
-| Logging | Serilog + Seq | Structured logs with correlation IDs; Seq makes them searchable |
-| Observability | OpenTelemetry | Traces and metrics exportable to any OTLP backend |
-| Resilience | Polly | Exponential-backoff retry on external source failures |
-| Mock data | Bogus | Realistic fake transactions for BogusBank source |
-| Testing | xUnit + FluentAssertions + NSubstitute + WebApplicationFactory | Unit + integration coverage with readable assertions |
-| Containerization | Docker + docker-compose | One-command startup, health checks, service ordering |
+| Concern          | Choice                                                         | Rationale                                                                                |
+| ---------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Web framework    | ASP.NET Core 10 Minimal APIs                                   | Low ceremony, fast startup, CQRS-friendly endpoint mapping                               |
+| Mediator / CQRS  | MediatR 14                                                     | Clean command/query separation; composable pipeline behaviors for cross-cutting concerns |
+| ORM              | EF Core 10 + Npgsql                                            | First-class PostgreSQL support, owned entities for value objects, automatic migrations   |
+| Database         | PostgreSQL                                                     | ACID, JSONB for metadata, strong index options                                           |
+| Cache            | Redis via StackExchange.Redis                                  | Shared cache for idempotency keys and read-query results                                 |
+| Mapping          | Mapster                                                        | Faster than AutoMapper; source-generator friendly                                        |
+| Validation       | FluentValidation                                               | Declarative, testable rules; wired into MediatR pipeline automatically                   |
+| Logging          | Serilog + Seq                                                  | Structured logs with correlation IDs; Seq makes them searchable                          |
+| Observability    | OpenTelemetry                                                  | Traces and metrics exportable to any OTLP backend                                        |
+| Resilience       | Polly                                                          | Exponential-backoff retry on external source failures                                    |
+| Mock data        | Bogus                                                          | Realistic fake transactions for BogusBank source                                         |
+| Testing          | xUnit + FluentAssertions + NSubstitute + WebApplicationFactory | Unit + integration coverage with readable assertions                                     |
+| Containerization | Docker + docker-compose                                        | One-command startup, health checks, service ordering                                     |
 
 ---
 
@@ -95,11 +95,11 @@ Supporting Services (docker-compose)
 
 ### Prerequisites
 
-| Tool | Version |
-|---|---|
-| Docker Desktop | 24+ |
-| Docker Compose | v2 |
-| .NET SDK *(local dev only)* | 10.0 |
+| Tool                        | Version |
+| --------------------------- | ------- |
+| Docker Desktop              | 24+     |
+| Docker Compose              | v2      |
+| .NET SDK _(local dev only)_ | 10.0    |
 
 ### Run with Docker (recommended)
 
@@ -110,15 +110,15 @@ cd TransactionAggregationAPI-main/TransactionAggregationAPI
 docker compose up --build
 ```
 
-| Service | URL | Notes |
-|---|---|---|
-| API | http://localhost:8080 | |
-| OpenAPI / Scalar | http://localhost:8080/scalar/v1 | Development only |
-| Health check | http://localhost:8080/health | |
-| Liveness | http://localhost:8080/alive | |
-| Seq (logs) | http://localhost:5341 | |
-| pgAdmin | http://localhost:5050 | admin@transaction.com / admin |
-| Redis Commander | http://localhost:8081 | |
+| Service          | URL                             | Notes                         |
+| ---------------- | ------------------------------- | ----------------------------- |
+| API              | http://localhost:8080           |                               |
+| OpenAPI / Scalar | http://localhost:8080/scalar/v1 | Development only              |
+| Health check     | http://localhost:8080/health    |                               |
+| Liveness         | http://localhost:8080/alive     |                               |
+| Seq (logs)       | http://localhost:5341           |                               |
+| pgAdmin          | http://localhost:5050           | admin@transaction.com / admin |
+| Redis Commander  | http://localhost:8081           |                               |
 
 ```bash
 # Stop
@@ -150,6 +150,7 @@ dotnet run --project TransactionAggregationAPI/TransactionAggregationAPI.csproj
 ```
 
 On startup the API automatically:
+
 - Applies any pending EF Core migrations
 - Seeds sample customers and transactions if the database is empty
 
@@ -172,13 +173,13 @@ dotnet test --collect:"XPlat Code Coverage"
 
 **Test coverage breakdown:**
 
-| Area | Type |
-|---|---|
-| Domain entities (`Transaction`, `Customer`, `Money`) | Unit |
-| Categorization service | Unit |
-| Transaction aggregator | Unit |
-| Query handlers | Unit |
-| API endpoints (health, customers, transactions) | Integration (WebApplicationFactory + in-memory DB) |
+| Area                                                 | Type                                               |
+| ---------------------------------------------------- | -------------------------------------------------- |
+| Domain entities (`Transaction`, `Customer`, `Money`) | Unit                                               |
+| Categorization service                               | Unit                                               |
+| Transaction aggregator                               | Unit                                               |
+| Query handlers                                       | Unit                                               |
+| API endpoints (health, customers, transactions)      | Integration (WebApplicationFactory + in-memory DB) |
 
 ---
 
@@ -188,48 +189,46 @@ All endpoints are versioned under `/api/v1/`.
 
 ### Customers
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/customers` | List all (paginated, searchable) |
-| `GET` | `/api/v1/customers/{id}` | Get by ID |
-| `GET` | `/api/v1/customers/email/{email}` | Get by email |
-| `POST` | `/api/v1/customers` | Create |
-| `PUT` | `/api/v1/customers/{id}` | Update |
-| `DELETE` | `/api/v1/customers/{id}` | Delete |
+| Method   | Route                             | Description                      |
+| -------- | --------------------------------- | -------------------------------- |
+| `GET`    | `/api/v1/customers`               | List all (paginated, searchable) |
+| `GET`    | `/api/v1/customers/{id}`          | Get by ID                        |
+| `GET`    | `/api/v1/customers/email/{email}` | Get by email                     |
+| `POST`   | `/api/v1/customers`               | Create                           |
+| `PUT`    | `/api/v1/customers/{id}`          | Update                           |
+| `DELETE` | `/api/v1/customers/{id}`          | Delete                           |
 
 ### Customer Transactions
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/customers/{id}/transactions` | Customer + transactions with aggregated totals |
-| `GET` | `/api/v1/customers/{id}/transactions/filter` | **Rich filtered, paginated list** |
-| `GET` | `/api/v1/customers/{id}/transactions/summary` | **Spend per category + monthly breakdowns** |
-| `POST` | `/api/v1/customers/{id}/transactions` | Create a transaction manually |
-| `POST` | `/api/v1/customers/{id}/transactions/sync` | Pull & sync from all external sources (idempotent) |
+| Method | Route                                         | Description                                        |
+| ------ | --------------------------------------------- | -------------------------------------------------- |
+| `GET`  | `/api/v1/customers/{id}/transactions`         | Customer + transactions with aggregated totals     |
+| `GET`  | `/api/v1/customers/{id}/transactions/filter`  | **Rich filtered, paginated list**                  |
+| `GET`  | `/api/v1/customers/{id}/transactions/summary` | **Spend per category + monthly breakdowns**        |
 
 ### Transactions
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/transactions/{id}` | Get single transaction |
-| `PATCH` | `/api/v1/transactions/{id}/categorize` | Override category |
+| Method  | Route                                  | Description            |
+| ------- | -------------------------------------- | ---------------------- |
+| `GET`   | `/api/v1/transactions/{id}`            | Get single transaction |
+| `PATCH` | `/api/v1/transactions/{id}/categorize` | Override category      |
 
 ### Filter parameters (`/transactions/filter`)
 
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `pageNumber` | int | 1 | Page number |
-| `pageSize` | int | 20 | Items per page (max 100) |
-| `category` | enum | — | Filter by category |
-| `status` | enum | — | Filter by status |
-| `fromDate` | DateTime | — | Date range start |
-| `toDate` | DateTime | — | Date range end |
-| `minAmount` | decimal | — | Minimum absolute amount |
-| `maxAmount` | decimal | — | Maximum absolute amount |
-| `searchTerm` | string | — | Description or source text search |
-| `source` | string | — | Exact source name match |
-| `sortBy` | string | date | `date`, `amount`, `category`, `status`, `description` |
-| `sortDescending` | bool | true | Sort direction |
+| Param            | Type     | Default | Description                                           |
+| ---------------- | -------- | ------- | ----------------------------------------------------- |
+| `pageNumber`     | int      | 1       | Page number                                           |
+| `pageSize`       | int      | 20      | Items per page (max 100)                              |
+| `category`       | enum     | —       | Filter by category                                    |
+| `status`         | enum     | —       | Filter by status                                      |
+| `fromDate`       | DateTime | —       | Date range start                                      |
+| `toDate`         | DateTime | —       | Date range end                                        |
+| `minAmount`      | decimal  | —       | Minimum absolute amount                               |
+| `maxAmount`      | decimal  | —       | Maximum absolute amount                               |
+| `searchTerm`     | string   | —       | Description or source text search                     |
+| `source`         | string   | —       | Exact source name match                               |
+| `sortBy`         | string   | date    | `date`, `amount`, `category`, `status`, `description` |
+| `sortDescending` | bool     | true    | Sort direction                                        |
 
 ### curl examples
 
@@ -256,15 +255,15 @@ curl -X PATCH http://localhost:8080/api/v1/transactions/{txId}/categorize \
 
 ### Transaction Categories
 
-| Value | Name | Value | Name |
-|---|---|---|---|
-| 0 | Uncategorized | 7 | Healthcare |
-| 1 | Groceries | 8 | Income |
-| 2 | Dining | 9 | Transfer |
-| 3 | Transportation | 10 | Shopping |
-| 4 | Entertainment | 11 | Subscriptions |
-| 5 | Utilities | | |
-| 6 | Housing | | |
+| Value | Name           | Value | Name          |
+| ----- | -------------- | ----- | ------------- |
+| 0     | Uncategorized  | 7     | Healthcare    |
+| 1     | Groceries      | 8     | Income        |
+| 2     | Dining         | 9     | Transfer      |
+| 3     | Transportation | 10    | Shopping      |
+| 4     | Entertainment  | 11    | Subscriptions |
+| 5     | Utilities      |       |               |
+| 6     | Housing        |       |               |
 
 ---
 
@@ -310,17 +309,17 @@ Configure interval:
 
 ## Trade-offs & Assumptions
 
-| Decision | Rationale |
-|---|---|
-| PostgreSQL over SQL Server | JSONB metadata column, open source, excellent EF Core support |
-| Minimal APIs over controllers | Less boilerplate; pairs naturally with CQRS endpoint handlers |
-| In-memory dedup + DB unique index | HashSet for fast sync-time check; the index is the authoritative guard |
-| Keyword scan (O(n) per transaction) | Fast enough for the current rule set size; Aho-Corasick trie would be needed at >1 000 rules |
-| `Money` value object disallows zero amount | Every transaction must have economic value; `Account.Balance` stores plain `decimal` |
-| Redis handles both idempotency and query caching | One external dependency for two purposes; TTLs are independent |
-| Background service polls all customers | Simple and reliable; a message queue scales better for millions of customers |
-| Mock sources use same DTO format | Keeps the demo clean; real integration would add a per-source adapter/normalizer |
-| EF Core migrations applied at startup | Zero-ops deployment; acceptable trade-off is a brief startup delay on first run |
+| Decision                                         | Rationale                                                                                    |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| PostgreSQL over SQL Server                       | JSONB metadata column, open source, excellent EF Core support                                |
+| Minimal APIs over controllers                    | Less boilerplate; pairs naturally with CQRS endpoint handlers                                |
+| In-memory dedup + DB unique index                | HashSet for fast sync-time check; the index is the authoritative guard                       |
+| Keyword scan (O(n) per transaction)              | Fast enough for the current rule set size; Aho-Corasick trie would be needed at >1 000 rules |
+| `Money` value object disallows zero amount       | Every transaction must have economic value; `Account.Balance` stores plain `decimal`         |
+| Redis handles both idempotency and query caching | One external dependency for two purposes; TTLs are independent                               |
+| Background service polls all customers           | Simple and reliable; a message queue scales better for millions of customers                 |
+| Mock sources use same DTO format                 | Keeps the demo clean; real integration would add a per-source adapter/normalizer             |
+| EF Core migrations applied at startup            | Zero-ops deployment; acceptable trade-off is a brief startup delay on first run              |
 
 ---
 

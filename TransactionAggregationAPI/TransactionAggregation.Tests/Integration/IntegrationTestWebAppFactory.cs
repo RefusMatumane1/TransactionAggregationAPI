@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.RateLimiting;
@@ -8,7 +9,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Persistence;
+using TransactionAggregation.Tests.Helpers;
 
 namespace TransactionAggregation.Tests.Integration
 {
@@ -112,6 +115,22 @@ namespace TransactionAggregation.Tests.Integration
                     });
                     options.GlobalLimiter = null;
                 });
+
+                // ── Authentication ────────────────────────────────────────────────────
+                // Swap the real Keycloak JwtBearer scheme for TestAuthHandler, so tests need
+                // no live Keycloak — see TestAuthHandler for how it authenticates a request.
+                services.AddAuthentication(options =>
+                {
+                    options.DefaultScheme = TestAuthHandler.SchemeName;
+                    options.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                    options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+
+                // ── Keycloak user provisioning ───────────────────────────────────────
+                // Replace the real Admin-API client with an in-memory fake so
+                // CreateCustomerCommandHandler still runs its real logic in tests.
+                services.RemoveAll<IKeycloakAdminClient>();
+                services.AddSingleton<IKeycloakAdminClient, FakeKeycloakAdminClient>();
             });
         }
     }

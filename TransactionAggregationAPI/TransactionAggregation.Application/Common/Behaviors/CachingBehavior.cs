@@ -63,12 +63,24 @@ namespace TransactionAggregation.Application.Common.Behaviors
             var json = JsonSerializer.Serialize(request);
             var bytes = Encoding.UTF8.GetBytes(json);
             var base64 = Convert.ToBase64String(bytes);
-            return $"{typeof(TRequest).Name}:{base64}";
+
+            // A request that owns customer/entity-scoped data (e.g. transactions) uses that
+            // prefix instead of its type name, so the outbox dispatcher's cache-invalidation
+            // step (OutboxDispatcherBackgroundService) can invalidate every cached variant for
+            // that entity via RemoveByPatternAsync("{prefix}:*") — a plain type-name prefix
+            // has no entity id in it for a pattern to match against.
+            var prefix = request is ICacheKeyPrefix prefixed ? prefixed.CachePrefix : typeof(TRequest).Name;
+            return $"{prefix}:{base64}";
         }
     }
 
     public interface ICacheableQuery
     {
         TimeSpan? CacheExpiration { get; }
+    }
+
+    public interface ICacheKeyPrefix
+    {
+        string CachePrefix { get; }
     }
 }

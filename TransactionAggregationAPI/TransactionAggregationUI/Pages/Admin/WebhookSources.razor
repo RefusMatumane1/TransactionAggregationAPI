@@ -1,0 +1,256 @@
+@page "/admin/webhook-sources"
+@attribute [Authorize(Roles = "admin")]
+@inject WebhookSourceService WebhookSourceService
+@inject IJSRuntime JS
+
+<PageTitle>Webhook Sources</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="mb-0">Webhook Sources</h4>
+    <button class="btn btn-primary btn-sm" @onclick="OpenCreateModal">
+        <i class="bi bi-plus-lg me-1"></i>New Source
+    </button>
+</div>
+
+<p class="text-muted small">
+    Each source is a separate API key allowed to push transactions via the aggregator webhook.
+    Compromising one source only requires rotating that source, not every integration — keys are
+    never stored or shown again after creation/rotation, only their hash.
+</p>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger py-2">@_error</div>
+}
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else if (_sources.Count == 0)
+{
+    <div class="alert alert-info">No webhook sources yet. Create one to let a source push transactions.</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Last used</th>
+                    <th class="text-end">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var source in _sources)
+                {
+                    <tr>
+                        <td>@source.Name</td>
+                        <td>
+                            @if (source.IsActive)
+                            {
+                                <span class="badge bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-secondary">Inactive</span>
+                            }
+                        </td>
+                        <td class="text-muted small">@source.CreatedAt.ToLocalTime().ToString("g")</td>
+                        <td class="text-muted small">
+                            @(source.LastUsedAt is { } lastUsed ? lastUsed.ToLocalTime().ToString("g") : "Never")
+                        </td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-secondary me-1"
+                                    disabled="@(_actingOnId == source.Id)"
+                                    @onclick="() => RotateKey(source.Id)">
+                                Rotate
+                            </button>
+                            @if (source.IsActive)
+                            {
+                                <button class="btn btn-sm btn-outline-danger"
+                                        disabled="@(_actingOnId == source.Id)"
+                                        @onclick="() => Deactivate(source.Id)">
+                                    Deactivate
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-success"
+                                        disabled="@(_actingOnId == source.Id)"
+                                        @onclick="() => Activate(source.Id)">
+                                    Activate
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (_showCreateModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New Webhook Source</h5>
+                    <button type="button" class="btn-close" @onclick="CloseCreateModal"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_modalError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_modalError</div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label">Name</label>
+                        <input class="form-control" @bind="_newSourceName" placeholder="e.g. stitch-production" />
+                    </div>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseCreateModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" disabled="@_creating" @onclick="HandleCreate">
+                            @if (_creating) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            Create
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_revealedKey is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">New API key</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning py-2">
+                        This key will not be shown again. Copy it now and give it to the source —
+                        rotating or losing it means generating a new one.
+                    </div>
+                    <div class="input-group">
+                        <input class="form-control font-monospace" readonly value="@_revealedKey" />
+                        <button class="btn btn-outline-secondary" @onclick="CopyRevealedKey">
+                            <i class="bi bi-clipboard me-1"></i>Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="() => _revealedKey = null">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<WebhookSourceModel> _sources = [];
+    private bool _loading = true;
+    private string? _error;
+
+    private bool _showCreateModal;
+    private bool _creating;
+    private string? _modalError;
+    private string _newSourceName = string.Empty;
+
+    private string? _revealedKey;
+    private Guid? _actingOnId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSources();
+        _loading = false;
+    }
+
+    private async Task LoadSources()
+    {
+        _sources = await WebhookSourceService.GetSourcesAsync();
+    }
+
+    private void OpenCreateModal()
+    {
+        _newSourceName = string.Empty;
+        _modalError = null;
+        _showCreateModal = true;
+    }
+
+    private void CloseCreateModal() => _showCreateModal = false;
+
+    private async Task HandleCreate()
+    {
+        if (string.IsNullOrWhiteSpace(_newSourceName))
+        {
+            _modalError = "Name is required.";
+            return;
+        }
+
+        _creating = true;
+        _modalError = null;
+        var (success, result, error) = await WebhookSourceService.CreateSourceAsync(_newSourceName);
+        _creating = false;
+
+        if (success && result is not null)
+        {
+            _showCreateModal = false;
+            _revealedKey = result.ApiKey;
+            await LoadSources();
+        }
+        else
+        {
+            _modalError = error;
+        }
+    }
+
+    private async Task RotateKey(Guid id)
+    {
+        _actingOnId = id;
+        _error = null;
+        var (success, apiKey, error) = await WebhookSourceService.RotateKeyAsync(id);
+        _actingOnId = null;
+
+        if (success)
+        {
+            _revealedKey = apiKey;
+            await LoadSources();
+        }
+        else
+        {
+            _error = error;
+        }
+    }
+
+    private async Task Activate(Guid id)
+    {
+        _actingOnId = id;
+        var (success, error) = await WebhookSourceService.ActivateAsync(id);
+        _actingOnId = null;
+        _error = success ? null : error;
+        await LoadSources();
+    }
+
+    private async Task Deactivate(Guid id)
+    {
+        _actingOnId = id;
+        var (success, error) = await WebhookSourceService.DeactivateAsync(id);
+        _actingOnId = null;
+        _error = success ? null : error;
+        await LoadSources();
+    }
+
+    private async Task CopyRevealedKey()
+    {
+        if (_revealedKey is not null)
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _revealedKey);
+    }
+}

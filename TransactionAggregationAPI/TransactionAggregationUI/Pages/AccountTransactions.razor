@@ -1,6 +1,5 @@
 @page "/accounts/{AccountId:guid}/transactions"
 @attribute [Authorize]
-@inject AuthService AuthService
 @inject TransactionService TransactionService
 @inject IJSRuntime JS
 
@@ -9,23 +8,11 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h4 class="mb-0">Transactions</h4>
     <div class="d-flex gap-2">
-        <button class="btn btn-sm btn-outline-secondary" @onclick="SyncTransactions" disabled="@_syncing">
-            @if (_syncing) { <span class="spinner-border spinner-border-sm me-1"></span> }
-            <i class="bi bi-arrow-repeat me-1"></i>Sync
-        </button>
         <button class="btn btn-sm btn-outline-success" @onclick="ExportCsv">
             <i class="bi bi-download me-1"></i>Export CSV
         </button>
     </div>
 </div>
-
-@if (_syncMessage is not null)
-{
-    <div class="alert alert-@(_syncSuccess ? "success" : "danger") py-2 mb-3 alert-dismissible">
-        @_syncMessage
-        <button type="button" class="btn-close" @onclick="() => _syncMessage = null"></button>
-    </div>
-}
 
 <!-- Filters -->
 <div class="card mb-3">
@@ -158,20 +145,22 @@ else
     private List<TransactionModel> _transactions = [];
     private TransactionFilterParams _filters = new();
     private bool _loading = true;
-    private bool _syncing;
-    private string? _syncMessage;
-    private bool _syncSuccess;
     private int _currentPage = 1;
     private int _totalPages = 1;
     private string _categoryFilter = "";
     private string _statusFilter = "";
     private Guid _customerId;
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        var userIdStr = AuthService.GetCurrentUserId();
-        if (Guid.TryParse(userIdStr, out _customerId))
+        var userId = AuthState is null ? null : (await AuthState).User.GetUserId();
+        if (userId is { } id)
+        {
+            _customerId = id;
             await LoadTransactions();
+        }
         _loading = false;
     }
 
@@ -206,17 +195,6 @@ else
     {
         _currentPage = page;
         await LoadTransactions();
-    }
-
-    private async Task SyncTransactions()
-    {
-        _syncing = true;
-        _syncMessage = null;
-        var (success, error) = await TransactionService.SyncTransactionsAsync(_customerId);
-        _syncing = false;
-        _syncSuccess = success;
-        _syncMessage = success ? "Transactions synced successfully." : error;
-        if (success) await LoadTransactions();
     }
 
     private async Task RecategorizeAsync(Guid txId, ChangeEventArgs e)

@@ -38,17 +38,4 @@ public class CustomerService
             return (false, ex.Message);
         }
     }
-
-    public async Task<(bool success, string? error)> DeleteCustomerAsync(Guid customerId)
-    {
-        try
-        {
-            var response = await Client.DeleteAsync($"api/v1/customers/{customerId}");
-            return response.IsSuccessStatusCode ? (true, null) : (false, $"Delete failed ({(int)response.StatusCode})");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
 }

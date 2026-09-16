@@ -1,6 +1,5 @@
 @page "/summary"
 @attribute [Authorize]
-@inject AuthService AuthService
 @inject TransactionService TransactionService
 
 <PageTitle>Transaction Summary</PageTitle>
@@ -152,6 +151,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private TransactionSummaryModel? _summary;
     private bool _loading = true;
     private DateTime _startDate = DateTime.Today.AddMonths(-12);
@@ -160,8 +161,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var userIdStr = AuthService.GetCurrentUserId();
-        Guid.TryParse(userIdStr, out _customerId);
+        var userId = AuthState is null ? null : (await AuthState).User.GetUserId();
+        _customerId = userId ?? Guid.Empty;
         await LoadSummary();
     }
 

@@ -64,7 +64,10 @@
       "Bash(kubectl api-resources *)",
       "Bash(curl *)",
       "Bash(python3 -c ' *)",
-      "Bash(nerdctl --namespace k8s.io build -t transactionaggregationapi:latest -f TransactionAggregationAPI/Dockerfile .)"
+      "Bash(nerdctl --namespace k8s.io build -t transactionaggregationapi:latest -f TransactionAggregationAPI/Dockerfile .)",
+      "Bash(docker exec *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(t['labels'].get\\('job'\\), t['health'], t['lastError']\\) for t in d['data']['activeTargets']]\")",
+      "PowerShell(Get-NetTCPConnection *)"
     ]
   }
 }

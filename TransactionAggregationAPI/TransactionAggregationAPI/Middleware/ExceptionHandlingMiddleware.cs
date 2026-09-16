@@ -7,11 +7,16 @@ namespace TransactionAggregationAPI.Middleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<ExceptionHandlingMiddleware> _logger;
+        private readonly IWebHostEnvironment _environment;
 
-        public ExceptionHandlingMiddleware(RequestDelegate next, ILogger<ExceptionHandlingMiddleware> logger)
+        public ExceptionHandlingMiddleware(
+            RequestDelegate next,
+            ILogger<ExceptionHandlingMiddleware> logger,
+            IWebHostEnvironment environment)
         {
             _next = next;
             _logger = logger;
+            _environment = environment;
         }
 
         public async Task InvokeAsync(HttpContext context)
@@ -23,16 +28,19 @@ namespace TransactionAggregationAPI.Middleware
             catch (Exception ex)
             {
                 _logger.LogError(ex, "An unhandled exception occurred");
-                await HandleExceptionAsync(context, ex);
+                await HandleExceptionAsync(context, ex, _environment);
             }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception exception)
+        private static async Task HandleExceptionAsync(HttpContext context, Exception exception, IWebHostEnvironment environment)
         {
+            // The real exception is always logged above; only Development responses echo
+            // it back to the caller. Anywhere else this can leak internal details (DB
+            // constraint text, internal type names, etc.) to any client that triggers a 500.
             var problemDetails = new ProblemDetails
             {
                 Title = "An error occurred while processing your request",
-                Detail = exception.Message,
+                Detail = environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.",
                 Status = StatusCodes.Status500InternalServerError,
                 Type = "https://httpstatuses.com/500"
             };

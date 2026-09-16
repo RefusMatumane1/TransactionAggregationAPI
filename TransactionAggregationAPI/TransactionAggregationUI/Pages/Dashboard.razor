@@ -1,6 +1,5 @@
 @page "/"
 @attribute [Authorize]
-@inject AuthService AuthService
 @inject CustomerService CustomerService
 @inject TransactionService TransactionService
 @inject AccountService AccountService
@@ -122,6 +121,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private CustomerModel? _customer;
     private TransactionSummaryModel? _summary;
     private List<AccountModel> _accounts = [];
@@ -129,12 +130,12 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var userIdStr = AuthService.GetCurrentUserId();
-        if (Guid.TryParse(userIdStr, out var userId))
+        var userId = AuthState is null ? null : (await AuthState).User.GetUserId();
+        if (userId is { } id)
         {
-                var customerTask = CustomerService.GetCustomerAsync(userId);
-            var summaryTask = TransactionService.GetSummaryAsync(userId);
-            var accountsTask = AccountService.GetAccountsAsync(userId);
+            var customerTask = CustomerService.GetCustomerAsync(id);
+            var summaryTask = TransactionService.GetSummaryAsync(id);
+            var accountsTask = AccountService.GetAccountsAsync(id);
             await Task.WhenAll(customerTask, summaryTask, accountsTask);
             _customer = customerTask.Result;
             _summary = summaryTask.Result;

@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: keycloak
+    app.kubernetes.io/component: identity
+    app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    configmap.reloader.stakater.com/reload: "keycloak-realm-config"
+    secret.reloader.stakater.com/reload: "transaction-api-secrets"
+spec:
+  # Single replica: start-dev mode keeps everything (including the realm) in an embedded H2
+  # database, so replicas wouldn't share state anyway. Fine for this dev cluster — a real
+  # deployment would run Keycloak in production mode against Postgres with multiple replicas.
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/component: identity
+        app.kubernetes.io/part-of: transaction-aggregation
+
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.0
+          imagePullPolicy: IfNotPresent
+          args: ["start-dev", "--import-realm"]
+
+          env:
+            - name: KEYCLOAK_ADMIN
+              value: admin
+            - name: KEYCLOAK_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: keycloak-admin-password
+
+            # Fixed so the `iss` claim on every issued token matches Keycloak__PublicIssuer
+            # (transaction-api-config) regardless of whether a request came in through the
+            # ingress hostname or the in-cluster service DNS — see Program.cs.
+            - name: KC_HOSTNAME
+              value: keycloak.transaction.local
+            - name: KC_HOSTNAME_STRICT_HTTPS
+              value: "false"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+
+          # /realms/{realm} is public (no auth) and only returns 200 once the realm has been
+          # imported and Keycloak is actually serving requests — simpler than wiring up
+          # Keycloak's separate health-endpoint subsystem for a dev deployment.
+          readinessProbe:
+            httpGet:
+              path: /realms/transaction-aggregation
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+
+          livenessProbe:
+            httpGet:
+              path: /realms/transaction-aggregation
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+      volumes:
+        - name: realm-import
+          configMap:
+            name: keycloak-realm-config

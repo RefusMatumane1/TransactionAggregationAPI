@@ -6,10 +6,12 @@ using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTransactions
 {
-    public sealed record GetTransactionsQuery : IRequest<Result<PaginatedResponse<TransactionDto>>>, ICacheableQuery
+    public sealed record GetTransactionsQuery : IRequest<Result<PaginatedResponse<TransactionDto>>>, ICacheableQuery, ICacheKeyPrefix
     {
         // Required
         public required Guid CustomerId { get; init; }
+
+        public string CachePrefix => $"transactions:{CustomerId}";
 
         // Pagination
         public int PageNumber { get; init; } = 1;

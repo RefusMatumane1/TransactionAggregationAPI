@@ -56,7 +56,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_TotalTransactionsReflectsAllPages_NotJustCurrentPage()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test");
         context.Customers.Add(customer);
 
         // Add 25 transactions but request page size = 5
@@ -81,7 +81,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_CategoryFilter_ReturnsOnlyMatchingTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test");
         context.Customers.Add(customer);
 
         context.Transactions.AddRange(
@@ -110,7 +110,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_DateRangeIncludingNow_ReturnsAllTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "date@example.com", "Date Test", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "date@example.com", "Date Test");
         context.Customers.Add(customer);
 
         // Transaction.Create stamps Date = UtcNow, so a range around now includes them
@@ -136,7 +136,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_DateRangeInPast_ExcludesAllCurrentTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "past@example.com", "Past Test", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "past@example.com", "Past Test");
         context.Customers.Add(customer);
         context.Transactions.Add(MakeTransaction(customer.Id, -100m)); // stamped UtcNow
         await context.SaveChangesAsync();
@@ -159,7 +159,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_SummaryCalculatesIncomeAndExpenses_ForSettledTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "fin@example.com", "Finance", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "fin@example.com", "Finance");
         context.Customers.Add(customer);
 
         context.Transactions.AddRange(
@@ -187,7 +187,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_ReturnsCorrectCustomerInfo()
     {
         var context = InMemoryDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), "info@example.com", "Info User", "hashed");
+        var customer = Customer.Create(CustomerId.Create(), "info@example.com", "Info User");
         context.Customers.Add(customer);
         await context.SaveChangesAsync();
 

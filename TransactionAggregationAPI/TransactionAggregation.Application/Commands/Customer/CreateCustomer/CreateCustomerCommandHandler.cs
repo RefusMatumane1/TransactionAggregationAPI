@@ -9,8 +9,8 @@ using TransactionAggregation.Domain.Common.ValueObjects;
 namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
 {
     internal sealed class CreateCustomerCommandHandler(IApplicationDbContext context,
-        IPasswordHasher passwordHasher,
-        ILogger<CreateCustomerCommandHandler> logger) 
+        IKeycloakAdminClient keycloakAdminClient,
+        ILogger<CreateCustomerCommandHandler> logger)
         : ICommandHandler<CreateCustomerCommand, Guid>
     {
         public async Task<Result<Guid>> Handle(CreateCustomerCommand request, CancellationToken cancellationToken)
@@ -23,9 +23,21 @@ namespace TransactionAggregation.Application.Commands.Customer.CreateCustomer
                 if (emailExists)
                     return Result.Failure<Guid>(Error.Conflict("Customer with this email already exists"));
 
-                var customerId = CustomerId.Create();
-                var passwordHash = passwordHasher.Hash(request.Password);
-                Domain.Entities.Customer customer = Domain.Entities.Customer.Create(customerId, request.Email, request.Name, passwordHash);
+                // Keycloak is the sole credential store — it owns the password and hands back
+                // the id we use as CustomerId, so identity has exactly one source of truth.
+                Guid keycloakUserId;
+                try
+                {
+                    keycloakUserId = await keycloakAdminClient.CreateUserAsync(
+                        request.Email, request.Name, request.Password, cancellationToken);
+                }
+                catch (KeycloakUserConflictException)
+                {
+                    return Result.Failure<Guid>(Error.Conflict("Customer with this email already exists"));
+                }
+
+                var customerId = CustomerId.CreateFrom(keycloakUserId);
+                Domain.Entities.Customer customer = Domain.Entities.Customer.Create(customerId, request.Email, request.Name);
 
                 await context.Customers.AddAsync(customer, cancellationToken);
                 await context.SaveChangesAsync(cancellationToken);

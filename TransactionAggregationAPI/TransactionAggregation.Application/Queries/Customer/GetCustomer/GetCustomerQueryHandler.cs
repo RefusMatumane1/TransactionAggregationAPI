@@ -20,6 +20,7 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
                 var customerId = CustomerId.CreateFrom(request.CustomerId);
 
                 var customer = await _context.Customers
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
                 if (customer is null)

@@ -13,13 +13,13 @@ public class UpdateCustomerCommandHandlerTests
 {
     private static UpdateCustomerCommandHandler BuildHandler(
         TransactionAggregation.Persistence.ApplicationDbContext ctx)
-        => new(ctx, NullLogger<UpdateCustomerCommandHandler>.Instance);
+        => new(ctx, new NoOpCacheService(), NullLogger<UpdateCustomerCommandHandler>.Instance);
 
     private static async Task<Customer> SeedCustomerAsync(
         TransactionAggregation.Persistence.ApplicationDbContext ctx,
         string email, string name)
     {
-        var customer = Customer.Create(CustomerId.Create(), email, name, "hashed");
+        var customer = Customer.Create(CustomerId.Create(), email, name);
         ctx.Customers.Add(customer);
         await ctx.SaveChangesAsync();
         return customer;

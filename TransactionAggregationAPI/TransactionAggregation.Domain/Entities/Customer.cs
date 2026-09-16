@@ -13,21 +13,22 @@ namespace TransactionAggregation.Domain.Entities
         public CustomerId Id { get; private set; }
         public string Email { get; private set; }
         public string Name { get; private set; }
-        
-        public string PasswordHash { get; set; }
+
         public IReadOnlyCollection<Transaction> Transactions => _transactions.AsReadOnly();
         public IReadOnlyCollection<Account> Accounts => _accounts.AsReadOnly();
 
         private Customer() { }
 
-        public static Customer Create(CustomerId id, string email, string name, string passwordHash)
+        // Id is the same id Keycloak issued for this customer when they were provisioned there
+        // (see IKeycloakAdminClient) — Keycloak is the sole credential store, so this entity
+        // never holds a password or password hash.
+        public static Customer Create(CustomerId id, string email, string name)
         {
             var customer = new Customer
             {
                 Id = id,
                 Email = email,
-                Name = name,
-                PasswordHash = passwordHash
+                Name = name
             };
 
            // customer.AddDomainEvent(new CustomerCreatedEvent(customer));

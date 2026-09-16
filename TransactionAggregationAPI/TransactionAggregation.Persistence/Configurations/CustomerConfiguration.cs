@@ -30,10 +30,6 @@ namespace TransactionAggregation.Persistence.Configurations
                 .HasMaxLength(200)
                 .IsRequired();
 
-            builder.Property(c => c.PasswordHash)
-                .HasMaxLength(500)
-                .IsRequired();
-
             builder.Property(c => c.CreatedAt)
                 .IsRequired();
 

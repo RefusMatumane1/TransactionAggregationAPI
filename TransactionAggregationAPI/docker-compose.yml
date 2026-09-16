@@ -1,4 +1,26 @@
 services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: transactionaggregation-keycloak-1
+    command: start-dev --import-realm
+    environment:
+      KEYCLOAK_ADMIN: admin
+      # Local-dev-only credential — override via `KEYCLOAK_ADMIN_PASSWORD=... docker compose up`.
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Keeps the `iss` claim on every issued token fixed to this address regardless of which
+      # hostname/port a request physically arrived on, so it matches Keycloak__PublicIssuer
+      # below (the value the API's JwtBearer issuer check validates against). See Program.cs.
+      KC_HOSTNAME: localhost:8081
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    networks:
+      - transaction-network
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -10,6 +32,16 @@ services:
       - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=postgres
       - ConnectionStrings__redis=redis:6379
       - ConnectionStrings__seq=http://seq:80
+      # Reached from inside the compose network — reliable, no dependency on host DNS.
+      - Keycloak__Authority=http://keycloak:8080
+      # Reached by the browser — must match KC_HOSTNAME above, since it becomes the `iss` claim
+      # on every token. Deliberately a different address than Keycloak__Authority — see
+      # Program.cs for why the API doesn't need these to be the same URL.
+      - Keycloak__PublicIssuer=http://localhost:8081/realms/transaction-aggregation
+      - Keycloak__Realm=transaction-aggregation
+      - Keycloak__Audience=transaction-ui
+      - Keycloak__AdminClientId=transaction-admin
+      - Keycloak__AdminClientSecret=dev-only-admin-client-secret
     ports:
       - "5001:8080"
     depends_on:
@@ -19,6 +51,8 @@ services:
         condition: service_healthy
       seq:
         condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
       - transaction-network
     restart: unless-stopped
@@ -31,6 +65,10 @@ services:
     environment:
       # nginx proxies /api/ to this upstream — must be reachable from inside the container network
       - API_UPSTREAM=http://api:8080
+      # Baked into wwwroot/appsettings.json at container start (see
+      # docker-entrypoint.d/20-keycloak-authority.sh) — must be reachable from the browser, same
+      # address as Keycloak__PublicIssuer above minus the /realms/... suffix.
+      - KEYCLOAK_AUTHORITY=http://localhost:8081/realms/transaction-aggregation
     ports:
       - "7200:80"
     depends_on:
@@ -100,7 +138,9 @@ services:
     container_name: transactionaggregation-pgadmin-1
     environment:
       PGADMIN_DEFAULT_EMAIL: admin
-      PGADMIN_DEFAULT_PASSWORD: admin
+      # Override via `PGADMIN_PASSWORD=... docker compose up` — local dev tool, but don't
+      # leave it on the literal word "admin" if this port is ever reachable beyond localhost.
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     ports:
       - "5050:80"
     depends_on:
@@ -148,7 +188,8 @@ services:
     container_name: transactionaggregation-grafana-1
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Override via `GRAFANA_ADMIN_PASSWORD=... docker compose up`.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_HTTP_PORT=3000
     volumes:

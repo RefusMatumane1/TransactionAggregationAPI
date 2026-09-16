@@ -46,7 +46,6 @@ api:
   env:
     ASPNETCORE_ENVIRONMENT: "development"
     ASPNETCORE_HTTP_PORTS: "8080"
-    TransactionSync__IntervalMinutes: "60"
 
   # Secrets are NEVER stored here — inject via external-secrets or sealed-secrets
   existingSecret: transaction-api-secrets

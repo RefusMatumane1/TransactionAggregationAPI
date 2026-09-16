@@ -76,6 +76,16 @@ namespace TransactionAggregation.Persistence.Configurations
                     .HasDatabaseName("IX_Transactions_SourceExternalId");
             });
 
+            // A composite UNIQUE ("CustomerId", "SourceExternalId") index is created via raw
+            // SQL in migration AddCompositeUniqueTransactionSourceIndex — EF Core's fluent
+            // HasIndex() can't express an index spanning an owner property and an owned
+            // navigation's property (Source.ExternalId) mapped into the same table. It is
+            // the DB-level backstop against double-inserting the same transaction when the
+            // aggregator redelivers a webhook or two deliveries race each other (see
+            // ReceiveBankTransactionsCommandHandler): a given external id is only unique
+            // within one customer's feed (two customers, or two source banks, can legitimately
+            // reuse the same id — why the old single-column unique index above was dropped).
+
       
             builder.Property(t => t.Description)
                 .HasMaxLength(500)

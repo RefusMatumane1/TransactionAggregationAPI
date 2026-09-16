@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Common.Interfaces;
+using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Infrastructure.Authentication;
 using TransactionAggregation.Infrastructure.BackgroundServices;
 using TransactionAggregation.Infrastructure.Providers;
@@ -17,11 +19,15 @@ namespace TransactionAggregation.Infrastructure
         {
             services.AddHttpClient();
 
-            // Register multiple mock transaction sources (satisfies "multiple data sources" requirement)
-            services.AddScoped<ITransactionSource, BogusTransactionSource>();
-            services.AddScoped<ITransactionSource, StaticDataTransactionSource>();
-
-            services.AddScoped<ITransactionAggregator, TransactionAggregator>();
+            // Real bank connectivity via a licensed account-data aggregator — it pushes
+            // transaction data to us (see WebhookEndpoints), so this client only backs the
+            // consent/linking handshake (InitiateBankLink/CompleteBankLink), not a pull loop.
+            services.Configure<BankAggregatorOptions>(
+                configuration.GetSection(BankAggregatorOptions.SectionName));
+            services.AddScoped<IBankLinkCredentialProtector, BankLinkCredentialProtector>();
+            // Resilience (retry/circuit-breaker/timeout) is inherited from the standard
+            // handler ServiceDefaults registers for every HttpClient — see AddServiceDefaults.
+            services.AddHttpClient<IBankAggregatorClient, HttpBankAggregatorClient>();
 
             // Redis-backed distributed cache
             services.AddDistributedMemoryCache();
@@ -31,15 +37,21 @@ namespace TransactionAggregation.Infrastructure
                 configuration.GetSection("NotificationOptions"));
             services.AddScoped<INotificationService, NotificationService>();
 
-            // Background sync worker
-            services.Configure<TransactionSyncOptions>(
-                configuration.GetSection(TransactionSyncOptions.SectionName));
-            services.AddHostedService<TransactionSyncBackgroundService>();
-            
-            
             services.AddScoped<IUserContext, UserContext>();
-            services.AddSingleton<IPasswordHasher, PasswordHasher>();
-            services.AddSingleton<ITokenProvider, TokenProvider>();
+
+            // Keycloak is the sole identity/credential store — see IKeycloakAdminClient.
+            services.Configure<KeycloakOptions>(configuration.GetSection(KeycloakOptions.SectionName));
+            services.AddHttpClient<IKeycloakAdminClient, KeycloakAdminClient>((sp, client) =>
+            {
+                var keycloakOptions = sp.GetRequiredService<IOptions<KeycloakOptions>>().Value;
+                client.BaseAddress = new Uri(keycloakOptions.Authority.TrimEnd('/') + "/");
+            });
+
+            services.Configure<OutboxOptions>(configuration.GetSection(OutboxOptions.SectionName));
+            services.AddHostedService<OutboxDispatcherBackgroundService>();
+
+            services.Configure<InboxOptions>(configuration.GetSection(InboxOptions.SectionName));
+            services.AddHostedService<InboxDispatcherBackgroundService>();
 
             return services;
         }

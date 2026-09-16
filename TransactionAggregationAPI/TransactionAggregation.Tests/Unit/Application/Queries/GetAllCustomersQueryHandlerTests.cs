@@ -11,7 +11,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries;
 public class GetAllCustomersQueryHandlerTests
 {
     private static Customer MakeCustomer(string email, string name)
-        => Customer.Create(CustomerId.Create(), email, name, "hashed");
+        => Customer.Create(CustomerId.Create(), email, name);
 
     [Fact]
     public async Task Handle_ReturnsAllCustomers_WithCorrectTotalCount()

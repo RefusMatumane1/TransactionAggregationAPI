@@ -51,35 +51,6 @@ public class TransactionService
         }
     }
 
-    public async Task<(bool success, string? error)> CreateTransactionAsync(
-        Guid customerId, CreateTransactionModel model)
-    {
-        try
-        {
-            var response = await Client.PostAsJsonAsync(
-                $"api/v1/customers/{customerId}/transactions", model);
-            return response.IsSuccessStatusCode ? (true, null) : (false, $"Failed ({(int)response.StatusCode})");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
-    public async Task<(bool success, string? error)> SyncTransactionsAsync(Guid customerId)
-    {
-        try
-        {
-            var response = await Client.PostAsync(
-                $"api/v1/customers/{customerId}/transactions/sync", null);
-            return response.IsSuccessStatusCode ? (true, null) : (false, $"Failed ({(int)response.StatusCode})");
-        }
-        catch (Exception ex)
-        {
-            return (false, ex.Message);
-        }
-    }
-
     public async Task<(bool success, string? error)> CategorizeTransactionAsync(
         Guid transactionId, TransactionCategory category)
     {

@@ -107,6 +107,16 @@ rejected one is caught and treated as a harmless duplicate — the classic
 "check-then-insert" race the brief calls out is avoided because there is no
 separate check step for the final guarantee; the constraint is the guarantee.
 
+**Now automated (this review)**: `ConcurrentIngestionTests.cs` (in the same
+`Integration/Postgres/` suite) submits the identical external transaction ID
+through two independent `DbContext`s racing to insert it, against a real
+Postgres unique constraint, and asserts exactly one row results and neither
+request errors. This is the first test in the whole suite to actually
+exercise the handler's `catch (DbUpdateException ex) when
+(ex.InnerException?.Message.Contains("23505") == true)` clause — the
+in-memory provider used everywhere else can't produce a Postgres-specific
+SQLSTATE code, so that catch clause had zero coverage until now.
+
 ## 9. Outbox publication fails
 - **Detection**: The handler for a given `OutboxMessage` throws; caught in
   `OutboxDispatcherBackgroundService.ProcessMessageAsync`.
@@ -161,13 +171,15 @@ separate check step for the final guarantee; the constraint is the guarantee.
   all 11 migrations in `__EFMigrationsHistory`, and running the full app in
   `Production` mode confirmed it does *not* re-run migrations or seed data
   (the `IsDevelopment()` gate holds).
-- **Still missing**: this was a manual, one-off verification, not automated
-  coverage. `ClaimInboxMessagesAsync`/`ClaimOutboxMessagesAsync` use raw
-  Postgres SQL (`FOR UPDATE SKIP LOCKED`), which the in-memory EF Core
-  provider used by the test suite cannot execute — so there is still no
-  *repeatable, CI-enforced* test for this path. Add Testcontainers-based
-  integration tests (already flagged as a "should-have" in the production
-  readiness checklist) so a future regression here is caught automatically.
+- **Now automated (this review)**: `TransactionAggregation.Tests/Integration/Postgres/StaleClaimReclaimTests.cs`
+  converts the manual check above into a permanent, CI-enforced test —
+  spins up a real `postgres:16-alpine` container via Testcontainers, inserts
+  a message stuck in `Processing` past `ClaimTimeoutMinutes`, and asserts
+  `ClaimOutboxMessagesAsync`/`ClaimInboxMessagesAsync` reclaim it (plus a
+  companion test asserting a message *within* its claim window is correctly
+  left alone). `MigrationTests.cs` in the same folder does the equivalent for
+  the migration fix. This closes the "should-have" gap the production
+  readiness checklist previously flagged.
 
 ## 12. Message broker unavailable
 **Not applicable** — there is no message broker; see

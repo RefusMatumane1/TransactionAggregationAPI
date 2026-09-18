@@ -63,7 +63,7 @@ ADR for why.
 | Contract tests | ✅ Done (this review) | Should-have |
 | Security tests (IDOR/BOLA) | ✅ Done (this review) | Must-have |
 | Performance tests | ✅ Script + targets exist (this review), not yet run for real | Should-have |
-| Integration tests against real Postgres/Redis (Testcontainers), not in-memory | ⚠️ Manually verified once against a real `postgres:16-alpine`/`redis:7-alpine` container (migration + stale-claim reclaim both confirmed working — see [failure-scenarios.md](failure-scenarios.md) scenarios 10/11/13); still no *automated, repeatable* coverage for the Postgres-specific claim SQL | Must-have — automate what was manually verified before relying on it long-term |
+| Integration tests against real Postgres (Testcontainers), not in-memory | ✅ Done (this review) — `TransactionAggregation.Tests/Integration/Postgres/` spins up a real `postgres:16-alpine` container per test class and runs actual EF Core migrations against it, permanently automating what was previously a manual, one-off `docker exec psql` check: migration application, the Inbox/Outbox stale-claim reclaim (`FOR UPDATE SKIP LOCKED`), and the exact concurrent-duplicate-insert race from Instructions.md section 6 against the real unique constraint (not the in-memory provider, which doesn't enforce it the same way and can't produce the Postgres-specific 23505 error the handler's catch clause checks for) | Must-have |
 
 ## Deployment
 

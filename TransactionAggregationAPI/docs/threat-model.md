@@ -112,5 +112,10 @@ considered and mitigated, and what residual risk is knowingly accepted.
 ## Not claimed
 This threat model does not cover: physical security, insider threat, supply-chain
 compromise of NuGet dependencies beyond Dependabot's automated scanning, or a full
-penetration test. It should be revisited whenever a new external integration,
-authentication method, or data flow is added.
+penetration test. A weekly/manual OWASP ZAP baseline scan
+(`.github/workflows/zap-baseline.yml`) now runs passive dynamic checks against the
+API (missing security headers, verbose error disclosure, cookie flags) — this closes
+part of section 21's "dynamic API security testing" gap, but a passive baseline scan
+is not an active scan and is not a substitute for a real penetration test. This
+threat model should be revisited whenever a new external integration, authentication
+method, or data flow is added.

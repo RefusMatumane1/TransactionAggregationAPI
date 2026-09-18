@@ -1,0 +1,60 @@
+name: ZAP Baseline Scan
+
+# Dynamic API security testing (Instructions.md section 21). Deliberately NOT run on
+# every push/PR: it needs the full stack up (Postgres, Redis, Keycloak, API) and takes
+# several minutes for a passive baseline pass — running it on every PR would slow the
+# main pipeline for a signal that's most useful pre-release or on a regular cadence,
+# not per-commit. Trigger manually before a release, or let the weekly schedule catch
+# drift. This does NOT replace the Trivy container/SBOM checks or the dependency
+# vulnerability scan in ci-cd.yml — those catch known-CVE and supply-chain issues; ZAP
+# catches runtime API behavior (missing headers, verbose errors, etc.) that static
+# scanning can't see. Neither replaces a real penetration test.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+
+jobs:
+  zap-baseline:
+    name: ZAP Baseline against docker-compose stack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start the stack
+        working-directory: TransactionAggregationAPI
+        run: docker compose up -d --build
+
+      - name: Wait for API readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5001/alive > /dev/null; then
+              echo "API is up"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "::error::API did not become ready in time"
+          docker compose -f TransactionAggregationAPI/docker-compose.yml logs api || true
+          exit 1
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:5001'
+          # Baseline = passive scan only (no active attack payloads against a shared
+          # local stack). This finds missing security headers, verbose error
+          # disclosure, cookie flags, etc. — not injection/auth-bypass, which needs an
+          # active scan against a disposable environment with real seeded data and is
+          # out of scope for this lightweight pass.
+          cmd_options: '-a'
+          fail_action: false
+
+      - name: Stop the stack
+        if: always()
+        working-directory: TransactionAggregationAPI
+        run: docker compose down -v

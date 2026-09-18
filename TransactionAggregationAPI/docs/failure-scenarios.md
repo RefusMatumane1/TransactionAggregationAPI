@@ -139,13 +139,27 @@ separate check step for the final guarantee; the constraint is the guarantee.
   twice by two instances — acceptable given downstream idempotency (the
   unique-constraint dedup for inbound transactions) and the default timeout
   being far larger than a normal batch's processing time.
-- **Not yet verified live**: `ClaimInboxMessagesAsync`/`ClaimOutboxMessagesAsync`
-  use raw Postgres SQL (`FOR UPDATE SKIP LOCKED`), which the in-memory EF Core
-  provider used by this test suite cannot execute — so this fix (and the
-  original claim logic) has no automated test coverage today. Confirm it
-  against a real Postgres instance (or add Testcontainers-based integration
-  tests, already flagged as a "should-have" in the production readiness
-  checklist) before relying on it in production.
+- **Verified against real PostgreSQL** (not just reasoned about): a message
+  was manually inserted with `Status = Processing` and `ClaimedAt` 15 minutes
+  in the past (simulating a crashed dispatcher), with no other pending
+  messages in the table. Running the real app against a throwaway
+  `postgres:16-alpine` container, the `OutboxDispatcherBackgroundService`
+  claimed and processed it on its very next poll (`Claimed 1 outbox messages`)
+  — the only way that could happen is via the new stale-claim reclaim branch,
+  since the message was never `Pending`. It was then correctly dead-lettered
+  (`Status = DeadLettered, Attempts = 1`) since its `Type` didn't match a
+  known handler. The migration fix was verified the same way: running
+  `--migrate-only` against a fresh database created all 8 tables and recorded
+  all 11 migrations in `__EFMigrationsHistory`, and running the full app in
+  `Production` mode confirmed it does *not* re-run migrations or seed data
+  (the `IsDevelopment()` gate holds).
+- **Still missing**: this was a manual, one-off verification, not automated
+  coverage. `ClaimInboxMessagesAsync`/`ClaimOutboxMessagesAsync` use raw
+  Postgres SQL (`FOR UPDATE SKIP LOCKED`), which the in-memory EF Core
+  provider used by the test suite cannot execute — so there is still no
+  *repeatable, CI-enforced* test for this path. Add Testcontainers-based
+  integration tests (already flagged as a "should-have" in the production
+  readiness checklist) so a future regression here is caught automatically.
 
 ## 12. Message broker unavailable
 **Not applicable** — there is no message broker; see

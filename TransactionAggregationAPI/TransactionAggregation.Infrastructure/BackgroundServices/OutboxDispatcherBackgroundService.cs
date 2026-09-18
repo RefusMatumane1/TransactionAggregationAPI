@@ -68,7 +68,8 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             var analytics = scope.ServiceProvider.GetRequiredService<IAnalyticsService>();
             var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-            var claimed = await context.ClaimOutboxMessagesAsync(_options.BatchSize, cancellationToken);
+            var claimed = await context.ClaimOutboxMessagesAsync(
+                _options.BatchSize, TimeSpan.FromMinutes(_options.ClaimTimeoutMinutes), cancellationToken);
             if (claimed.Count == 0)
                 return;
 

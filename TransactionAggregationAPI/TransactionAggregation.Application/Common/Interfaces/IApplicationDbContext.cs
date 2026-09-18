@@ -18,8 +18,10 @@ namespace TransactionAggregation.Application.Common.Interfaces
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-        Task<List<OutboxMessage>> ClaimOutboxMessagesAsync(int batchSize, CancellationToken cancellationToken = default);
+        Task<List<OutboxMessage>> ClaimOutboxMessagesAsync(
+            int batchSize, TimeSpan claimTimeout, CancellationToken cancellationToken = default);
 
-        Task<List<InboxMessage>> ClaimInboxMessagesAsync(int batchSize, CancellationToken cancellationToken = default);
+        Task<List<InboxMessage>> ClaimInboxMessagesAsync(
+            int batchSize, TimeSpan claimTimeout, CancellationToken cancellationToken = default);
     }
 }

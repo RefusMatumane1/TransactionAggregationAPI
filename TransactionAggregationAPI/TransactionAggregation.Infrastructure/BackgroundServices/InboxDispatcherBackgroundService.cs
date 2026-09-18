@@ -65,7 +65,8 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            var claimed = await context.ClaimInboxMessagesAsync(_options.BatchSize, cancellationToken);
+            var claimed = await context.ClaimInboxMessagesAsync(
+                _options.BatchSize, TimeSpan.FromMinutes(_options.ClaimTimeoutMinutes), cancellationToken);
             if (claimed.Count == 0)
                 return;
 

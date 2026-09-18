@@ -31,7 +31,8 @@ ADR for why.
 | Graceful degradation when Redis is unavailable | ✅ Done, health check no longer cascades | Must-have |
 | Health checks split liveness vs. readiness | ✅ Done | Must-have |
 | Disaster recovery / backup-restore runbook for Postgres | ❌ Not documented in this repo | Must-have |
-| Documented failure-scenario responses (Instructions.md section 42) | ⚠️ Partially covered by the threat model; not exhaustively walked through per-scenario | Should-have |
+| Documented failure-scenario responses (Instructions.md section 42) | ✅ Done ([failure-scenarios.md](failure-scenarios.md)) — walking through it surfaced and fixed a real stale-claim gap in the Inbox/Outbox dispatchers (see below) | Should-have |
+| Inbox/Outbox stale-claim recovery (crash between claim and commit) | ✅ Fixed (this review) — reclaim after a configurable `ClaimTimeoutMinutes`; **not yet verified against real Postgres**, since the claim SQL is Postgres-specific and the test suite uses the in-memory provider | Must-have |
 
 ## Performance
 
@@ -61,7 +62,7 @@ ADR for why.
 | Contract tests | ✅ Done (this review) | Should-have |
 | Security tests (IDOR/BOLA) | ✅ Done (this review) | Must-have |
 | Performance tests | ✅ Script + targets exist (this review), not yet run for real | Should-have |
-| Integration tests against real Postgres/Redis (Testcontainers), not in-memory | ❌ Not done | Should-have |
+| Integration tests against real Postgres/Redis (Testcontainers), not in-memory | ❌ Not done — the Inbox/Outbox claim/reclaim SQL is Postgres-specific and has zero automated coverage today because of this gap | Must-have before relying on the stale-claim reclaim fix above in production |
 
 ## Deployment
 

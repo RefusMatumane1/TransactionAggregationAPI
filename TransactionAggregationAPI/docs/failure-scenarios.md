@@ -183,12 +183,36 @@ at which point another dispatcher instance (or the same one, post-restart)
 reclaims it.
 
 ## 14. Database migration fails
-- **Detection**: The dedicated `db-migrate` Job (Helm pre-install/pre-upgrade
-  hook, per `k8s/api/migration-job.yaml`) exits non-zero if `MigrateAsync()`
-  throws.
-- **Response**: A failed Helm hook blocks the release from proceeding — the
-  API Deployment does not roll out with a schema the migration couldn't
-  reach.
+- **Detection**: The dedicated `db-migrate` Job (`k8s/api/migration-job.yaml`)
+  exits non-zero if `MigrateAsync()` throws. Note: the manifest carries
+  `helm.sh/hook` annotations and its own header comment describes a Helm
+  pre-install/pre-upgrade hook workflow, but **this repo's `k8s/helm/`
+  directory has a `Chart.yaml` and per-environment `values.*.yaml` files with
+  no `templates/` directory at all** — there is no Helm chart actually
+  rendering these manifests, so the Helm-hook annotations do nothing today.
+  The workflow that actually works, confirmed by the manifest's own "Apply
+  workflow" comment, is plain `kubectl apply -f migration-job.yaml && kubectl
+  wait --for=condition=complete ... && kubectl apply -f deployment.yaml`. This
+  is a real gap between what the comments describe and what's deployable —
+  see the production readiness checklist.
+- **Fixed and verified live, this review**: the Job's container previously
+  declared only `POSTGRES_PASSWORD` and `ConnectionStrings__transactiondb` —
+  missing the Seq/Keycloak/Redis configuration `Program.cs` requires at
+  startup regardless of `--migrate-only` (those are builder-time
+  registrations that run before the migrate-only branch is even checked).
+  Confirmed by running the actual container image with only the env vars the
+  Job used to declare: it crashed with `Unable to add a Seq health check
+  because the 'ServerUrl' setting is missing` before a single migration ran.
+  Added `envFrom: transaction-api-config` plus explicit `ConnectionStrings__seq`/
+  `ConnectionStrings__redis` mappings (mirroring `deployment.yaml`); re-ran
+  against a real Postgres with exactly the fixed config set and confirmed
+  migrations now apply successfully.
+- **Response**: A failed Job run blocks the operator from proceeding to the
+  next `kubectl apply` step in the documented workflow (there's no automated
+  gate enforcing this today since it isn't a real Helm hook — an operator
+  following the documented steps manually respects the ordering; nothing
+  currently stops someone from applying `deployment.yaml` without first
+  waiting on the Job).
 - **Recovery**: Forward-only — fix the migration (or the underlying data
   issue) and re-run the Job. There is no automatic rollback of a partially
   applied migration; EF Core migrations are not natively transactional across
@@ -197,7 +221,8 @@ reclaims it.
   migrations" guidance.
 - **User impact**: The new version never reaches production; the previous
   version keeps serving traffic uninterrupted (rolling deployment never
-  starts).
+  starts) — *provided* the operator actually followed the manual
+  Job-then-Deployment ordering, since nothing enforces it automatically.
 
 ## 15. Partial provider outage
 Verified `HttpBankAggregatorClient`: this system integrates with a single

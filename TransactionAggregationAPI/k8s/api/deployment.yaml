@@ -71,6 +71,19 @@ spec:
           image: transactionaggregationapi:latest
           imagePullPolicy: IfNotPresent
 
+          # ── Container-level hardening ───────────────────────────────────
+          # Verified locally (docker run --read-only --tmpfs /tmp --cap-drop=ALL
+          # --security-opt=no-new-privileges) that the app starts cleanly and
+          # /alive responds Healthy under these constraints — the only
+          # writable path it needs is /tmp (.NET's default temp directory),
+          # mounted below as an emptyDir.
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+
           ports:
             - name: http
               containerPort: 8080
@@ -132,6 +145,10 @@ spec:
                   name: transaction-api-secrets
                   key: bank-aggregator-client-secret
 
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
           # ── Resource limits ────────────────────────────────────────────
           resources:
             requests:
@@ -177,3 +194,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 18
+
+      volumes:
+        - name: tmp
+          emptyDir: {}

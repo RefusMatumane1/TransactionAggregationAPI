@@ -50,9 +50,18 @@ spec:
           # EF Core migrations and exits with code 0 without starting the web server.
           command: ["dotnet", "TransactionAggregationAPI.dll", "--migrate-only"]
 
+          # Program.cs validates Keycloak config and registers the Seq/Redis
+          # clients during startup BEFORE the --migrate-only check runs (they're
+          # builder-time calls, not app-time) — without these, the process
+          # throws before ever reaching the migration. Verified: running this
+          # container with only the env vars this Job used to declare crashes
+          # with "Unable to add a Seq health check because the 'ServerUrl'
+          # setting is missing" before a single migration is attempted.
+          envFrom:
+            - configMapRef:
+                name: transaction-api-config
+
           env:
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "development"
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -60,6 +69,16 @@ spec:
                   key: postgres-password
             - name: ConnectionStrings__transactiondb
               value: "Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+            - name: ConnectionStrings__redis
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: REDIS_CONNECTION_STRING
+            - name: ConnectionStrings__seq
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: SEQ_URL
 
           resources:
             requests:

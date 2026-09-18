@@ -16,6 +16,7 @@ ADR for why.
 | Rate limiting | ✅ Done (Redis-backed, fails open) | Must-have |
 | Secrets never committed to source control | ✅ Verified — placeholders only | Must-have |
 | Dependency vulnerability scanning in CI | ✅ Done (`dotnet list package --vulnerable`, Dependabot) | Must-have |
+| Secret scanning across full git history (not just current file state) | ✅ Done (Gitleaks, `.gitleaks.toml`) — surfaced and resolved one historical placeholder that needed explicit confirmation it was never real; see the threat model section 6 | Must-have |
 | Container image scanning | ✅ Done (Trivy, SARIF → Code Scanning) | Must-have |
 | SBOM generation | ✅ Done | Should-have |
 | Dynamic API security testing (DAST) | ✅ Passive baseline only (ZAP, manual/weekly) — not an active scan or a real pentest | Should-have |

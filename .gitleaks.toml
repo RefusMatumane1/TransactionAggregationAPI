@@ -1,0 +1,19 @@
+title = "gitleaks config — TransactionAggregationAPI"
+
+[extend]
+useDefault = true
+
+# Allowlisted by exact secret value, not by file path — so any NEW real secret
+# accidentally added to k8s/secrets.yaml (or anywhere else) is still caught.
+# Each entry below is a documented placeholder, never used against a real
+# deployment — confirmed with the repo owner. See docs/threat-model.md
+# section 6 and k8s/secrets.yaml's own header comment.
+[allowlist]
+description = "Known placeholder values in k8s/secrets.yaml (current and historical)"
+regexes = [
+  '''Q0hBTkdFX01FX0JFRk9SRV9ERVBMT1k=''',                     # base64("CHANGE_ME_BEFORE_DEPLOY") — current placeholder for postgres/keycloak-admin/pgadmin/bank-aggregator secrets
+  '''ZGV2LW9ubHktYWRtaW4tY2xpZW50LXNlY3JldA==''',             # base64("dev-only-admin-client-secret") — current dev-only Keycloak client secret, also in keycloak/realm-export.json
+  '''dGhpcy1pcy1hLXNlY3VyZS0zMi1jaGFyLXNlY3JldC1rZXkhIQ==''', # base64("this-is-a-secure-32-char-secret-key!!") — historical placeholder from a removed jwt-secret field
+  '''hqF/U8QsVizs4Z7Yp/mT/BfyoWmXgevqecVAgjC2ZcI=''',         # historical jwt-secret field, removed when auth moved to Keycloak — confirmed never used against a real deployment
+  '''cG9zdGdyZXM=''',                                        # base64("postgres") — the well-known, intentionally fixed local-dev-only Postgres password documented in README.md and docker-compose.yml; not a secret, it's published in plain text
+]

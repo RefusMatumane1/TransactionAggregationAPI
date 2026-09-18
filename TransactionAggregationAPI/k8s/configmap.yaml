@@ -8,8 +8,25 @@ metadata:
     app.kubernetes.io/component: config
 data:
   # ── ASP.NET Core ──────────────────────────────────────────────────────
-  ASPNETCORE_ENVIRONMENT: "development"
+  # This ConfigMap (and the plain `kubectl apply` workflow k8s/README.md documents
+  # for it) is the single, shared path used regardless of target environment —
+  # there is no per-environment templating here (that's what k8s/helm/ is for,
+  # once it has actual templates — see docs/production-readiness-checklist.md).
+  # It must therefore default to a safe, non-Development value: Production gates
+  # Program.cs's IsDevelopment()-conditioned behavior correctly (no demo-data
+  # seeding, no Swagger UI exposure, no detailed EF Core errors, no localhost CORS
+  # fallback). Only override this to "Development" for a genuinely local/throwaway
+  # cluster where those trade-offs are wanted.
+  ASPNETCORE_ENVIRONMENT: "Production"
   ASPNETCORE_HTTP_PORTS: "8080"
+
+  # In-cluster Keycloak currently serves plain HTTP (see k8s/keycloak —
+  # KC_HTTP_ENABLED), with TLS terminated at the Ingress for external traffic only;
+  # NetworkPolicy isolates the namespace for internal hops. Explicitly false here
+  # rather than left to default from ASPNETCORE_ENVIRONMENT, since "is this
+  # Production" and "does this specific hop need HTTPS" are different questions —
+  # see Program.cs. Revisit if in-cluster TLS (e.g. a service mesh) is introduced.
+  Keycloak__RequireHttpsMetadata: "false"
 
   # ── CORS (production only — Program.cs falls back to a localhost allow-list in
   # development) ───────────────────────────────────────────────────────────

@@ -124,7 +124,19 @@ try
 
             options.MetadataAddress =
                             $"{keycloakAuthority.TrimEnd('/')}/realms/{keycloakRealm}/.well-known/openid-configuration";
-            options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+
+            // Decoupled from IsDevelopment() on purpose: whether this specific
+            // in-cluster hop needs HTTPS is an infrastructure fact (is there a TLS
+            // listener on the other end?), not a proxy for "is this environment
+            // Production." The in-cluster Keycloak service currently serves plain
+            // HTTP (see k8s/keycloak — KC_HTTP_ENABLED), with TLS terminated at the
+            // Ingress for external traffic only; NetworkPolicy isolates the
+            // namespace. Explicitly set Keycloak:RequireHttpsMetadata=false in that
+            // ConfigMap to reflect that reviewed decision — defaulting here to
+            // "true unless Development" only when the value isn't set at all, so
+            // this doesn't silently downgrade security for anyone who hasn't set it.
+            options.RequireHttpsMetadata = builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
+                ?? !builder.Environment.IsDevelopment();
 
             options.MapInboundClaims = false;
 

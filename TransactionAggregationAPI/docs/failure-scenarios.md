@@ -207,6 +207,22 @@ reclaims it.
   `ConnectionStrings__redis` mappings (mirroring `deployment.yaml`); re-ran
   against a real Postgres with exactly the fixed config set and confirmed
   migrations now apply successfully.
+- **Also fixed, this review**: `k8s/configmap.yaml` hardcoded
+  `ASPNETCORE_ENVIRONMENT: "development"` for every environment — since there's
+  no Helm chart to override it per environment (see above), this meant the
+  `IsDevelopment()` production-safety gate never actually protected a real
+  deployment using these manifests. Flipped the default to `Production` (the
+  repo owner explicitly chose to fix this immediate risk and leave building a
+  real Helm chart as separate future work). This alone would have broken every
+  authenticated request, since `RequireHttpsMetadata` was tied to the same
+  `IsDevelopment()` check and the in-cluster Keycloak serves plain HTTP —
+  decoupled it into its own explicit `Keycloak:RequireHttpsMetadata` config
+  value (`Program.cs`), set to `false` in the ConfigMap with a comment
+  explaining why (TLS terminates at the Ingress; NetworkPolicy isolates
+  in-cluster traffic). Verified live: ran the real image with
+  `ASPNETCORE_ENVIRONMENT=Production`, a plain-HTTP Keycloak authority, and
+  `Keycloak__RequireHttpsMetadata=false` against real Postgres/Redis — clean
+  startup, no exception, no seeding/auto-migration occurred.
 - **Response**: A failed Job run blocks the operator from proceeding to the
   next `kubectl apply` step in the documented workflow (there's no automated
   gate enforcing this today since it isn't a real Helm hook — an operator

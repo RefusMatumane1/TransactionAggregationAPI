@@ -96,8 +96,8 @@ considered and mitigated, and what residual risk is knowingly accepted.
 | **Threat** | Redis compromise or outage. |
 | **Impact** | Cache data (low sensitivity) and OAuth state disclosure/loss; **not** financial data (see ADR-0005 — Redis is never the source of truth). |
 | **Likelihood** | Low-medium. |
-| **Mitigation** | Application degrades gracefully on Redis failure (cache miss, rate-limit fail-open); readiness health check reports Degraded rather than Unhealthy on Redis failure (ADR-0005) so an outage doesn't cascade into API unavailability. |
-| **Residual risk** | Bank-link initiation depends on Redis for OAuth state; a Redis outage during that narrow window legitimately fails that one operation — accepted and scoped, not a gap. |
+| **Mitigation** | Application degrades gracefully on Redis failure (cache miss, rate-limit fail-open); readiness health check reports Degraded rather than Unhealthy on Redis failure (ADR-0005) so an outage doesn't cascade into API unavailability. Data Protection (which encrypts bank-link OAuth tokens at rest) now explicitly falls back to `UseEphemeralDataProtectionProvider()` when Redis-backed key persistence can't be set up (`Program.cs`) — previously the code only *logged* that it would fall back to ephemeral keys without actually configuring anything, silently leaving the framework's implicit default in place, which in a container without a stable user profile could try to write key material to a local path that may not exist or be writable. Verified live against a real Postgres/Redis setup: both the "no Redis connection string" and "malformed Redis connection string" paths now start cleanly with no unhandled exception. |
+| **Residual risk** | Bank-link initiation depends on Redis for OAuth state; a Redis outage during that narrow window legitimately fails that one operation — accepted and scoped, not a gap. Ephemeral keys mean any bank-link tokens encrypted before a Redis outage become unrecoverable once the process restarts (by design — this is the explicit trade-off logged at the point of fallback, not a silent data-loss surprise). |
 
 ## 6. Secrets and configuration
 

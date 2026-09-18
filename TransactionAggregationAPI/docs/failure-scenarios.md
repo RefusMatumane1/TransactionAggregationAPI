@@ -37,6 +37,14 @@ during this review (not inferred from the architecture alone).
   operations. **Exception**: bank-link initiation depends on Redis for OAuth
   state and will legitimately fail until Redis recovers — a narrow, accepted
   scope, not an oversight.
+- **Startup-time fix, this review**: if Redis-backed Data Protection key
+  persistence can't be set up at all (no connection string, or a malformed
+  one), the app now explicitly falls back to `UseEphemeralDataProtectionProvider()`.
+  Previously the code logged that it would do exactly this and then didn't —
+  leaving Data Protection on ASP.NET Core's implicit default, which in a
+  container is ambiguous and could attempt a local file write that fails.
+  Verified live: both the missing-connection-string and malformed-connection-
+  string paths now start cleanly with no unhandled exception.
 
 ## 3. Provider (bank aggregator) unavailable
 - **Detection**: Outbound HTTP calls through `IBankAggregatorClient` fail;

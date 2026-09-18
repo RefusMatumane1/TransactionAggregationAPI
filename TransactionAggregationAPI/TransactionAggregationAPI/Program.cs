@@ -83,11 +83,25 @@ try
         catch (Exception ex)
         {
             Log.Warning(ex, "Could not set up Redis-backed Data Protection key storage — falling back to ephemeral keys for this instance. Bank-link tokens encrypted before this is fixed may become unrecoverable across restarts/replicas.");
+
+            // The log message above used to be a lie: nothing actually configured a
+            // fallback, so Data Protection silently fell through to ASP.NET Core's
+            // implicit default — which, in a container without a stable user profile,
+            // is ambiguous and may try (and fail) to write to a local file path.
+            // UseEphemeralDataProtectionProvider() makes the fallback explicit and
+            // matches what was already being claimed in the log.
+            builder.Services.AddDataProtection()
+                .SetApplicationName("TransactionAggregationAPI")
+                .UseEphemeralDataProtectionProvider();
         }
     }
     else
     {
         Log.Warning("No Redis connection string configured — Data Protection keys will not survive a restart or be shared across replicas. Bank-link tokens encrypted before this is fixed will become unrecoverable.");
+
+        builder.Services.AddDataProtection()
+            .SetApplicationName("TransactionAggregationAPI")
+            .UseEphemeralDataProtectionProvider();
     }
 
     builder.Services.AddApplication(builder.Configuration);

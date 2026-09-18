@@ -42,6 +42,8 @@ namespace TransactionAggregation.Persistence
 
                     logger.LogInformation("Applying database migrations...");
 
+                    await context.Database.MigrateAsync(cancellationToken);
+
                     logger.LogInformation("Database migrations applied successfully");
                 }
                 finally

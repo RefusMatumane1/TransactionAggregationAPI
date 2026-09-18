@@ -498,7 +498,10 @@ All routes are prefixed with `/api/v1`.
 | `GET` | `/customers/{id}` | Yes | Get by ID |
 | `GET` | `/customers/email/{email}` | Yes | Get by email |
 | `PUT` | `/customers/{id}` | Yes | Update name / email |
-| `DELETE` | `/customers/{id}` | Yes | Delete account |
+
+> No account-deletion endpoint exists yet — see `docs/data-retention.md` for why
+> that's a real gap if a right-to-erasure obligation applies, not just a
+> documentation omission.
 
 #### Accounts (under a customer)
 

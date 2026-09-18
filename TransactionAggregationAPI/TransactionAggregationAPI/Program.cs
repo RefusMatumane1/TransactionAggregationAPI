@@ -277,9 +277,19 @@ try
         return;
     }
 
-    await app.ApplyMigrationsAsync();
+    // Staging/Production apply migrations via the dedicated db-migrate Job
+    // (k8s/api/migration-job.yaml, run with --migrate-only above) before this
+    // Deployment rolls out — see the comment in k8s/api/deployment.yaml explaining
+    // why no pod self-migrates there. Auto-migrating and seeding demo data here is
+    // a Development-only convenience for docker-compose/local dev, which has no
+    // separate migration step. Never seed demo customers (fake accounts with a
+    // well-known password) into a real environment.
+    if (app.Environment.IsDevelopment())
+    {
+        await app.ApplyMigrationsAsync();
+        await SeedData.SeedDatabaseAsync(app.Services);
+    }
 
-    await SeedData.SeedDatabaseAsync(app.Services);
     await app.RunAsync();
 }
 catch (Exception ex)

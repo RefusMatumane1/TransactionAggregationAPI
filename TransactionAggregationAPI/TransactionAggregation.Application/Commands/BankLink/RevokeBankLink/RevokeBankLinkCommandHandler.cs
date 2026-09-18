@@ -14,30 +14,22 @@ namespace TransactionAggregation.Application.Commands.BankLink.RevokeBankLink
     {
         public async Task<Result> Handle(RevokeBankLinkCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
-                var bankLinkId = Domain.Common.ValueObjects.BankLinkId.CreateFrom(request.BankLinkId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
+            var bankLinkId = Domain.Common.ValueObjects.BankLinkId.CreateFrom(request.BankLinkId);
 
-                var link = await _context.BankLinks
-                    .FirstOrDefaultAsync(b => b.Id == bankLinkId, cancellationToken);
+            var link = await _context.BankLinks
+                .FirstOrDefaultAsync(b => b.Id == bankLinkId, cancellationToken);
 
-                if (link is null || link.CustomerId != customerId)
-                    return Result.Failure(Error.NotFound("BankLink", request.BankLinkId));
+            if (link is null || link.CustomerId != customerId)
+                return Result.Failure(Error.NotFound("BankLink", request.BankLinkId));
 
-                link.Revoke();
-                await _context.SaveChangesAsync(cancellationToken);
+            link.Revoke();
+            await _context.SaveChangesAsync(cancellationToken);
 
-                logger.LogInformation("Bank link {BankLinkId} revoked for customer {CustomerId}",
-                    request.BankLinkId, request.CustomerId);
+            logger.LogInformation("Bank link {BankLinkId} revoked for customer {CustomerId}",
+                request.BankLinkId, request.CustomerId);
 
-                return Result.Success();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error revoking bank link {BankLinkId}", request.BankLinkId);
-                return Result.Failure(Error.Unexpected);
-            }
+            return Result.Success();
         }
     }
 }

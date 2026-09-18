@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using System.Diagnostics;
 using System.Text.Json;
 
 namespace TransactionAggregationAPI.Middleware
@@ -27,20 +28,22 @@ namespace TransactionAggregationAPI.Middleware
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "An unhandled exception occurred");
-                await HandleExceptionAsync(context, ex, _environment);
+                var traceId = Activity.Current?.Id ?? context.TraceIdentifier;
+                _logger.LogError(ex, "An unhandled exception occurred. TraceId: {TraceId}", traceId);
+                await HandleExceptionAsync(context, ex, _environment, traceId);
             }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext context, Exception exception, IWebHostEnvironment environment)
+        private static async Task HandleExceptionAsync(
+            HttpContext context, Exception exception, IWebHostEnvironment environment, string traceId)
         {
-
             var problemDetails = new ProblemDetails
             {
                 Title = "An error occurred while processing your request",
                 Detail = environment.IsDevelopment() ? exception.Message : "An unexpected error occurred.",
                 Status = StatusCodes.Status500InternalServerError,
-                Type = "https://httpstatuses.com/500"
+                Type = "https://httpstatuses.com/500",
+                Extensions = { ["traceId"] = traceId }
             };
 
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;

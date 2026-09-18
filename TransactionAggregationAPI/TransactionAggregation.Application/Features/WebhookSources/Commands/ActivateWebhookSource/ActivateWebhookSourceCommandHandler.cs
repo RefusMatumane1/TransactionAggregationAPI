@@ -16,29 +16,21 @@ namespace TransactionAggregation.Application.Features.WebhookSources.Commands.Ac
     {
         public async Task<Result> Handle(ActivateWebhookSourceCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var id = WebhookSourceId.CreateFrom(request.Id);
-                var source = await context.WebhookSources
-                    .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+            var id = WebhookSourceId.CreateFrom(request.Id);
+            var source = await context.WebhookSources
+                .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
-                if (source is null)
-                    return Result.Failure(Error.NotFound("WebhookSource", request.Id));
+            if (source is null)
+                return Result.Failure(Error.NotFound("WebhookSource", request.Id));
 
-                source.Activate();
-                await context.SaveChangesAsync(cancellationToken);
+            source.Activate();
+            await context.SaveChangesAsync(cancellationToken);
 
-                logger.LogInformation(
-                    "Webhook source {SourceName} ({SourceId}) activated by admin {AdminId}",
-                    source.Name, source.Id.Value, userContext.UserId);
+            logger.LogInformation(
+                "Webhook source {SourceName} ({SourceId}) activated by admin {AdminId}",
+                source.Name, source.Id.Value, userContext.UserId);
 
-                return Result.Success();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error activating webhook source {WebhookSourceId}", request.Id);
-                return Result.Failure(Error.Unexpected);
-            }
+            return Result.Success();
         }
     }
 }

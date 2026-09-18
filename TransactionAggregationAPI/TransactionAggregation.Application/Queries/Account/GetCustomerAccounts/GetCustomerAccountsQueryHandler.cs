@@ -17,41 +17,33 @@ namespace TransactionAggregation.Application.Queries.Account.GetCustomerAccounts
             GetCustomerAccountsQuery request,
             CancellationToken cancellationToken)
         {
-            try
-            {
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
 
-                var customerExists = await _context.Customers
-                    .AnyAsync(c => c.Id == customerId, cancellationToken);
+            var customerExists = await _context.Customers
+                .AnyAsync(c => c.Id == customerId, cancellationToken);
 
-                if (!customerExists)
-                    return Result.Failure<IEnumerable<AccountDto>>(
-                        Error.NotFound("Customer", request.CustomerId));
+            if (!customerExists)
+                return Result.Failure<IEnumerable<AccountDto>>(
+                    Error.NotFound("Customer", request.CustomerId));
 
-                var accounts = await _context.Accounts
-                    .AsNoTracking()
-                    .Where(a => a.CustomerId == customerId)
-                    .ToListAsync(cancellationToken);
+            var accounts = await _context.Accounts
+                .AsNoTracking()
+                .Where(a => a.CustomerId == customerId)
+                .ToListAsync(cancellationToken);
 
-                var dtos = accounts.Select(a => new AccountDto(
-                    a.Id.Value,
-                    a.CustomerId.Value,
-                    a.AccountNumber,
-                    a.AccountName,
-                    a.AccountType,
-                    a.Balance,
-                    a.Currency,
-                    a.IsActive,
-                    a.CreatedAt,
-                    a.UpdatedAt));
+            var dtos = accounts.Select(a => new AccountDto(
+                a.Id.Value,
+                a.CustomerId.Value,
+                a.AccountNumber,
+                a.AccountName,
+                a.AccountType,
+                a.Balance,
+                a.Currency,
+                a.IsActive,
+                a.CreatedAt,
+                a.UpdatedAt));
 
-                return Result.Success(dtos.AsEnumerable());
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error retrieving accounts for customer {CustomerId}", request.CustomerId);
-                return Result.Failure<IEnumerable<AccountDto>>(Error.Unexpected);
-            }
+            return Result.Success(dtos.AsEnumerable());
         }
     }
 }

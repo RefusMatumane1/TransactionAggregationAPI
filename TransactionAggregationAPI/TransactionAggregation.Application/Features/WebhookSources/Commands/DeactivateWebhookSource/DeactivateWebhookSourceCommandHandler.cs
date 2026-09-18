@@ -16,29 +16,21 @@ namespace TransactionAggregation.Application.Features.WebhookSources.Commands.De
     {
         public async Task<Result> Handle(DeactivateWebhookSourceCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var id = WebhookSourceId.CreateFrom(request.Id);
-                var source = await context.WebhookSources
-                    .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+            var id = WebhookSourceId.CreateFrom(request.Id);
+            var source = await context.WebhookSources
+                .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
-                if (source is null)
-                    return Result.Failure(Error.NotFound("WebhookSource", request.Id));
+            if (source is null)
+                return Result.Failure(Error.NotFound("WebhookSource", request.Id));
 
-                source.Deactivate();
-                await context.SaveChangesAsync(cancellationToken);
+            source.Deactivate();
+            await context.SaveChangesAsync(cancellationToken);
 
-                logger.LogInformation(
-                    "Webhook source {SourceName} ({SourceId}) deactivated by admin {AdminId}",
-                    source.Name, source.Id.Value, userContext.UserId);
+            logger.LogInformation(
+                "Webhook source {SourceName} ({SourceId}) deactivated by admin {AdminId}",
+                source.Name, source.Id.Value, userContext.UserId);
 
-                return Result.Success();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error deactivating webhook source {WebhookSourceId}", request.Id);
-                return Result.Failure(Error.Unexpected);
-            }
+            return Result.Success();
         }
     }
 }

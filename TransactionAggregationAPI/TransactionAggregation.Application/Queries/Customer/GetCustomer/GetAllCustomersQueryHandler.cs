@@ -15,51 +15,42 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
             GetAllCustomersQuery request,
             CancellationToken cancellationToken)
         {
-            try
+            logger.LogInformation("Handling GetAllCustomersQuery: Page {Page}, PageSize {PageSize}, SearchTerm {SearchTerm}",
+                request.Page, request.PageSize, request.SearchTerm);
+
+            var query = _context.Customers.AsNoTracking().AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(request.SearchTerm))
             {
-                logger.LogInformation("Handling GetAllCustomersQuery: Page {Page}, PageSize {PageSize}, SearchTerm {SearchTerm}",
-                    request.Page, request.PageSize, request.SearchTerm);
-
-                var query = _context.Customers.AsNoTracking().AsQueryable();
-
-                if (!string.IsNullOrWhiteSpace(request.SearchTerm))
-                {
-                    query = query.Where(c =>
-                        c.Name.Contains(request.SearchTerm) ||
-                        c.Email.Contains(request.SearchTerm));
-                }
-
-                var totalCount = await query.CountAsync(cancellationToken);
-
-                var customers = await query
-                    .Skip((request.Page - 1) * request.PageSize)
-                    .Take(request.PageSize)
-                    .ToListAsync(cancellationToken);
-
-                var customerDtos = customers.Select(c => new CustomerDto(
-                    c.Id.Value,
-                    c.Email,
-                    c.Name,
-                    c.CreatedAt,
-                    c.UpdatedAt));
-
-                var result = new PagedResult<CustomerDto>(
-                    customerDtos,
-                    totalCount,
-                    request.Page,
-                    request.PageSize);
-
-                logger.LogInformation("Successfully retrieved {Count} customers for Page {Page} with PageSize {PageSize}",
-                    customerDtos?.Count(), request.Page, request.PageSize);
-
-                return Result.Success(result);
+                query = query.Where(c =>
+                    c.Name.Contains(request.SearchTerm) ||
+                    c.Email.Contains(request.SearchTerm));
             }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while handling GetAllCustomersQuery: Page {Page}, PageSize {PageSize}, SearchTerm {SearchTerm}",
-                    request.Page, request.PageSize, request.SearchTerm);
-                return Result.Failure<PagedResult<CustomerDto>>(Error.Failure("Customer.RetrievalFailed", "An error occurred while retrieving customers."));
-            }
+
+            var totalCount = await query.CountAsync(cancellationToken);
+
+            var customers = await query
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .ToListAsync(cancellationToken);
+
+            var customerDtos = customers.Select(c => new CustomerDto(
+                c.Id.Value,
+                c.Email,
+                c.Name,
+                c.CreatedAt,
+                c.UpdatedAt));
+
+            var result = new PagedResult<CustomerDto>(
+                customerDtos,
+                totalCount,
+                request.Page,
+                request.PageSize);
+
+            logger.LogInformation("Successfully retrieved {Count} customers for Page {Page} with PageSize {PageSize}",
+                customerDtos?.Count(), request.Page, request.PageSize);
+
+            return Result.Success(result);
         }
     }
 }

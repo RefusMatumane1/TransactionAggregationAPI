@@ -22,72 +22,64 @@ namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
     {
         public async Task<Result<Guid>> Handle(CompleteBankLinkCommand request, CancellationToken cancellationToken)
         {
+            var cacheKey = InitiateBankLinkCommandHandler.StateCacheKey(request.State);
+            var statePayloadJson = await _cache.GetStringAsync(cacheKey, cancellationToken);
+
+            if (statePayloadJson is null)
+                return Result.Failure<Guid>(Error.Validation("Authorization state is invalid or has expired. Please try linking again."));
+
+            await _cache.RemoveAsync(cacheKey, cancellationToken);
+
+            var statePayload = JsonSerializer.Deserialize<InitiateBankLinkCommandHandler.StatePayload>(statePayloadJson)!;
+            var customerId = CustomerId.CreateFrom(statePayload.CustomerId);
+
+            var link = await _context.BankLinks
+                .FirstOrDefaultAsync(
+                    b => b.CustomerId == customerId && b.Institution == statePayload.Institution,
+                    cancellationToken);
+
+            if (link is not { Status: BankLinkStatus.PendingAuthorization })
+                return Result.Failure<Guid>(Error.Validation("No pending bank link found for this authorization."));
+
+            var customer = await _context.Customers
+                .Include(c => c.Accounts)
+                .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+
+            if (customer is null)
+                return Result.Failure<Guid>(Error.NotFound("Customer", statePayload.CustomerId));
+
+            var tokens = await _client.ExchangeAuthorizationCodeAsync(request.Code, cancellationToken);
+            var linkedAccount = await _client.GetLinkedAccountAsync(tokens.AccessToken, cancellationToken);
+
+            Domain.Entities.Account account;
             try
             {
-                var cacheKey = InitiateBankLinkCommandHandler.StateCacheKey(request.State);
-                var statePayloadJson = await _cache.GetStringAsync(cacheKey, cancellationToken);
-
-                if (statePayloadJson is null)
-                    return Result.Failure<Guid>(Error.Validation("Authorization state is invalid or has expired. Please try linking again."));
-
-                await _cache.RemoveAsync(cacheKey, cancellationToken);
-
-                var statePayload = JsonSerializer.Deserialize<InitiateBankLinkCommandHandler.StatePayload>(statePayloadJson)!;
-                var customerId = CustomerId.CreateFrom(statePayload.CustomerId);
-
-                var link = await _context.BankLinks
-                    .FirstOrDefaultAsync(
-                        b => b.CustomerId == customerId && b.Institution == statePayload.Institution,
-                        cancellationToken);
-
-                if (link is not { Status: BankLinkStatus.PendingAuthorization })
-                    return Result.Failure<Guid>(Error.Validation("No pending bank link found for this authorization."));
-
-                var customer = await _context.Customers
-                    .Include(c => c.Accounts)
-                    .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
-
-                if (customer is null)
-                    return Result.Failure<Guid>(Error.NotFound("Customer", statePayload.CustomerId));
-
-                var tokens = await _client.ExchangeAuthorizationCodeAsync(request.Code, cancellationToken);
-                var linkedAccount = await _client.GetLinkedAccountAsync(tokens.AccessToken, cancellationToken);
-
-                Domain.Entities.Account account;
-                try
-                {
-                    account = customer.AddAccount(
-                        linkedAccount.AccountNumber,
-                        linkedAccount.AccountName,
-                        MapAccountType(linkedAccount.AccountType),
-                        linkedAccount.Currency);
-                }
-                catch (DomainException)
-                {
-
-                    account = customer.Accounts.First(a => a.AccountNumber == linkedAccount.AccountNumber);
-                }
-
-                link.Activate(
-                    account.Id,
-                    linkedAccount.ExternalAccountId,
-                    _protector.Protect(tokens.AccessToken),
-                    _protector.Protect(tokens.RefreshToken),
-                    tokens.ExpiresAtUtc);
-
-                await _context.SaveChangesAsync(cancellationToken);
-
-                logger.LogInformation(
-                    "Bank link completed for customer {CustomerId}, institution {Institution}, account {AccountId}",
-                    statePayload.CustomerId, statePayload.Institution, account.Id.Value);
-
-                return Result.Success(account.Id.Value);
+                account = customer.AddAccount(
+                    linkedAccount.AccountNumber,
+                    linkedAccount.AccountName,
+                    MapAccountType(linkedAccount.AccountType),
+                    linkedAccount.Currency);
             }
-            catch (Exception ex)
+            catch (DomainException)
             {
-                logger.LogError(ex, "Error completing bank link");
-                return Result.Failure<Guid>(Error.Unexpected);
+
+                account = customer.Accounts.First(a => a.AccountNumber == linkedAccount.AccountNumber);
             }
+
+            link.Activate(
+                account.Id,
+                linkedAccount.ExternalAccountId,
+                _protector.Protect(tokens.AccessToken),
+                _protector.Protect(tokens.RefreshToken),
+                tokens.ExpiresAtUtc);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            logger.LogInformation(
+                "Bank link completed for customer {CustomerId}, institution {Institution}, account {AccountId}",
+                statePayload.CustomerId, statePayload.Institution, account.Id.Value);
+
+            return Result.Success(account.Id.Value);
         }
 
         private static Domain.Enums.AccountType MapAccountType(string aggregatorAccountType) =>

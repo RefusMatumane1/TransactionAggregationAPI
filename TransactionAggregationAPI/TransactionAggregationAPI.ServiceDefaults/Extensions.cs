@@ -91,6 +91,9 @@ public static class Extensions
             .AddRedis(
                 connectionMultiplexerFactory: sp => sp.GetRequiredService<IConnectionMultiplexer>(),
                 name: "redis",
+                // Redis is cache-only, never the source of truth for financial data (see ADR-0005).
+                // An outage must not fail readiness and pull healthy API pods out of rotation.
+                failureStatus: HealthStatus.Degraded,
                 tags: ["ready"]);
 
         return builder;

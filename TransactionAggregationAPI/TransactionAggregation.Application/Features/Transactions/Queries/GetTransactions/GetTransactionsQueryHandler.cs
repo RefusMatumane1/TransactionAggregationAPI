@@ -30,39 +30,30 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.GetTr
             GetTransactionsQuery request,
             CancellationToken cancellationToken)
         {
-            try
-            {
-                var query = _context.Transactions
-                    .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
-                    .AsNoTracking();
+            var query = _context.Transactions
+                .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
+                .AsNoTracking();
 
-                query = ApplyFilters(query, request);
+            query = ApplyFilters(query, request);
 
-                query = ApplySorting(query, request);
+            query = ApplySorting(query, request);
 
-                var totalCount = await query.CountAsync(cancellationToken);
+            var totalCount = await query.CountAsync(cancellationToken);
 
-                var items = await query
-                                    .Skip((request.PageNumber - 1) * request.PageSize)
-                                    .Take(request.PageSize)
-                                    .ToListAsync(cancellationToken);
+            var items = await query
+                                .Skip((request.PageNumber - 1) * request.PageSize)
+                                .Take(request.PageSize)
+                                .ToListAsync(cancellationToken);
 
-                var dtos = _mapper.Map<List<TransactionDto>>(items);
+            var dtos = _mapper.Map<List<TransactionDto>>(items);
 
-                var response = PaginatedResponse<TransactionDto>.Create(
-                    dtos,
-                    totalCount,
-                    request.PageNumber,
-                    request.PageSize);
+            var response = PaginatedResponse<TransactionDto>.Create(
+                dtos,
+                totalCount,
+                request.PageNumber,
+                request.PageSize);
 
-                return Result<PaginatedResponse<TransactionDto>>.Success(response);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error getting transactions for customer {CustomerId}", request.CustomerId);
-                return Result.Failure<PaginatedResponse<TransactionDto>>(
-                    Error.Failure("QueryFailed", $"Failed to retrieve transactions: {ex.Message}"));
-            }
+            return Result<PaginatedResponse<TransactionDto>>.Success(response);
         }
 
         private static IQueryable<Transaction> ApplyFilters(

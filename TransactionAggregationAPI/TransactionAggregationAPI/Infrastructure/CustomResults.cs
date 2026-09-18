@@ -1,4 +1,5 @@
-﻿using TransactionAggregation.Application.Common.Enums;
+﻿using System.Diagnostics;
+using TransactionAggregation.Application.Common.Enums;
 using TransactionAggregation.Application.Common.Models;
 
 namespace TransactionAggregationAPI.Infrastructure
@@ -17,7 +18,7 @@ namespace TransactionAggregationAPI.Infrastructure
                 detail: GetDetail(result.Error),
                 type: GetType(result.Error.Type),
                 statusCode: GetStatusCode(result.Error.Type),
-                extensions: GetErrors(result));
+                extensions: GetExtensions(result));
 
             static string GetTitle(Error error) =>
                 error.Type switch
@@ -59,17 +60,19 @@ namespace TransactionAggregationAPI.Infrastructure
                     _ => StatusCodes.Status500InternalServerError
                 };
 
-            static Dictionary<string, object?>? GetErrors(Result result)
+            static Dictionary<string, object?> GetExtensions(Result result)
             {
-                if (result.Error is not ValidationError validationError)
+                var extensions = new Dictionary<string, object?>
                 {
-                    return null;
+                    { "traceId", Activity.Current?.Id }
+                };
+
+                if (result.Error is ValidationError validationError)
+                {
+                    extensions["errors"] = validationError.Errors;
                 }
 
-                return new Dictionary<string, object?>
-            {
-                { "errors", validationError.Errors }
-            };
+                return extensions;
             }
         }
     }

@@ -23,55 +23,45 @@ namespace TransactionAggregation.Application.Commands.BankLink.InitiateBankLink
 
         public async Task<Result<string>> Handle(InitiateBankLinkCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
 
-                var existingLink = await _context.BankLinks
-                    .FirstOrDefaultAsync(
-                        b => b.CustomerId == customerId && b.Institution == request.Institution,
-                        cancellationToken);
-
-                if (existingLink is { Status: BankLinkStatus.Active or BankLinkStatus.PendingAuthorization })
-                    return Result.Failure<string>(Error.Conflict(
-                        $"{request.Institution} is already linked (or a link is already in progress)."));
-
-                if (existingLink is null)
-                {
-                    existingLink = Domain.Entities.BankLink.Create(customerId, request.Institution);
-                    _context.BankLinks.Add(existingLink);
-                }
-                else
-                {
-                    existingLink.ResetForReauthorization();
-                }
-
-                var state = GenerateState();
-                var statePayload = JsonSerializer.Serialize(new StatePayload(request.CustomerId, request.Institution));
-
-                await _cache.SetStringAsync(
-                    StateCacheKey(state),
-                    statePayload,
-                    new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = StateTtl },
+            var existingLink = await _context.BankLinks
+                .FirstOrDefaultAsync(
+                    b => b.CustomerId == customerId && b.Institution == request.Institution,
                     cancellationToken);
 
-                await _context.SaveChangesAsync(cancellationToken);
+            if (existingLink is { Status: BankLinkStatus.Active or BankLinkStatus.PendingAuthorization })
+                return Result.Failure<string>(Error.Conflict(
+                    $"{request.Institution} is already linked (or a link is already in progress)."));
 
-                var authorizationUrl = _client.BuildAuthorizationUrl(request.Institution, state);
-
-                logger.LogInformation(
-                    "Bank link initiated for customer {CustomerId}, institution {Institution}",
-                    request.CustomerId, request.Institution);
-
-                return Result.Success(authorizationUrl);
-            }
-            catch (Exception ex)
+            if (existingLink is null)
             {
-                logger.LogError(ex,
-                    "Error initiating bank link for customer {CustomerId}, institution {Institution}",
-                    request.CustomerId, request.Institution);
-                return Result.Failure<string>(Error.Unexpected);
+                existingLink = Domain.Entities.BankLink.Create(customerId, request.Institution);
+                _context.BankLinks.Add(existingLink);
             }
+            else
+            {
+                existingLink.ResetForReauthorization();
+            }
+
+            var state = GenerateState();
+            var statePayload = JsonSerializer.Serialize(new StatePayload(request.CustomerId, request.Institution));
+
+            await _cache.SetStringAsync(
+                StateCacheKey(state),
+                statePayload,
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = StateTtl },
+                cancellationToken);
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            var authorizationUrl = _client.BuildAuthorizationUrl(request.Institution, state);
+
+            logger.LogInformation(
+                "Bank link initiated for customer {CustomerId}, institution {Institution}",
+                request.CustomerId, request.Institution);
+
+            return Result.Success(authorizationUrl);
         }
 
         private static string GenerateState() =>

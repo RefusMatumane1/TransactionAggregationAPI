@@ -15,37 +15,29 @@ namespace TransactionAggregation.Application.Commands.Customer.UpdateCustomer
     {
         public async Task<Result> Handle(UpdateCustomerCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                logger.LogInformation("Handling UpdateCustomerCommand for Customer ID {CustomerId}", request.CustomerId);
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
+            logger.LogInformation("Handling UpdateCustomerCommand for Customer ID {CustomerId}", request.CustomerId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
 
-                var customer = await _context.Customers
-                    .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+            var customer = await _context.Customers
+                .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
-                if (customer is null)
-                    return Result.Failure(Error.NotFound("Customer", request.CustomerId));
+            if (customer is null)
+                return Result.Failure(Error.NotFound("Customer", request.CustomerId));
 
-                var emailExists = await _context.Customers
-                    .AnyAsync(c => c.Email == request.Email && c.Id != customerId, cancellationToken);
+            var emailExists = await _context.Customers
+                .AnyAsync(c => c.Email == request.Email && c.Id != customerId, cancellationToken);
 
-                if (emailExists)
-                    return Result.Failure(Error.Conflict("Email already in use by another customer"));
+            if (emailExists)
+                return Result.Failure(Error.Conflict("Email already in use by another customer"));
 
-                customer.Update(request.Email, request.Name);
-                await _context.SaveChangesAsync(cancellationToken);
+            customer.Update(request.Email, request.Name);
+            await _context.SaveChangesAsync(cancellationToken);
 
-                await _cacheService.RemoveByPatternAsync($"customer:{request.CustomerId}*", cancellationToken);
+            await _cacheService.RemoveByPatternAsync($"customer:{request.CustomerId}*", cancellationToken);
 
-                logger.LogInformation("Customer with ID {CustomerId} updated successfully", customerId);
+            logger.LogInformation("Customer with ID {CustomerId} updated successfully", customerId);
 
-                return Result.Success();
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while updating customer with ID {CustomerId}", request.CustomerId);
-                return Result.Failure(Error.Failure("Customer.UpdateFailed", "An error occurred while updating the customer"));
-            }
+            return Result.Success();
         }
     }
 }

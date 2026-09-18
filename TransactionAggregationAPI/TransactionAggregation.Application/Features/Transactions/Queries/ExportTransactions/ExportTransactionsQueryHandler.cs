@@ -29,53 +29,44 @@ namespace TransactionAggregation.Application.Features.Transactions.Queries.Expor
             ExportTransactionsQuery request,
             CancellationToken cancellationToken)
         {
-            try
+            var query = _context.Transactions
+                .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
+                .AsNoTracking();
+
+            if (request.FromDate.HasValue)
             {
-                var query = _context.Transactions
-                    .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
-                    .AsNoTracking();
-
-                if (request.FromDate.HasValue)
-                {
-                    var from = DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc);
-                    query = query.Where(t => t.Date >= from);
-                }
-
-                if (request.ToDate.HasValue)
-                {
-                    var to = DateTime.SpecifyKind(request.ToDate.Value, DateTimeKind.Utc);
-                    query = query.Where(t => t.Date <= to);
-                }
-
-                if (request.Category.HasValue)
-                    query = query.Where(t => t.Category == request.Category.Value);
-
-                var transactions = await query
-                    .OrderByDescending(t => t.Date)
-                    .ToListAsync(cancellationToken);
-
-                var content = GenerateCsv(transactions);
-
-                var result = new ExportTransactionsResult
-                {
-                    Content = Utf8Bom.GetBytes(content),
-                    ContentType = "text/csv; charset=utf-8",
-                    FileName = $"transactions_{request.CustomerId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv",
-                    RecordCount = transactions.Count
-                };
-
-                _logger.LogInformation(
-                    "Exported {RecordCount} transactions for customer {CustomerId}",
-                    result.RecordCount, request.CustomerId);
-
-                return Result.Success(result);
+                var from = DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc);
+                query = query.Where(t => t.Date >= from);
             }
-            catch (Exception ex)
+
+            if (request.ToDate.HasValue)
             {
-                _logger.LogError(ex, "Error exporting transactions for customer {CustomerId}", request.CustomerId);
-                return Result.Failure<ExportTransactionsResult>(
-                    Error.Failure("ExportFailed", $"Failed to export transactions: {ex.Message}"));
+                var to = DateTime.SpecifyKind(request.ToDate.Value, DateTimeKind.Utc);
+                query = query.Where(t => t.Date <= to);
             }
+
+            if (request.Category.HasValue)
+                query = query.Where(t => t.Category == request.Category.Value);
+
+            var transactions = await query
+                .OrderByDescending(t => t.Date)
+                .ToListAsync(cancellationToken);
+
+            var content = GenerateCsv(transactions);
+
+            var result = new ExportTransactionsResult
+            {
+                Content = Utf8Bom.GetBytes(content),
+                ContentType = "text/csv; charset=utf-8",
+                FileName = $"transactions_{request.CustomerId}_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv",
+                RecordCount = transactions.Count
+            };
+
+            _logger.LogInformation(
+                "Exported {RecordCount} transactions for customer {CustomerId}",
+                result.RecordCount, request.CustomerId);
+
+            return Result.Success(result);
         }
 
         private static string GenerateCsv(List<Transaction> transactions)

@@ -15,38 +15,30 @@ namespace TransactionAggregation.Application.Queries.Transaction.GetTransaction
     {
         public async Task<Result<TransactionDto>> Handle(GetTransactionQuery request, CancellationToken cancellationToken)
         {
-            try
-            {
-                logger.LogInformation("Handling GetTransactionQuery for TransactionId: {TransactionId}", request.TransactionId);
+            logger.LogInformation("Handling GetTransactionQuery for TransactionId: {TransactionId}", request.TransactionId);
 
-                var transactionId = TransactionId.CreateFrom(request.TransactionId);
+            var transactionId = TransactionId.CreateFrom(request.TransactionId);
 
-                var transaction = await context.Transactions
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(t => t.Id == transactionId, cancellationToken);
+            var transaction = await context.Transactions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(t => t.Id == transactionId, cancellationToken);
 
-                if (transaction is null)
-                    return Result.Failure<TransactionDto>(Error.NotFound("Transaction", request.TransactionId));
+            if (transaction is null)
+                return Result.Failure<TransactionDto>(Error.NotFound("Transaction", request.TransactionId));
 
-                var dto = new TransactionDto(
-                    transaction.Id.Value,
-                    transaction.CustomerId.Value,
-                    transaction.Amount.Amount,
-                    transaction.Amount.Currency,
-                    transaction.Date,
-                    transaction.Description,
-                    transaction.Category,
-                    transaction.Status,
-                    transaction.Source.Name,
-                    transaction.AccountId != null ? transaction.AccountId.Value : null);
+            var dto = new TransactionDto(
+                transaction.Id.Value,
+                transaction.CustomerId.Value,
+                transaction.Amount.Amount,
+                transaction.Amount.Currency,
+                transaction.Date,
+                transaction.Description,
+                transaction.Category,
+                transaction.Status,
+                transaction.Source.Name,
+                transaction.AccountId != null ? transaction.AccountId.Value : null);
 
-                return Result.Success(dto);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while handling GetTransactionQuery for TransactionId: {TransactionId}", request.TransactionId);
-                return Result.Failure<TransactionDto>(Error.Failure("Transaction.GetFailed", "An unexpected error occurred while retrieving the transaction"));
-            }
+            return Result.Success(dto);
         }
     }
 }

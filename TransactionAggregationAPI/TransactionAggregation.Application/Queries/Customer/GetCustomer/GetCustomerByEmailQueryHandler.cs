@@ -15,33 +15,24 @@ namespace TransactionAggregation.Application.Queries.Customer.GetCustomer
             GetCustomerByEmailQuery request,
             CancellationToken cancellationToken)
         {
-            try
-            {
-                logger.LogInformation("Handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
-                var customer = await _context.Customers
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Email == request.Email, cancellationToken);
+            logger.LogInformation("Handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
+            var customer = await _context.Customers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Email == request.Email, cancellationToken);
 
-                if (customer is null)
-                    return Result.Failure<CustomerDto>(
-                        Error.NotFound("Customer", request.Email));
-
-                var dto = new CustomerDto(
-                    customer.Id.Value,
-                    customer.Email,
-                    customer.Name,
-                    customer.CreatedAt,
-                    customer.UpdatedAt);
-
-                logger.LogInformation("Successfully retrieved customer with email: {Email}", request.Email);
-                return Result.Success(dto);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "An error occurred while handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
+            if (customer is null)
                 return Result.Failure<CustomerDto>(
-                    Error.Failure("Customer.RetrievalError", $"An error occurred while retrieving customer with email {request.Email}"));
-            }
+                    Error.NotFound("Customer", request.Email));
+
+            var dto = new CustomerDto(
+                customer.Id.Value,
+                customer.Email,
+                customer.Name,
+                customer.CreatedAt,
+                customer.UpdatedAt);
+
+            logger.LogInformation("Successfully retrieved customer with email: {Email}", request.Email);
+            return Result.Success(dto);
         }
     }
 }

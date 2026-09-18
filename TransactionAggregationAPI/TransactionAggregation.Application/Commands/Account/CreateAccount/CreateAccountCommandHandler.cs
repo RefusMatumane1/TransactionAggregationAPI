@@ -15,17 +15,17 @@ namespace TransactionAggregation.Application.Commands.Account.CreateAccount
     {
         public async Task<Result<Guid>> Handle(CreateAccountCommand request, CancellationToken cancellationToken)
         {
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
+
+            var customer = await _context.Customers
+                .Include(c => c.Accounts)
+                .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
+
+            if (customer is null)
+                return Result.Failure<Guid>(Error.NotFound("Customer", request.CustomerId));
+
             try
             {
-                var customerId = CustomerId.CreateFrom(request.CustomerId);
-
-                var customer = await _context.Customers
-                    .Include(c => c.Accounts)
-                    .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
-
-                if (customer is null)
-                    return Result.Failure<Guid>(Error.NotFound("Customer", request.CustomerId));
-
                 var account = customer.AddAccount(
                     request.AccountNumber,
                     request.AccountName,
@@ -42,11 +42,6 @@ namespace TransactionAggregation.Application.Commands.Account.CreateAccount
             catch (DomainException ex)
             {
                 return Result.Failure<Guid>(Error.Validation(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error creating account for customer {CustomerId}", request.CustomerId);
-                return Result.Failure<Guid>(Error.Unexpected);
             }
         }
     }

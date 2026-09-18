@@ -167,8 +167,11 @@ public class InitiateBankLinkCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_AggregatorClientThrows_ReturnsUnexpectedError()
+    public async Task Handle_AggregatorClientThrows_PropagatesToCentralizedExceptionHandling()
     {
+        // Unexpected exceptions are no longer swallowed into a generic Result.Unexpected
+        // by the handler — they propagate so the centralized exception-handling
+        // middleware (and its trace-ID-bearing ProblemDetails response) handles them.
         var context = InMemoryDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var client = Substitute.For<IBankAggregatorClient>();
@@ -176,9 +179,8 @@ public class InitiateBankLinkCommandHandlerTests
             .Returns(_ => throw new InvalidOperationException("aggregator unreachable"));
         var handler = BuildHandler(context, client, new FakeDistributedCache());
 
-        var result = await handler.Handle(new InitiateBankLinkCommand(customer.Id.Value, Institution.FNB), CancellationToken.None);
+        var act = async () => await handler.Handle(new InitiateBankLinkCommand(customer.Id.Value, Institution.FNB), CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Should().Be(TransactionAggregation.Application.Common.Models.Error.Unexpected);
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("aggregator unreachable");
     }
 }

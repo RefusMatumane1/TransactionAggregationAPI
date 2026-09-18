@@ -16,29 +16,21 @@ namespace TransactionAggregation.Application.Features.WebhookSources.Commands.Ro
     {
         public async Task<Result<string>> Handle(RotateWebhookSourceKeyCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var id = WebhookSourceId.CreateFrom(request.Id);
-                var source = await context.WebhookSources
-                    .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
+            var id = WebhookSourceId.CreateFrom(request.Id);
+            var source = await context.WebhookSources
+                .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
 
-                if (source is null)
-                    return Result.Failure<string>(Error.NotFound("WebhookSource", request.Id));
+            if (source is null)
+                return Result.Failure<string>(Error.NotFound("WebhookSource", request.Id));
 
-                var apiKey = source.RotateKey();
-                await context.SaveChangesAsync(cancellationToken);
+            var apiKey = source.RotateKey();
+            await context.SaveChangesAsync(cancellationToken);
 
-                logger.LogInformation(
-                    "Webhook source {SourceName} ({SourceId}) key rotated by admin {AdminId}",
-                    source.Name, source.Id.Value, userContext.UserId);
+            logger.LogInformation(
+                "Webhook source {SourceName} ({SourceId}) key rotated by admin {AdminId}",
+                source.Name, source.Id.Value, userContext.UserId);
 
-                return Result.Success(apiKey);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error rotating webhook source {WebhookSourceId}", request.Id);
-                return Result.Failure<string>(Error.Unexpected);
-            }
+            return Result.Success(apiKey);
         }
     }
 }

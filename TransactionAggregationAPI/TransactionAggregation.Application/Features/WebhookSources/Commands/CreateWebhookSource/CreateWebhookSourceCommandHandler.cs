@@ -15,31 +15,23 @@ namespace TransactionAggregation.Application.Features.WebhookSources.Commands.Cr
     {
         public async Task<Result<CreateWebhookSourceResult>> Handle(CreateWebhookSourceCommand request, CancellationToken cancellationToken)
         {
-            try
-            {
-                var nameExists = await context.WebhookSources
-                    .AnyAsync(s => s.Name == request.Name, cancellationToken);
+            var nameExists = await context.WebhookSources
+                .AnyAsync(s => s.Name == request.Name, cancellationToken);
 
-                if (nameExists)
-                    return Result.Failure<CreateWebhookSourceResult>(
-                        Error.Conflict($"A webhook source named '{request.Name}' already exists."));
+            if (nameExists)
+                return Result.Failure<CreateWebhookSourceResult>(
+                    Error.Conflict($"A webhook source named '{request.Name}' already exists."));
 
-                var (source, apiKey) = Domain.Entities.WebhookSource.Create(request.Name);
+            var (source, apiKey) = Domain.Entities.WebhookSource.Create(request.Name);
 
-                await context.WebhookSources.AddAsync(source, cancellationToken);
-                await context.SaveChangesAsync(cancellationToken);
+            await context.WebhookSources.AddAsync(source, cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
 
-                logger.LogInformation(
-                    "Webhook source {SourceName} ({SourceId}) created by admin {AdminId}",
-                    source.Name, source.Id.Value, userContext.UserId);
+            logger.LogInformation(
+                "Webhook source {SourceName} ({SourceId}) created by admin {AdminId}",
+                source.Name, source.Id.Value, userContext.UserId);
 
-                return Result.Success(new CreateWebhookSourceResult(source.Id.Value, source.Name, apiKey));
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error creating webhook source {SourceName}", request.Name);
-                return Result.Failure<CreateWebhookSourceResult>(Error.Unexpected);
-            }
+            return Result.Success(new CreateWebhookSourceResult(source.Id.Value, source.Name, apiKey));
         }
     }
 }

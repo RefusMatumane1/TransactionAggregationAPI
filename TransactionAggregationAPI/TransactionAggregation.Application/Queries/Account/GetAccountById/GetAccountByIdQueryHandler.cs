@@ -17,37 +17,29 @@ namespace TransactionAggregation.Application.Queries.Account.GetAccountById
             GetAccountByIdQuery request,
             CancellationToken cancellationToken)
         {
-            try
-            {
-                var accountId = AccountId.CreateFrom(request.AccountId);
+            var accountId = AccountId.CreateFrom(request.AccountId);
 
-                var account = await _context.Accounts
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+            var account = await _context.Accounts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
-                if (account is null)
-                    return Result.Failure<AccountDto>(
-                        Error.NotFound("Account", request.AccountId));
+            if (account is null)
+                return Result.Failure<AccountDto>(
+                    Error.NotFound("Account", request.AccountId));
 
-                var dto = new AccountDto(
-                    account.Id.Value,
-                    account.CustomerId.Value,
-                    account.AccountNumber,
-                    account.AccountName,
-                    account.AccountType,
-                    account.Balance,
-                    account.Currency,
-                    account.IsActive,
-                    account.CreatedAt,
-                    account.UpdatedAt);
+            var dto = new AccountDto(
+                account.Id.Value,
+                account.CustomerId.Value,
+                account.AccountNumber,
+                account.AccountName,
+                account.AccountType,
+                account.Balance,
+                account.Currency,
+                account.IsActive,
+                account.CreatedAt,
+                account.UpdatedAt);
 
-                return Result.Success(dto);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error retrieving account {AccountId}", request.AccountId);
-                return Result.Failure<AccountDto>(Error.Unexpected);
-            }
+            return Result.Success(dto);
         }
     }
 }

@@ -17,6 +17,8 @@ namespace TransactionAggregation.Application.Queries.Account.GetAccountById
             GetAccountByIdQuery request,
             CancellationToken cancellationToken)
         {
+            logger.LogInformation("Handling GetAccountByIdQuery for AccountId: {AccountId}", request.AccountId);
+
             var accountId = AccountId.CreateFrom(request.AccountId);
 
             var account = await _context.Accounts
@@ -24,8 +26,22 @@ namespace TransactionAggregation.Application.Queries.Account.GetAccountById
                 .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
 
             if (account is null)
+            {
+                logger.LogWarning("Account {AccountId} not found", request.AccountId);
                 return Result.Failure<AccountDto>(
                     Error.NotFound("Account", request.AccountId));
+            }
+
+            // Account.Balance is never maintained by any handler (Credit()/Debit() are
+            // domain-tested but unwired) — always 0 if used directly. Balance is the sum
+            // of linked transactions instead, the same computed-not-stored convention
+            // GetTransactionSummaryQueryHandler already uses for NetBalance, so it's
+            // always consistent with Transactions (the actual source of truth) with no
+            // stored-counter concurrency/lost-update risk.
+            var balance = await _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.AccountId == accountId)
+                .SumAsync(t => t.Amount.Amount, cancellationToken);
 
             var dto = new AccountDto(
                 account.Id.Value,
@@ -33,7 +49,7 @@ namespace TransactionAggregation.Application.Queries.Account.GetAccountById
                 account.AccountNumber,
                 account.AccountName,
                 account.AccountType,
-                account.Balance,
+                balance,
                 account.Currency,
                 account.IsActive,
                 account.CreatedAt,

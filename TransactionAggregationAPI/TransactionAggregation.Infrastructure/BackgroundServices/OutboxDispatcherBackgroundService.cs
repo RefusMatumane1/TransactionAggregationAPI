@@ -10,6 +10,7 @@ using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Outbox;
+using TransactionAggregation.Infrastructure.Observability;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
@@ -81,7 +82,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             await context.SaveChangesAsync(cancellationToken);
         }
 
-        private async Task ProcessMessageAsync(
+        internal async Task ProcessMessageAsync(
             OutboxMessage message,
             IApplicationDbContext context,
             ICacheService cache,
@@ -109,7 +110,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
                         _logger.LogWarning(
                             "Unknown outbox message type {Type} for message {MessageId} — dead-lettering",
                             message.Type, message.Id.Value);
-                        message.MarkFailed($"Unknown message type: {message.Type}", TimeSpan.Zero, maxAttempts: 1);
+                        RecordFailure(message, $"Unknown message type: {message.Type}", TimeSpan.Zero, maxAttempts: 1);
                         return;
                 }
 
@@ -118,8 +119,15 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to process outbox message {MessageId} ({Type})", message.Id.Value, message.Type);
-                message.MarkFailed(ex.Message, ComputeBackoff(message.Attempts), _options.MaxAttempts);
+                RecordFailure(message, ex.Message, ComputeBackoff(message.Attempts), _options.MaxAttempts);
             }
+        }
+
+        private static void RecordFailure(OutboxMessage message, string error, TimeSpan backoff, int maxAttempts)
+        {
+            message.MarkFailed(error, backoff, maxAttempts);
+            if (message.Status == OutboxMessageStatus.DeadLettered)
+                DeadLetterMetrics.OutboxMessagesDeadLettered.WithLabels(message.Type).Inc();
         }
 
         private static async Task HandleTransactionCreatedAsync(

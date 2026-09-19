@@ -9,6 +9,7 @@ using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using TransactionAggregation.Domain.Inbox;
+using TransactionAggregation.Infrastructure.Observability;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
@@ -78,7 +79,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             await context.SaveChangesAsync(cancellationToken);
         }
 
-        private async Task ProcessMessageAsync(
+        internal async Task ProcessMessageAsync(
             InboxMessage message, ISender sender, CancellationToken cancellationToken)
         {
             try
@@ -94,7 +95,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
 
                 if (result.IsFailure)
                 {
-                    message.MarkFailed(result.Error.Description, ComputeBackoff(message.Attempts), _options.MaxAttempts);
+                    RecordFailure(message, result.Error.Description, ComputeBackoff(message.Attempts), _options.MaxAttempts);
                     return;
                 }
 
@@ -104,8 +105,15 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             {
                 _logger.LogError(ex, "Failed to process inbox message {MessageId} from {SourceName}",
                     message.Id.Value, message.SourceName);
-                message.MarkFailed(ex.Message, ComputeBackoff(message.Attempts), _options.MaxAttempts);
+                RecordFailure(message, ex.Message, ComputeBackoff(message.Attempts), _options.MaxAttempts);
             }
+        }
+
+        private static void RecordFailure(InboxMessage message, string error, TimeSpan backoff, int maxAttempts)
+        {
+            message.MarkFailed(error, backoff, maxAttempts);
+            if (message.Status == InboxMessageStatus.DeadLettered)
+                DeadLetterMetrics.InboxMessagesDeadLettered.WithLabels(message.SourceName).Inc();
         }
 
         private static TimeSpan ComputeBackoff(int attempts)

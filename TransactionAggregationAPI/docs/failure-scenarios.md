@@ -281,11 +281,20 @@ concern on our side.
 A message that fails deterministically (e.g. a payload the handler can never
 successfully process) retries with backoff up to `MaxAttempts`, then is
 marked `DeadLettered` and stops being retried — it does not block the queue,
-since other pending messages are picked up independently. There is currently
-no alerting specifically on dead-lettered messages accumulating — worth
-adding a metric/alert (`inbox_messages_dead_lettered_total` /
-`outbox_messages_dead_lettered_total`) if poison messages turn out to be a
-real operational concern.
+since other pending messages are picked up independently.
+
+**Fixed, this review**: dead-lettering was previously visible only as a log
+line — a growing pile of poison messages had no metric an alert could fire
+on. `DeadLetterMetrics` (`TransactionAggregation.Infrastructure/Observability/`)
+now exposes `inbox_messages_dead_lettered_total{source_name}` and
+`outbox_messages_dead_lettered_total{message_type}` Prometheus counters,
+incremented at the exact point a message's status transitions to
+`DeadLettered` in both dispatchers (`DeadLetterMetricsTests.cs` pins this:
+dead-lettering a message with a distinct label asserts the matching counter
+reads exactly 1). No alert rule is wired up against these yet — that's a
+Grafana/Prometheus configuration step outside this repo's code, tracked in
+the production readiness checklist under "Dashboards/alerting configured in
+a real environment."
 
 ## 18. Invalid authentication
 - **Customer-facing API**: JWT validation (issuer, audience, lifetime, signing

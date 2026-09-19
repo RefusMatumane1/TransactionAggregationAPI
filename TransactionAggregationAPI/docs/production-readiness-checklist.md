@@ -51,7 +51,8 @@ ADR for why.
 | Structured logging, no sensitive-data leakage | ✅ Done (Serilog + `SensitiveDataDestructuringPolicy`) | Must-have |
 | Distributed tracing, metrics (OpenTelemetry) | ✅ Done | Must-have |
 | Trace ID on every error response | ✅ Done (this review) | Must-have |
-| Dashboards/alerting configured in a real environment | ❌ Not verified — Grafana/Prometheus exist in `monitoring/`, but alert rules and on-call routing aren't confirmed | Must-have before launch |
+| Dead-lettered (poison) message counters | ✅ Done (this review) — `inbox_messages_dead_lettered_total` / `outbox_messages_dead_lettered_total` (see [failure-scenarios.md](failure-scenarios.md) scenario 17) | Should-have |
+| Dashboards/alerting configured in a real environment | ❌ Not verified — Grafana/Prometheus exist in `monitoring/`, but alert rules and on-call routing aren't confirmed. The dead-letter counters above give something to alert *on*; no rule is wired up yet | Must-have before launch |
 
 ## Testing
 

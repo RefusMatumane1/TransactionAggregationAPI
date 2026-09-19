@@ -31,7 +31,7 @@ ADR for why.
 | Retry/timeout/circuit-breaker on outbound HTTP | ✅ Done (`AddStandardResilienceHandler`, centralized) | Must-have |
 | Graceful degradation when Redis is unavailable | ✅ Done, health check no longer cascades | Must-have |
 | Health checks split liveness vs. readiness | ✅ Done | Must-have |
-| Disaster recovery / backup-restore runbook for Postgres | ❌ Not documented in this repo | Must-have |
+| Disaster recovery / backup-restore runbook for Postgres | ⚠️ Documented ([operations.md](operations.md) §2 — `pg_dump`/`pg_restore` commands) but **not executed against this schema** — treat as a starting point, not a verified procedure. See "Backup/restore tested" below, which remains the real gap | Must-have |
 | Documented failure-scenario responses (Instructions.md section 42) | ✅ Done ([failure-scenarios.md](failure-scenarios.md)) — walking through it surfaced and fixed a real stale-claim gap in the Inbox/Outbox dispatchers (see below) | Should-have |
 | Inbox/Outbox stale-claim recovery (crash between claim and commit) | ✅ Fixed and manually verified against real PostgreSQL (this review) — reclaim after a configurable `ClaimTimeoutMinutes` | Must-have |
 
@@ -52,7 +52,8 @@ ADR for why.
 | Distributed tracing, metrics (OpenTelemetry) | ✅ Done | Must-have |
 | Trace ID on every error response | ✅ Done (this review) | Must-have |
 | Dead-lettered (poison) message counters | ✅ Done (this review) — `inbox_messages_dead_lettered_total` / `outbox_messages_dead_lettered_total` (see [failure-scenarios.md](failure-scenarios.md) scenario 17) | Should-have |
-| Dashboards/alerting configured in a real environment | ❌ Not verified — Grafana/Prometheus exist in `monitoring/`, but alert rules and on-call routing aren't confirmed. The dead-letter counters above give something to alert *on*; no rule is wired up yet | Must-have before launch |
+| Prometheus alert rule definitions | ✅ Done (this review) — `k8s/monitoring/prometheus/configmap.yaml` (`rules.yml`): target-down, 5xx rate, P99 latency, memory approaching the container limit, and dead-letter accumulation. Every expression is checked against a metric verified to actually exist (matched to the working queries already in `configmap-dashboards.yaml`), not assumed. **Not validated with `promtool` or a live Prometheus** — no cluster/Docker was available in this session to load and confirm them; treat as reviewed-but-unexecuted, same caveat as the backup/restore commands below | Should-have |
+| Dashboards/alerting configured in a real environment | ❌ Still not verified — the alert rules above exist as code but there is **no Alertmanager deployed anywhere in `k8s/monitoring/`**, so a firing alert is visible only in Prometheus's own `/alerts` UI and pages no one. Wiring a receiver (Slack/PagerDuty/email) and routing is an organizational decision (who gets paged, on what channel) this repo can't invent — see the "On-call rotation" row below | Must-have before launch |
 
 ## Testing
 

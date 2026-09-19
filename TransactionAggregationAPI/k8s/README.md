@@ -273,5 +273,6 @@ The Compose file forces Seq to `linux/amd64`. On Apple Silicon (ARM) this trigge
 |---|---|
 | **Structured logs** | Serilog → Seq (`http://seq:80`). Set `OTEL_EXPORTER_OTLP_ENDPOINT` to additionally send logs to any OTLP-compatible collector |
 | **Metrics** | prometheus-net.AspNetCore serves `/metrics` at `:8080`. Prometheus discovers pods via `prometheus.io/scrape: "true"` annotation and scrapes the endpoint. Grafana visualises the data using the pre-provisioned dashboard. |
+| **Alerting** | Rule definitions exist (`k8s/monitoring/prometheus/configmap.yaml`, `rules.yml`: target-down, 5xx rate, P99 latency, memory pressure, dead-letter accumulation) and are loaded by Prometheus via `rule_files`, but **no Alertmanager is deployed** — a firing alert is visible only in Prometheus's own `/alerts` page, not routed anywhere. See `docs/production-readiness-checklist.md`. |
 | **Traces** | OpenTelemetry distributed tracing (ASP.NET Core + EF Core + Redis + HttpClient). Set `OTEL_EXPORTER_OTLP_ENDPOINT` in ConfigMap to export traces to Jaeger, Tempo, or any OTLP endpoint. |
 | **Health** | `/alive` (liveness — self tag only, fast), `/health` (readiness — includes Postgres + Redis checks) |

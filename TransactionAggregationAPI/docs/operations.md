@@ -42,10 +42,15 @@ All commands assume the `transaction-aggregation` namespace and the manual
    scenario 3) — only new bank-link operations fail. No customer-facing
    incident communication needed beyond "bank linking is temporarily
    unavailable."
-5. **Gap, not yet built**: no alert fires automatically when the circuit
-   trips. Watch application logs directly (Seq: `kubectl port-forward -n
-   transaction-aggregation svc/seq 8080:80`) until the alerting story in
-   `production-readiness-checklist.md`'s Observability section is closed.
+5. **Gap**: there is no alert specifically on the circuit breaker tripping —
+   no metric for its state is exported. If provider failures are frequent
+   enough to push the exception through to a 500 (failure-scenarios.md
+   scenario 3), the general `TransactionApiHighErrorRate` rule
+   (`k8s/monitoring/prometheus/configmap.yaml`) will eventually fire, but
+   that's incidental, not a dedicated signal — and even then, there is no
+   Alertmanager to page anyone (see `production-readiness-checklist.md`).
+   Until that's closed, watch application logs directly (Seq: `kubectl
+   port-forward -n transaction-aggregation svc/seq 8080:80`).
 
 ---
 
@@ -140,7 +145,11 @@ state).
 **Symptom**: `inbox_messages_dead_lettered_total` or
 `outbox_messages_dead_lettered_total` (Prometheus counters, see
 [failure-scenarios.md](failure-scenarios.md) scenario 17) climbing instead of
-staying flat.
+staying flat. `OutboxMessagesDeadLettering`/`InboxMessagesDeadLettering`
+alert rules exist for this (`k8s/monitoring/prometheus/configmap.yaml`,
+`rules.yml`) — but there is no Alertmanager deployed, so today this only
+shows up if someone is actually looking at Prometheus's `/alerts` page, not
+as a page/notification.
 
 1. Query current dead-letter counts by label (source/type) directly against
    Prometheus (`kubectl port-forward -n transaction-aggregation svc/prometheus

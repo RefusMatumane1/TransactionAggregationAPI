@@ -15,6 +15,12 @@ data:
       external_labels:
         environment: "kubernetes"
 
+    # Whole ConfigMap is mounted at /etc/prometheus (see deployment.yaml's
+    # "config" volume), so a sibling key in this same data block lands at
+    # /etc/prometheus/rules.yml with no extra volume/mount needed.
+    rule_files:
+      - /etc/prometheus/rules.yml
+
     scrape_configs:
       # Prometheus self-monitoring
       - job_name: prometheus
@@ -59,3 +65,74 @@ data:
           - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
             action: replace
             target_label: job
+
+  # Alert THRESHOLDS only — there is no Alertmanager deployed in k8s/monitoring/
+  # (see production-readiness-checklist.md, Observability section), so a firing
+  # alert here is visible in Prometheus's own UI/API (http://prometheus:9090/alerts)
+  # but pages no one. Every expression below references a metric verified against
+  # an actual source: the HTTP/runtime series match k8s/monitoring/grafana/
+  # configmap-dashboards.yaml's own panel queries (prometheus-net's real metric
+  # names, not assumed ones); the dead-letter counters are
+  # TransactionAggregation.Infrastructure/Observability/DeadLetterMetrics.cs.
+  # Thresholds mirror the dashboard's own existing color-threshold steps
+  # (5% error rate, 1s P99) rather than inventing new numbers.
+  rules.yml: |
+    groups:
+      - name: transaction-api.rules
+        rules:
+          - alert: TransactionApiDown
+            expr: up{job="transaction-api"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "transaction-api target is down"
+              description: "Prometheus has not successfully scraped {{ $labels.kubernetes_pod_name }} for 2 minutes. See docs/operations.md."
+
+          - alert: TransactionApiHighErrorRate
+            expr: |
+              100 * sum(rate(http_request_duration_seconds_count{job="transaction-api",code=~"5.."}[5m]))
+              / sum(rate(http_request_duration_seconds_count{job="transaction-api"}[5m]))
+              > 5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "transaction-api 5xx rate above 5%"
+              description: "Matches the dashboard's own red threshold (Error Rate panel). Check readiness (/health) first — Postgres/Redis outages surface here before their own signal exists (no DB/Redis exporter is deployed)."
+
+          - alert: TransactionApiHighLatencyP99
+            expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job="transaction-api"}[5m])) by (le)) > 1
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "transaction-api P99 latency above 1s"
+              description: "Matches the dashboard's own red threshold (P99 Latency panel)."
+
+          - alert: TransactionApiHighMemoryUsage
+            expr: process_working_set_bytes{job="transaction-api"} > 450 * 1024 * 1024
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "transaction-api working set approaching its 512Mi container limit"
+              description: "k8s/api/deployment.yaml sets a 512Mi memory limit; sustained usage above ~450Mi risks an OOMKill. See docs/operations.md."
+
+      - name: message-dispatch.rules
+        rules:
+          - alert: OutboxMessagesDeadLettering
+            expr: increase(outbox_messages_dead_lettered_total{job="transaction-api"}[15m]) > 0
+            labels:
+              severity: warning
+            annotations:
+              summary: "Outbox message(s) dead-lettered in the last 15 minutes"
+              description: "See docs/operations.md §4 (Poison messages / dead-letter pileup) for the investigation steps."
+
+          - alert: InboxMessagesDeadLettering
+            expr: increase(inbox_messages_dead_lettered_total{job="transaction-api"}[15m]) > 0
+            labels:
+              severity: warning
+            annotations:
+              summary: "Inbox message(s) dead-lettered in the last 15 minutes"
+              description: "See docs/operations.md §4 (Poison messages / dead-letter pileup) for the investigation steps."

@@ -6,4 +6,5 @@
 - [Failure scenarios](failure-scenarios.md) — detection/response/recovery/consistency/observability/user-impact for the 19 named failure modes
 - [Data retention](data-retention.md) — open compliance/legal questions this system has not yet answered
 - [Production readiness checklist](production-readiness-checklist.md) — must-have / should-have / future-enhancement status across security, reliability, performance, testing, deployment, and more
+- [Operations runbooks](operations.md) — step-by-step recovery procedures for provider outages, database/Redis failures, poison messages, migration failures, and rollback
 - [Performance testing](../perf/README.md) — k6 script, assumptions, and targets for the main read endpoints

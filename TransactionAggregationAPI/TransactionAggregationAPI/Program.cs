@@ -173,7 +173,10 @@ try
     });
 
     builder.Services.AddControllers();
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+    });
     builder.Services.AddProblemDetails();
 
     builder.Services.AddResponseCompression(options =>

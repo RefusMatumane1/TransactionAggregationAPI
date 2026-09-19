@@ -6,11 +6,11 @@ namespace TransactionAggregation.Domain.Outbox
     {
         private OutboxMessage() { }
 
-        public OutboxMessageId Id { get; private set; }
+        public OutboxMessageId Id { get; private set; } = null!;
 
-        public string Type { get; private set; }
+        public string Type { get; private set; } = null!;
 
-        public string Payload { get; private set; }
+        public string Payload { get; private set; } = null!;
 
         public DateTime OccurredAt { get; private set; }
         public OutboxMessageStatus Status { get; private set; }

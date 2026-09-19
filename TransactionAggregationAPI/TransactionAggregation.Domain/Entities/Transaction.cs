@@ -33,13 +33,13 @@ namespace TransactionAggregation.Domain.Entities
             AddDomainEvent(new TransactionCreatedDomainEvent(this));
         }
 
-        public TransactionId Id { get; private set; }
-        public CustomerId CustomerId { get; private set; }
+        public TransactionId Id { get; private set; } = null!;
+        public CustomerId CustomerId { get; private set; } = null!;
         public AccountId? AccountId { get; private set; }
-        public Money Amount { get; private set; }
-        public string Description { get; private set; }
+        public Money Amount { get; private set; } = null!;
+        public string Description { get; private set; } = null!;
         public TransactionCategory Category { get; private set; }
-        public TransactionSource Source { get; private set; }
+        public TransactionSource Source { get; private set; } = null!;
         public DateTime? ApprovedAt { get; private set; }
         public string? ApprovedBy { get; private set; }
         public DateTime Date { get; private set; }

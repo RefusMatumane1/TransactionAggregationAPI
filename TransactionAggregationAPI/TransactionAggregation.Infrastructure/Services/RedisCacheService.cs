@@ -29,7 +29,9 @@ namespace TransactionAggregation.Infrastructure.Services
                 if (!cachedData.HasValue)
                     return null;
 
-                return JsonSerializer.Deserialize<T>(new MemoryStream(cachedData));
+                // RedisValue's conversion to byte[] is nullable only to represent the
+                // "no value" case, which HasValue already ruled out above.
+                return JsonSerializer.Deserialize<T>(new MemoryStream((byte[])cachedData!));
             }
             catch (Exception ex)
             {

@@ -6,11 +6,11 @@ namespace TransactionAggregation.Domain.Inbox
     {
         private InboxMessage() { }
 
-        public InboxMessageId Id { get; private set; }
+        public InboxMessageId Id { get; private set; } = null!;
 
-        public string SourceName { get; private set; }
+        public string SourceName { get; private set; } = null!;
 
-        public string Payload { get; private set; }
+        public string Payload { get; private set; } = null!;
 
         public DateTime ReceivedAt { get; private set; }
         public InboxMessageStatus Status { get; private set; }

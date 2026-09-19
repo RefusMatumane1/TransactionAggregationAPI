@@ -11,14 +11,14 @@ namespace TransactionAggregation.Domain.Entities
 
         private Account() { }
 
-        public AccountId Id { get; private set; }
-        public CustomerId CustomerId { get; private set; }
+        public AccountId Id { get; private set; } = null!;
+        public CustomerId CustomerId { get; private set; } = null!;
         public IReadOnlyCollection<Transaction> Transactions => _transactions.AsReadOnly();
-        public string AccountNumber { get; private set; }
-        public string AccountName { get; private set; }
+        public string AccountNumber { get; private set; } = null!;
+        public string AccountName { get; private set; } = null!;
         public AccountType AccountType { get; private set; }
         public decimal Balance { get; private set; }
-        public string Currency { get; private set; }
+        public string Currency { get; private set; } = null!;
         public bool IsActive { get; private set; }
 
         public static Account Create(

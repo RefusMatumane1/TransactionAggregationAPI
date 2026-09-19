@@ -10,9 +10,9 @@ namespace TransactionAggregation.Domain.Entities
         private readonly List<Transaction> _transactions = new();
         private readonly List<Account> _accounts = new();
 
-        public CustomerId Id { get; private set; }
-        public string Email { get; private set; }
-        public string Name { get; private set; }
+        public CustomerId Id { get; private set; } = null!;
+        public string Email { get; private set; } = null!;
+        public string Name { get; private set; } = null!;
 
         public IReadOnlyCollection<Transaction> Transactions => _transactions.AsReadOnly();
         public IReadOnlyCollection<Account> Accounts => _accounts.AsReadOnly();

@@ -9,8 +9,8 @@ namespace TransactionAggregation.Domain.Entities
     {
         private BankLink() { }
 
-        public BankLinkId Id { get; private set; }
-        public CustomerId CustomerId { get; private set; }
+        public BankLinkId Id { get; private set; } = null!;
+        public CustomerId CustomerId { get; private set; } = null!;
         public Institution Institution { get; private set; }
         public BankLinkStatus Status { get; private set; }
 

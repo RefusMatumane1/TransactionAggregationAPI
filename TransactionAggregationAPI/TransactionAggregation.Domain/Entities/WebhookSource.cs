@@ -9,9 +9,9 @@ namespace TransactionAggregation.Domain.Entities
     {
         private WebhookSource() { }
 
-        public WebhookSourceId Id { get; private set; }
-        public string Name { get; private set; }
-        public string KeyHash { get; private set; }
+        public WebhookSourceId Id { get; private set; } = null!;
+        public string Name { get; private set; } = null!;
+        public string KeyHash { get; private set; } = null!;
         public bool IsActive { get; private set; }
 
         public DateTime? LastUsedAt { get; private set; }

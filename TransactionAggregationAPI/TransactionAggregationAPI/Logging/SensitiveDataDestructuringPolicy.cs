@@ -12,7 +12,7 @@ namespace TransactionAggregationAPI.Logging
         public bool TryDestructure(
             object value,
             ILogEventPropertyValueFactory propertyValueFactory,
-            out LogEventPropertyValue? result)
+            out LogEventPropertyValue result)
         {
             var type = value.GetType();
             var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -21,7 +21,10 @@ namespace TransactionAggregationAPI.Logging
 
             if (!properties.Any(p => p.GetCustomAttribute<SensitiveAttribute>() != null))
             {
-                result = null;
+                // Standard Try-pattern: `result` is only meaningful when this returns true,
+                // same contract as the interface it implements (Serilog's own
+                // IDestructuringPolicy.TryDestructure declares a non-nullable `out` here).
+                result = null!;
                 return false;
             }
 

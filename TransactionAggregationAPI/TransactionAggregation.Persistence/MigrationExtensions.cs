@@ -11,15 +11,25 @@ namespace TransactionAggregation.Persistence
 
         private const long MigrationLockId = 7_27_2024;
 
-        public static async Task ApplyMigrationsAsync(this IHost host, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Generic over TContext so every module's own DbContext (each with its own
+        /// schema/migration history — see docs/adr/0009-schema-per-module-database-strategy.md)
+        /// can apply its migrations the same way, called once per context from
+        /// Program.cs. The shared MigrationLockId is safe to reuse across contexts:
+        /// they migrate sequentially within one process, and the lock exists to guard
+        /// against multiple pod replicas racing to migrate concurrently, not against
+        /// these calls racing each other.
+        /// </summary>
+        public static async Task ApplyMigrationsAsync<TContext>(this IHost host, CancellationToken cancellationToken = default)
+            where TContext : DbContext
         {
             using var scope = host.Services.CreateScope();
             var services = scope.ServiceProvider;
-            var logger = services.GetRequiredService<ILogger<ApplicationDbContext>>();
+            var logger = services.GetRequiredService<ILogger<TContext>>();
 
             try
             {
-                var context = services.GetRequiredService<ApplicationDbContext>();
+                var context = services.GetRequiredService<TContext>();
 
                 if (!context.Database.IsRelational())
                 {
@@ -40,11 +50,11 @@ namespace TransactionAggregation.Persistence
                         await lockCommand.ExecuteNonQueryAsync(cancellationToken);
                     }
 
-                    logger.LogInformation("Applying database migrations...");
+                    logger.LogInformation("Applying database migrations for {ContextType}...", typeof(TContext).Name);
 
                     await context.Database.MigrateAsync(cancellationToken);
 
-                    logger.LogInformation("Database migrations applied successfully");
+                    logger.LogInformation("Database migrations applied successfully for {ContextType}", typeof(TContext).Name);
                 }
                 finally
                 {
@@ -56,7 +66,7 @@ namespace TransactionAggregation.Persistence
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "An error occurred while applying database migrations");
+                logger.LogError(ex, "An error occurred while applying database migrations for {ContextType}", typeof(TContext).Name);
                 throw;
             }
         }

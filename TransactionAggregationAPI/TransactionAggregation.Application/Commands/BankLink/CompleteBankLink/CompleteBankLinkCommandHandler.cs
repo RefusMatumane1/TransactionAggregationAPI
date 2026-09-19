@@ -2,13 +2,15 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
 using TransactionAggregation.Application.Commands.BankLink.InitiateBankLink;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Domain.Exceptions;
+using SharedKernel.Exceptions;
 
 namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
 {

@@ -7,6 +7,9 @@
   <Project Path="docker-compose.dcproj">
     <Build />
   </Project>
+  <Project Path="SharedKernel/SharedKernel.csproj" />
+  <Project Path="BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj" />
+  <Project Path="Modules/WebhookSources/WebhookSources.csproj" />
   <Project Path="TransactionAggregation.Application/TransactionAggregation.Application.csproj" Id="ffdc5dc1-72ce-4ff2-8f05-f8ad6f205bfe" />
   <Project Path="TransactionAggregation.Domain/TransactionAggregation.Domain.csproj" Id="69d4d908-2140-4efc-b376-cd669f1b39dd" />
   <Project Path="TransactionAggregation.Infrastructure/TransactionAggregation.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />

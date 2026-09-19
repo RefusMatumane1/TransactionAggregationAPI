@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using System.Text.Json;
+using SharedKernel.Common.Interfaces;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Common.Outbox;
@@ -12,7 +14,6 @@ using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events.Transaction;
-using TransactionAggregation.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -49,12 +50,12 @@ public class TransactionCreatedEventHandlerTests
             TransactionSource.Create("test", Guid.NewGuid().ToString()));
 
     private static TransactionCreatedEventHandler BuildHandler(
-        ApplicationDbContext context,
+        IMessagingDbContext messaging,
         ITransactionCategorizationService? categorization = null) =>
         new(
             NullLogger<TransactionCreatedEventHandler>.Instance,
             categorization ?? new TransactionCategorizationService(Options.Create(DefaultOptions)),
-            context);
+            messaging);
 
     [Theory]
     [InlineData("walmart weekly shop", TransactionCategory.Groceries)]
@@ -70,9 +71,9 @@ public class TransactionCreatedEventHandlerTests
     [InlineData("starbucks morning", TransactionCategory.Dining)]
     public async Task Handle_AutoCategorisesFromDescription(string description, TransactionCategory expected)
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(-100m, description);
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
@@ -82,9 +83,9 @@ public class TransactionCreatedEventHandlerTests
     [Fact]
     public async Task Handle_PositiveAmount_CategorisedAsIncome()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(5000m, "salary payment");
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
@@ -94,9 +95,9 @@ public class TransactionCreatedEventHandlerTests
     [Fact]
     public async Task Handle_UnrecognisedNegativeDescription_RemainsUncategorized()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(-75m, "payment xyz");
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
@@ -107,9 +108,9 @@ public class TransactionCreatedEventHandlerTests
     public async Task Handle_AlreadyCategorizedTransaction_DoesNotOverwriteIt()
     {
 
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(-100m, "uber ride home", TransactionCategory.Groceries);
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
@@ -119,10 +120,10 @@ public class TransactionCreatedEventHandlerTests
     [Fact]
     public async Task Handle_AlreadyCategorizedTransaction_DoesNotCallCategorizationService()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var categorization = Substitute.For<ITransactionCategorizationService>();
         var transaction = MakeTransaction(-100m, "uber ride home", TransactionCategory.Groceries);
-        var handler = BuildHandler(context, categorization);
+        var handler = BuildHandler(messaging, categorization);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
@@ -132,27 +133,27 @@ public class TransactionCreatedEventHandlerTests
     [Fact]
     public async Task Handle_AlreadyCategorizedTransaction_StillEnqueuesOutboxMessage()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(-100m, "uber ride home", TransactionCategory.Groceries);
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
-        await context.SaveChangesAsync();
+        await messaging.SaveChangesAsync();
 
-        context.OutboxMessages.Should().ContainSingle(m => m.Type == OutboxMessageTypes.TransactionCreated);
+        messaging.OutboxMessages.Should().ContainSingle(m => m.Type == OutboxMessageTypes.TransactionCreated);
     }
 
     [Fact]
     public async Task Handle_EnqueuesTransactionCreatedOutboxMessageWithCorrectPayload()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction(-100m, "test payment");
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
-        await context.SaveChangesAsync();
+        await messaging.SaveChangesAsync();
 
-        var message = context.OutboxMessages.Should().ContainSingle().Subject;
+        var message = messaging.OutboxMessages.Should().ContainSingle().Subject;
         message.Type.Should().Be(OutboxMessageTypes.TransactionCreated);
 
         var payload = JsonSerializer.Deserialize<TransactionCreatedOutboxPayload>(message.Payload)!;

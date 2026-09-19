@@ -1,4 +1,6 @@
-﻿namespace TransactionAggregation.Domain.Common.ValueObjects
+﻿using SharedKernel.Common.ValueObjects;
+
+namespace TransactionAggregation.Domain.Common.ValueObjects
 {
     public sealed class CustomerId : ValueObject
     {

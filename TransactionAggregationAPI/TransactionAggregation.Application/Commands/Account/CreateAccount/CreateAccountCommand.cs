@@ -1,4 +1,4 @@
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
 using TransactionAggregation.Domain.Enums;
 
 namespace TransactionAggregation.Application.Commands.Account.CreateAccount

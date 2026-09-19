@@ -1,5 +1,5 @@
 using FluentAssertions;
-using TransactionAggregation.Domain.Entities;
+using Modules.WebhookSources;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;

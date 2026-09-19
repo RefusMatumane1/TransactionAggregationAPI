@@ -9,6 +9,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using BuildingBlocks.Messaging.Persistence;
+using Modules.WebhookSources.Persistence;
+using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Persistence;
 using TransactionAggregation.Tests.Helpers;
@@ -31,21 +34,9 @@ namespace TransactionAggregation.Tests.Integration
 
             builder.ConfigureServices(services =>
             {
-
-                services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
-                services.RemoveAll<ApplicationDbContext>();
-
-                var toRemove = services
-                                    .Where(d =>
-                                        d.ServiceType == typeof(IConfigureOptions<DbContextOptions<ApplicationDbContext>>) ||
-                                        d.ServiceType == typeof(IDbContextOptionsConfiguration<ApplicationDbContext>))
-                                    .ToList();
-                foreach (var d in toRemove)
-                    services.Remove(d);
-
-                var dbName = $"TestDb_{Guid.NewGuid()}";
-                services.AddDbContext<ApplicationDbContext>(options =>
-                    options.UseInMemoryDatabase(dbName));
+                ReplaceWithInMemory<ApplicationDbContext>(services);
+                ReplaceWithInMemory<MessagingDbContext>(services);
+                ReplaceWithInMemory<WebhookSourcesDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 
@@ -78,6 +69,30 @@ namespace TransactionAggregation.Tests.Integration
                 services.RemoveAll<IKeycloakAdminClient>();
                 services.AddSingleton<IKeycloakAdminClient, FakeKeycloakAdminClient>();
             });
+        }
+
+        /// <summary>
+        /// Program.cs registers ApplicationDbContext/MessagingDbContext against a
+        /// shared NpgsqlConnection (see docs/adr/0009-schema-per-module-database-strategy.md)
+        /// and WebhookSourcesDbContext against its own Npgsql connection string —
+        /// none reachable in this test host. Swaps each for its own isolated
+        /// in-memory database, same as the single-context swap this replaced.
+        /// </summary>
+        private static void ReplaceWithInMemory<TContext>(IServiceCollection services) where TContext : DbContext
+        {
+            services.RemoveAll<DbContextOptions<TContext>>();
+            services.RemoveAll<TContext>();
+
+            var toRemove = services
+                .Where(d =>
+                    d.ServiceType == typeof(IConfigureOptions<DbContextOptions<TContext>>) ||
+                    d.ServiceType == typeof(IDbContextOptionsConfiguration<TContext>))
+                .ToList();
+            foreach (var d in toRemove)
+                services.Remove(d);
+
+            var dbName = $"TestDb_{typeof(TContext).Name}_{Guid.NewGuid()}";
+            services.AddDbContext<TContext>(options => options.UseInMemoryDatabase(dbName));
         }
     }
 }

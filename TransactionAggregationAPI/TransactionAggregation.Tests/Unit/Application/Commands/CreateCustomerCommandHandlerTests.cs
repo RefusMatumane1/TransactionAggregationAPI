@@ -1,9 +1,10 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Commands.Customer.CreateCustomer;
-using TransactionAggregation.Application.Common.Enums;
+using SharedKernel.Common.Enums;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Tests.Helpers;

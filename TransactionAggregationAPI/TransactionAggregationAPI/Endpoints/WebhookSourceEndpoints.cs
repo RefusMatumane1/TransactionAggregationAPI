@@ -1,10 +1,10 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.ActivateWebhookSource;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.CreateWebhookSource;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.DeactivateWebhookSource;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.RotateWebhookSourceKey;
-using TransactionAggregation.Application.Features.WebhookSources.Queries.GetWebhookSources;
+using Modules.WebhookSources.Features.ActivateWebhookSource;
+using Modules.WebhookSources.Features.CreateWebhookSource;
+using Modules.WebhookSources.Features.DeactivateWebhookSource;
+using Modules.WebhookSources.Features.RotateWebhookSourceKey;
+using Modules.WebhookSources.Features.GetWebhookSources;
 using TransactionAggregationAPI.DTOs.WebhookSources;
 using TransactionAggregationAPI.Infrastructure;
 

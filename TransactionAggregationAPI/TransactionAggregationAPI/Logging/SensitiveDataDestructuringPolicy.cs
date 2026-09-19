@@ -1,7 +1,7 @@
 using System.Reflection;
 using Serilog.Core;
 using Serilog.Events;
-using TransactionAggregation.Application.Common.Attributes;
+using SharedKernel.Common.Attributes;
 
 namespace TransactionAggregationAPI.Logging
 {

@@ -5,14 +5,16 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using TransactionAggregation.Application.Common.Inbox;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Common.Outbox;
-using TransactionAggregation.Domain.Inbox;
-using TransactionAggregation.Domain.Outbox;
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Observability;
 using TransactionAggregation.Infrastructure.BackgroundServices;
-using TransactionAggregation.Infrastructure.Observability;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices

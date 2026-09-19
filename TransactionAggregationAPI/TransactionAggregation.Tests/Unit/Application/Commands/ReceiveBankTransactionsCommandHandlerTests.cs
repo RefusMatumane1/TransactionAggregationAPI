@@ -1,10 +1,10 @@
 using FluentAssertions;
 using System.Text.Json;
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.DTOs;
 using TransactionAggregation.Application.Common.Inbox;
 using TransactionAggregation.Application.Features.Transactions.Commands.ReceiveBankTransactions;
-using TransactionAggregation.Domain.Inbox;
-using TransactionAggregation.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -12,7 +12,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 
 public class ReceiveBankTransactionsCommandHandlerTests
 {
-    private static ReceiveBankTransactionsCommandHandler BuildHandler(ApplicationDbContext ctx) => new(ctx);
+    private static ReceiveBankTransactionsCommandHandler BuildHandler(IMessagingDbContext ctx) => new(ctx);
 
     private static ExternalTransactionDTO MakeDto(string id = "txn-1", decimal amount = -150m) => new()
     {
@@ -27,7 +27,7 @@ public class ReceiveBankTransactionsCommandHandlerTests
     [Fact]
     public async Task Handle_ValidRequest_CreatesAPendingInboxMessage()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryMessagingDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -43,7 +43,7 @@ public class ReceiveBankTransactionsCommandHandlerTests
     [Fact]
     public async Task Handle_ValidRequest_PayloadRoundTripsExternalAccountIdAndTransactions()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryMessagingDbContextFactory.Create();
         var handler = BuildHandler(context);
         var dto = MakeDto("txn-42", amount: -75.50m);
 
@@ -62,15 +62,16 @@ public class ReceiveBankTransactionsCommandHandlerTests
     [Fact]
     public async Task Handle_DoesNotResolveBankLinkOrPersistTransactions()
     {
-
-        var context = InMemoryDbContextFactory.Create();
+        // The handler only depends on IMessagingDbContext now — it has no way to
+        // touch Transactions/BankLinks even if it wanted to; this pins that exactly
+        // one InboxMessage is created and nothing else happens.
+        var context = InMemoryMessagingDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
             new ReceiveBankTransactionsCommand("test-source", "never-linked", [MakeDto()]), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
-        context.Transactions.Should().BeEmpty();
         context.InboxMessages.Should().ContainSingle();
     }
 }

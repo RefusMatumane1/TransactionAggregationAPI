@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.DataProtection;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 
 namespace TransactionAggregation.Infrastructure.Authentication

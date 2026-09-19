@@ -140,7 +140,7 @@ public class LayerDependencyTests
         var result = Types.InAssembly(DomainAssembly)
             .That().ResideInNamespace("TransactionAggregation.Domain.Common.ValueObjects")
             .And().AreNotAbstract()
-            .Should().Inherit(typeof(ValueObject))
+            .Should().Inherit(typeof(SharedKernel.Common.ValueObjects.ValueObject))
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
@@ -152,7 +152,7 @@ public class LayerDependencyTests
     {
         var result = Types.InAssembly(DomainAssembly)
             .That().ResideInNamespace("TransactionAggregation.Domain.Events")
-            .Should().Inherit(typeof(TransactionAggregation.Domain.Common.BaseDomainEvent))
+            .Should().Inherit(typeof(SharedKernel.Common.BaseDomainEvent))
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
@@ -163,7 +163,7 @@ public class LayerDependencyTests
     public void DomainEntities_ShouldResideIn_DomainLayer()
     {
         var result = Types.InAssembly(DomainAssembly)
-            .That().Inherit(typeof(TransactionAggregation.Domain.Common.BaseEntity))
+            .That().Inherit(typeof(SharedKernel.Common.BaseEntity))
             .Should().ResideInNamespace(DomainNs)
             .GetResult();
 

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
-using TransactionAggregation.Application.Common.Enums;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 
 namespace TransactionAggregationAPI.Infrastructure

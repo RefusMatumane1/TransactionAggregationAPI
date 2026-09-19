@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Commands.BankLink.CompleteBankLink;
 using TransactionAggregation.Application.Commands.BankLink.InitiateBankLink;

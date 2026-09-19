@@ -1,6 +1,6 @@
 using FluentAssertions;
-using TransactionAggregation.Application.Features.WebhookSources.Queries.GetWebhookSources;
-using TransactionAggregation.Domain.Entities;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Features.GetWebhookSources;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -11,7 +11,7 @@ public class GetWebhookSourcesQueryHandlerTests
     [Fact]
     public async Task Handle_NoSources_ReturnsEmptyList()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = new GetWebhookSourcesQueryHandler(context);
 
         var result = await handler.Handle(new GetWebhookSourcesQuery(), CancellationToken.None);
@@ -23,7 +23,7 @@ public class GetWebhookSourcesQueryHandlerTests
     [Fact]
     public async Task Handle_MultipleSources_ReturnsThemOrderedByName_WithoutKeyMaterial()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var (sourceB, _) = WebhookSource.Create("b-source");
         var (sourceA, _) = WebhookSource.Create("a-source");
         context.WebhookSources.AddRange(sourceB, sourceA);
@@ -38,7 +38,7 @@ public class GetWebhookSourcesQueryHandlerTests
     [Fact]
     public async Task Handle_Source_MapsIsActiveAndTimestamps()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var (source, _) = WebhookSource.Create("stitch");
         source.Deactivate();
         context.WebhookSources.Add(source);

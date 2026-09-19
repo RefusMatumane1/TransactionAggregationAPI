@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Application.Common.Enums;
+using SharedKernel.Common.Enums;
 using TransactionAggregation.Application.Queries.Account.GetAccountById;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;

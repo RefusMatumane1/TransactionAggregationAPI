@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 using System.Text.Json;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 
 namespace TransactionAggregation.Infrastructure.Services

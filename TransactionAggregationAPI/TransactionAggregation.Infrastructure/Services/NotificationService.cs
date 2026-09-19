@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;

@@ -3,6 +3,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using BuildingBlocks.Messaging.Persistence;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Application.Common.Inbox;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
@@ -44,7 +47,7 @@ namespace TransactionAggregation.Tests.Integration
         private async Task<string> SeedActiveWebhookSourceAsync(string name)
         {
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<IWebhookSourcesDbContext>();
 
             var (source, apiKey) = WebhookSource.Create(name);
             context.WebhookSources.Add(source);
@@ -103,7 +106,7 @@ namespace TransactionAggregation.Tests.Integration
         public async Task ReceiveTransactions_DeactivatedSourcesKey_Returns401()
         {
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<IWebhookSourcesDbContext>();
             var (source, apiKey) = WebhookSource.Create("soon-deactivated");
             source.Deactivate();
             context.WebhookSources.Add(source);
@@ -132,8 +135,8 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            var message = context.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-1").Subject;
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
+            var message = messaging.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-1").Subject;
 
             var payload = JsonSerializer.Deserialize<InboundTransactionsPayload>(message.Payload)!;
             payload.ExternalAccountId.Should().Be(link.ExternalAccountId);
@@ -155,8 +158,8 @@ namespace TransactionAggregation.Tests.Integration
                 (await _client.SendAsync(redelivered)).StatusCode.Should().Be(HttpStatusCode.Accepted);
 
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            context.InboxMessages.Count(m => m.SourceName == "source-2").Should().Be(2);
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
+            messaging.InboxMessages.Count(m => m.SourceName == "source-2").Should().Be(2);
         }
 
         [Fact]
@@ -174,8 +177,8 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.Accepted);
 
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            context.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-3");
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
+            messaging.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-3");
         }
 
         [Fact]

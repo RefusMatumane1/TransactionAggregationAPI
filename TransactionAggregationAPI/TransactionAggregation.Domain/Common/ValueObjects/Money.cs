@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using TransactionAggregation.Domain.Exceptions;
+using SharedKernel.Exceptions;
+using SharedKernel.Common.ValueObjects;
 
 namespace TransactionAggregation.Domain.Common.ValueObjects
 {

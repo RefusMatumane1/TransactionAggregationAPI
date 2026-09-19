@@ -9,7 +9,12 @@ using Serilog;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using StackExchange.Redis;
+using BuildingBlocks.Messaging;
+using BuildingBlocks.Messaging.Persistence;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Application;
 using TransactionAggregation.Infrastructure;
 using TransactionAggregation.Persistence;
@@ -43,9 +48,19 @@ try
         sp => sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
 
     var connectionString = builder.Configuration.GetConnectionString("transactiondb");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+
+    // ApplicationDbContext and MessagingDbContext share one scoped NpgsqlConnection
+    // (rather than each opening its own) so ApplicationDbContext.SaveChangesAsync can
+    // share one real transaction across both — required for an Outbox write to commit
+    // atomically with the business-entity change that triggered it. See
+    // docs/adr/0009-schema-per-module-database-strategy.md. WebhookSourcesDbContext
+    // has no such requirement (every write there is a standalone unit of work) and
+    // keeps its own independent connection, registered inside AddWebhookSourcesModule.
+    builder.Services.AddScoped(_ => new NpgsqlConnection(connectionString));
+
+    builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
     {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
+        options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(), npgsqlOptions =>
         {
             npgsqlOptions.MigrationsAssembly("TransactionAggregation.Persistence");
             npgsqlOptions.EnableRetryOnFailure(
@@ -62,6 +77,9 @@ try
     });
 
     builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
+
+    builder.Services.AddMessagingBuildingBlock(builder.Configuration);
+    builder.Services.AddWebhookSourcesModule(builder.Configuration);
 
     builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
 
@@ -300,9 +318,19 @@ try
 
     app.MapFallbackToFile("index.html");
 
+    // Each module's own DbContext owns its own schema/migration history — see
+    // docs/adr/0009-schema-per-module-database-strategy.md — so each applies
+    // independently. Order doesn't matter: no schema references another's tables.
+    static async Task ApplyAllMigrationsAsync(WebApplication app)
+    {
+        await app.ApplyMigrationsAsync<ApplicationDbContext>();
+        await app.ApplyMigrationsAsync<MessagingDbContext>();
+        await app.ApplyMigrationsAsync<WebhookSourcesDbContext>();
+    }
+
     if (args.Contains("--migrate-only"))
     {
-        await app.ApplyMigrationsAsync();
+        await ApplyAllMigrationsAsync(app);
         return;
     }
 
@@ -315,7 +343,7 @@ try
     // well-known password) into a real environment.
     if (app.Environment.IsDevelopment())
     {
-        await app.ApplyMigrationsAsync();
+        await ApplyAllMigrationsAsync(app);
         await SeedData.SeedDatabaseAsync(app.Services);
     }
 

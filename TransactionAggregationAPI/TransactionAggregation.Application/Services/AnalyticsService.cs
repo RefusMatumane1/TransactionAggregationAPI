@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;

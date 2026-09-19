@@ -41,6 +41,30 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             }
         }
 
+        /// <summary>
+        /// Pins the schema-per-module split (docs/adr/0009-schema-per-module-database-strategy.md):
+        /// each table must live in its owning module's schema, not just "exist somewhere" —
+        /// the previous test alone couldn't catch a table landing in the wrong schema.
+        /// </summary>
+        [Theory]
+        [InlineData("Customers", "public")]
+        [InlineData("Accounts", "public")]
+        [InlineData("Transactions", "public")]
+        [InlineData("BankLinks", "public")]
+        [InlineData("WebhookSources", "webhooksources")]
+        [InlineData("InboxMessages", "messaging")]
+        [InlineData("OutboxMessages", "messaging")]
+        public async Task Migrations_PlaceEachTable_InItsOwningModulesSchema(string table, string expectedSchema)
+        {
+            using var context = _fixture.CreateContext();
+
+            var actualSchema = await context.Database.SqlQuery<string>(
+                $"SELECT table_schema AS \"Value\" FROM information_schema.tables WHERE table_name = {table}")
+                .SingleOrDefaultAsync();
+
+            actualSchema.Should().Be(expectedSchema, $"table '{table}' must live in the \"{expectedSchema}\" schema, not wherever it happened to land");
+        }
+
         [Fact]
         public async Task TransactionSourceExternalId_HasAUniqueConstraintScopedToCustomer()
         {

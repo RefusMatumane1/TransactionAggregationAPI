@@ -1,5 +1,5 @@
 using FluentAssertions;
-using TransactionAggregation.Domain.Inbox;
+using BuildingBlocks.Messaging.Inbox;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;

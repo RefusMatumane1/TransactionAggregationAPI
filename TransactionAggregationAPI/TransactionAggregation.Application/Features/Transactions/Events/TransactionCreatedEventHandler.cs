@@ -1,18 +1,19 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events.Transaction;
-using TransactionAggregation.Domain.Outbox;
 
 namespace TransactionAggregation.Application.Features.Transactions.Events
 {
     public class TransactionCreatedEventHandler(
         ILogger<TransactionCreatedEventHandler> _logger,
         ITransactionCategorizationService _categorizationService,
-        IApplicationDbContext _context)
+        IMessagingDbContext _messaging)
         : INotificationHandler<TransactionCreatedDomainEvent>
     {
         public async Task Handle(TransactionCreatedDomainEvent notification, CancellationToken cancellationToken)
@@ -32,7 +33,7 @@ namespace TransactionAggregation.Application.Features.Transactions.Events
             }
 
             var payload = new TransactionCreatedOutboxPayload(transaction.Id.Value, transaction.CustomerId.Value);
-            _context.OutboxMessages.Add(OutboxMessage.Create(
+            _messaging.OutboxMessages.Add(OutboxMessage.Create(
                 OutboxMessageTypes.TransactionCreated, JsonSerializer.Serialize(payload)));
         }
     }

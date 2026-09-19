@@ -1,20 +1,23 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
-using TransactionAggregation.Application.Common.Models;
+using SharedKernel.Common.Models;
+using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Application.Services;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Domain.Outbox;
 
 namespace TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions
 {
     internal sealed class ProcessInboundTransactionsCommandHandler(
         IApplicationDbContext context,
+        IMessagingDbContext messaging,
         ITransactionCategorizationService categorizationService,
         ILogger<ProcessInboundTransactionsCommandHandler> logger)
         : ICommandHandler<ProcessInboundTransactionsCommand, int>
@@ -68,7 +71,7 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Proc
             {
                 var payload = new TransactionSyncedOutboxPayload(
                     transaction.Id.Value, transaction.CustomerId.Value, link.Institution.ToString());
-                context.OutboxMessages.Add(OutboxMessage.Create(
+                messaging.OutboxMessages.Add(OutboxMessage.Create(
                     OutboxMessageTypes.TransactionSynced, JsonSerializer.Serialize(payload)));
             }
 

@@ -1,4 +1,5 @@
-﻿using TransactionAggregation.Application.Abstractions;
+﻿using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Application.Features.Transactions.DTOs;
 using TransactionAggregation.Domain.Enums;

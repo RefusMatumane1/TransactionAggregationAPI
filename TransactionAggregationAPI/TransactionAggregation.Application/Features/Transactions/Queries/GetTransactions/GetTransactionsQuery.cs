@@ -1,5 +1,6 @@
 using MediatR;
-using TransactionAggregation.Application.Common.Behaviors;
+using SharedKernel.Common.Behaviors;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Application.Features.Transactions.DTOs;
 using TransactionAggregation.Domain.Enums;

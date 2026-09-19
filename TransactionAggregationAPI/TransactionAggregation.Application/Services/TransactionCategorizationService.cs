@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Domain.Entities;

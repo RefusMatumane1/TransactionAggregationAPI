@@ -1,6 +1,7 @@
-﻿using TransactionAggregation.Application.Abstractions;
-using TransactionAggregation.Application.Common.Behaviors;
+﻿using SharedKernel.Abstractions;
+using SharedKernel.Common.Behaviors;
 using TransactionAggregation.Application.Common.DTOs;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 
 namespace TransactionAggregation.Application.Queries.Customer.GetCustomer

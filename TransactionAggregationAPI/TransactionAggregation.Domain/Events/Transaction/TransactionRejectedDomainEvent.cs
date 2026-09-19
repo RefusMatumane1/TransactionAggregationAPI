@@ -1,4 +1,4 @@
-﻿using TransactionAggregation.Domain.Common;
+﻿using SharedKernel.Common;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 

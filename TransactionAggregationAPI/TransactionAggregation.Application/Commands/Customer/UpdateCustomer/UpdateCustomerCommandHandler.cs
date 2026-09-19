@@ -1,8 +1,10 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
 

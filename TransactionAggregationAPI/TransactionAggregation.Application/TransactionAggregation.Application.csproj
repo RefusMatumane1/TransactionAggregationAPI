@@ -13,6 +13,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\TransactionAggregation.Domain\TransactionAggregation.Domain.csproj" />
+		<ProjectReference Include="..\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
 	</ItemGroup>
 
 </Project>

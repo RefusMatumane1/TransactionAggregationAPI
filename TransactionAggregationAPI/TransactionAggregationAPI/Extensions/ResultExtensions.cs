@@ -1,4 +1,4 @@
-﻿using TransactionAggregation.Application.Common.Models;
+﻿using SharedKernel.Common.Models;
 
 namespace TransactionAggregationAPI.Extensions
 {

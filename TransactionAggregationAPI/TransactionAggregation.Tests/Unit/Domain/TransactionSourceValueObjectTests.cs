@@ -1,6 +1,6 @@
 using FluentAssertions;
 using TransactionAggregation.Domain.Common.ValueObjects;
-using TransactionAggregation.Domain.Exceptions;
+using SharedKernel.Exceptions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;

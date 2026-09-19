@@ -38,6 +38,9 @@
 		<ProjectReference Include="..\TransactionAggregation.Infrastructure\TransactionAggregation.Infrastructure.csproj" />
 		<ProjectReference Include="..\TransactionAggregation.Persistence\TransactionAggregation.Persistence.csproj" />
 		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
+		<ProjectReference Include="..\SharedKernel\SharedKernel.csproj" />
+		<ProjectReference Include="..\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
+		<ProjectReference Include="..\Modules\WebhookSources\WebhookSources.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

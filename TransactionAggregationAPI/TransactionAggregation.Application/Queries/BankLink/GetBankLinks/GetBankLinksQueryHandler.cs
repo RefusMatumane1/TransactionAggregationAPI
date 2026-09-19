@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
 using TransactionAggregation.Application.Common.DTOs;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
 

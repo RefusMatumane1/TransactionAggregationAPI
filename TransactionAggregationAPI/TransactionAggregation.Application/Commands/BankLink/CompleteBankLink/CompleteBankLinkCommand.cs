@@ -1,5 +1,5 @@
-using TransactionAggregation.Application.Abstractions;
-using TransactionAggregation.Application.Common.Attributes;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Attributes;
 
 namespace TransactionAggregation.Application.Commands.BankLink.CompleteBankLink
 {

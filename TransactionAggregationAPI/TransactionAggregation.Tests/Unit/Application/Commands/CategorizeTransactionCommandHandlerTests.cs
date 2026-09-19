@@ -1,6 +1,6 @@
 using FluentAssertions;
 using TransactionAggregation.Application.Commands.CategorizeTransaction;
-using TransactionAggregation.Application.Common.Enums;
+using SharedKernel.Common.Enums;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;

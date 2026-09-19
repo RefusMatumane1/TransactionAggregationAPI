@@ -1,3 +1,5 @@
+using SharedKernel.Common.ValueObjects;
+
 namespace TransactionAggregation.Domain.Common.ValueObjects
 {
     public sealed class BankLinkId : ValueObject

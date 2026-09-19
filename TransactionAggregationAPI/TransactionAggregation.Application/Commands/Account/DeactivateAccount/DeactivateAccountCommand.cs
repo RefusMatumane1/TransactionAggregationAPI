@@ -1,4 +1,4 @@
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
 
 namespace TransactionAggregation.Application.Commands.Account.DeactivateAccount
 {

@@ -4,13 +4,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using SharedKernel.Common.Interfaces;
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Outbox;
-using TransactionAggregation.Infrastructure.Observability;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
@@ -65,11 +67,12 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
         {
             using var scope = _scopeFactory.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
             var cache = scope.ServiceProvider.GetRequiredService<ICacheService>();
             var analytics = scope.ServiceProvider.GetRequiredService<IAnalyticsService>();
             var notifications = scope.ServiceProvider.GetRequiredService<INotificationService>();
 
-            var claimed = await context.ClaimOutboxMessagesAsync(
+            var claimed = await messaging.ClaimOutboxMessagesAsync(
                 _options.BatchSize, TimeSpan.FromMinutes(_options.ClaimTimeoutMinutes), cancellationToken);
             if (claimed.Count == 0)
                 return;
@@ -79,7 +82,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             foreach (var message in claimed)
                 await ProcessMessageAsync(message, context, cache, analytics, notifications, cancellationToken);
 
-            await context.SaveChangesAsync(cancellationToken);
+            await messaging.SaveChangesAsync(cancellationToken);
         }
 
         internal async Task ProcessMessageAsync(

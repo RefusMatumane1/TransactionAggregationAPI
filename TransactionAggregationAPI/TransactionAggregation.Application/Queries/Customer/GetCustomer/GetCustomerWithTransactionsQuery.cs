@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Text;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
 using TransactionAggregation.Application.Common.DTOs;
 using TransactionAggregation.Domain.Enums;
 

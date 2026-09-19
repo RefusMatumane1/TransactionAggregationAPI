@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using TransactionAggregation.Application.Common.DTOs;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using TransactionAggregation.Domain.Common.ValueObjects;
@@ -76,12 +77,16 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             };
 
             // Two independent DbContexts (as two concurrent requests would have),
-            // both racing to insert the same external transaction ID.
-            using var contextA = _fixture.CreateContext();
-            using var contextB = _fixture.CreateContext();
+            // both racing to insert the same external transaction ID. Each
+            // ApplicationDbContext must be constructed with the SAME MessagingDbContext
+            // instance the handler also receives — see the CreateContext doc comment.
+            using var messagingA = _fixture.CreateMessagingContext();
+            using var messagingB = _fixture.CreateMessagingContext();
+            using var contextA = _fixture.CreateContext(messagingA);
+            using var contextB = _fixture.CreateContext(messagingB);
 
-            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
-            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, messagingA, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
 
             var command = new ProcessInboundTransactionsCommand("race-test-source", link.ExternalAccountId!, [dto]);
 

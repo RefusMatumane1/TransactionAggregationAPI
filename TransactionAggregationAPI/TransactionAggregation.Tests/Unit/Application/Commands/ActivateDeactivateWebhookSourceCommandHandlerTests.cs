@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Common.Enums;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.ActivateWebhookSource;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.DeactivateWebhookSource;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Persistence;
+using SharedKernel.Abstractions.Authentication;
+using SharedKernel.Common.Enums;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Features.ActivateWebhookSource;
+using Modules.WebhookSources.Features.DeactivateWebhookSource;
+using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -21,7 +21,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
         return userContext;
     }
 
-    private static async Task<WebhookSource> SeedSourceAsync(ApplicationDbContext ctx, string name = "stitch")
+    private static async Task<WebhookSource> SeedSourceAsync(WebhookSourcesDbContext ctx, string name = "stitch")
     {
         var (source, _) = WebhookSource.Create(name);
         ctx.WebhookSources.Add(source);
@@ -32,7 +32,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Deactivate_ExistingActiveSource_SetsIsActiveFalse()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var source = await SeedSourceAsync(context);
         var handler = new DeactivateWebhookSourceCommandHandler(
             context, BuildUserContext(), NullLogger<DeactivateWebhookSourceCommandHandler>.Instance);
@@ -46,7 +46,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Deactivate_UnknownId_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = new DeactivateWebhookSourceCommandHandler(
             context, BuildUserContext(), NullLogger<DeactivateWebhookSourceCommandHandler>.Instance);
 
@@ -59,7 +59,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Activate_DeactivatedSource_SetsIsActiveTrue()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var source = await SeedSourceAsync(context);
         source.Deactivate();
         await context.SaveChangesAsync();
@@ -75,7 +75,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Activate_UnknownId_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = new ActivateWebhookSourceCommandHandler(
             context, BuildUserContext(), NullLogger<ActivateWebhookSourceCommandHandler>.Instance);
 

@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Common.Enums;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.CreateWebhookSource;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Persistence;
+using SharedKernel.Abstractions.Authentication;
+using SharedKernel.Common.Enums;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Features.CreateWebhookSource;
+using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,7 +13,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 
 public class CreateWebhookSourceCommandHandlerTests
 {
-    private static CreateWebhookSourceCommandHandler BuildHandler(ApplicationDbContext ctx)
+    private static CreateWebhookSourceCommandHandler BuildHandler(WebhookSourcesDbContext ctx)
     {
         var userContext = Substitute.For<IUserContext>();
         userContext.UserId.Returns(Guid.NewGuid());
@@ -23,7 +23,7 @@ public class CreateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Handle_NewName_CreatesActiveSourceAndReturnsAUsableKey()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(new CreateWebhookSourceCommand("stitch"), CancellationToken.None);
@@ -41,7 +41,7 @@ public class CreateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Handle_DuplicateName_ReturnsConflictAndDoesNotPersistASecondRow()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
         await handler.Handle(new CreateWebhookSourceCommand("stitch"), CancellationToken.None);
 
@@ -55,7 +55,7 @@ public class CreateWebhookSourceCommandHandlerTests
     [Fact]
     public async Task Handle_DifferentNames_BothSucceedWithDistinctKeys()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var a = await handler.Handle(new CreateWebhookSourceCommand("source-a"), CancellationToken.None);

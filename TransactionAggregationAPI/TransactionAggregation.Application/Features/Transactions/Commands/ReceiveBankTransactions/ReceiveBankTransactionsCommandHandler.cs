@@ -1,13 +1,13 @@
 using System.Text.Json;
-using TransactionAggregation.Application.Abstractions;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Inbox;
-using TransactionAggregation.Application.Common.Interfaces;
-using TransactionAggregation.Application.Common.Models;
-using TransactionAggregation.Domain.Inbox;
 
 namespace TransactionAggregation.Application.Features.Transactions.Commands.ReceiveBankTransactions
 {
-    internal sealed class ReceiveBankTransactionsCommandHandler(IApplicationDbContext context)
+    internal sealed class ReceiveBankTransactionsCommandHandler(IMessagingDbContext messaging)
         : ICommandHandler<ReceiveBankTransactionsCommand, Guid>
     {
         public async Task<Result<Guid>> Handle(ReceiveBankTransactionsCommand request, CancellationToken cancellationToken)
@@ -16,8 +16,8 @@ namespace TransactionAggregation.Application.Features.Transactions.Commands.Rece
             var payload = new InboundTransactionsPayload(request.ExternalAccountId, request.Transactions);
             var inboxMessage = InboxMessage.Create(request.SourceName, JsonSerializer.Serialize(payload));
 
-            context.InboxMessages.Add(inboxMessage);
-            await context.SaveChangesAsync(cancellationToken);
+            messaging.InboxMessages.Add(inboxMessage);
+            await messaging.SaveChangesAsync(cancellationToken);
 
             return Result.Success(inboxMessage.Id.Value);
         }

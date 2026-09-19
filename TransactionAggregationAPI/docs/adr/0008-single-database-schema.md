@@ -1,6 +1,17 @@
 # ADR-0008: Single PostgreSQL schema, not one schema per module
 
 ## Status
+**Superseded by [ADR-0009](0009-schema-per-module-database-strategy.md).**
+The security reasoning below is still correct and still applies — schemas
+alone give no access-control boundary without per-schema database
+roles/grants, which this repo still doesn't have. What changed is the
+question: ADR-0009 adopts schema-per-module for module-boundary and
+independent-migration-history reasons (a consequence of splitting the
+shared `DbContext` into one per module), not for the security/organizational
+reasons this ADR correctly rejected. Read this ADR for why schemas are not
+a security boundary here; read ADR-0009 for why they exist anyway.
+
+## Original status
 Accepted
 
 ## Context

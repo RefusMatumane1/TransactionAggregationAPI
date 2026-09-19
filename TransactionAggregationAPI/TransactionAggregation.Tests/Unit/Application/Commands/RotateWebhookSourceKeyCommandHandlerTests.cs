@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Common.Enums;
-using TransactionAggregation.Application.Features.WebhookSources.Commands.RotateWebhookSourceKey;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Persistence;
+using SharedKernel.Abstractions.Authentication;
+using SharedKernel.Common.Enums;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Features.RotateWebhookSourceKey;
+using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,14 +13,14 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 
 public class RotateWebhookSourceKeyCommandHandlerTests
 {
-    private static RotateWebhookSourceKeyCommandHandler BuildHandler(ApplicationDbContext ctx)
+    private static RotateWebhookSourceKeyCommandHandler BuildHandler(WebhookSourcesDbContext ctx)
     {
         var userContext = Substitute.For<IUserContext>();
         userContext.UserId.Returns(Guid.NewGuid());
         return new RotateWebhookSourceKeyCommandHandler(ctx, userContext, NullLogger<RotateWebhookSourceKeyCommandHandler>.Instance);
     }
 
-    private static async Task<(WebhookSource Source, string OriginalKey)> SeedSourceAsync(ApplicationDbContext ctx, string name = "stitch")
+    private static async Task<(WebhookSource Source, string OriginalKey)> SeedSourceAsync(WebhookSourcesDbContext ctx, string name = "stitch")
     {
         var (source, key) = WebhookSource.Create(name);
         ctx.WebhookSources.Add(source);
@@ -31,7 +31,7 @@ public class RotateWebhookSourceKeyCommandHandlerTests
     [Fact]
     public async Task Handle_ExistingSource_ReturnsANewKeyDifferentFromTheOriginal()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var (source, originalKey) = await SeedSourceAsync(context);
         var handler = BuildHandler(context);
 
@@ -44,7 +44,7 @@ public class RotateWebhookSourceKeyCommandHandlerTests
     [Fact]
     public async Task Handle_ExistingSource_OldKeyNoLongerMatchesStoredHash()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var (source, originalKey) = await SeedSourceAsync(context);
         var handler = BuildHandler(context);
 
@@ -57,7 +57,7 @@ public class RotateWebhookSourceKeyCommandHandlerTests
     [Fact]
     public async Task Handle_ExistingSource_NewKeyMatchesStoredHash()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var (source, _) = await SeedSourceAsync(context);
         var handler = BuildHandler(context);
 
@@ -70,7 +70,7 @@ public class RotateWebhookSourceKeyCommandHandlerTests
     [Fact]
     public async Task Handle_UnknownId_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(new RotateWebhookSourceKeyCommand(Guid.NewGuid()), CancellationToken.None);

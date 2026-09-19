@@ -1,4 +1,4 @@
-﻿using TransactionAggregation.Domain.Common;
+﻿using SharedKernel.Common;
 using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregation.Domain.Events.Transaction

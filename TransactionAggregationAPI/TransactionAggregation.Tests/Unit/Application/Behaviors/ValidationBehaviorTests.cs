@@ -2,8 +2,9 @@ using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
-using TransactionAggregation.Application.Abstractions;
-using TransactionAggregation.Application.Common.Behaviors;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Behaviors;
+using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using Xunit;
 

@@ -1,9 +1,9 @@
-using TransactionAggregation.Domain.Common;
+using SharedKernel.Common;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events;
 using TransactionAggregation.Domain.Events.Transaction;
-using TransactionAggregation.Domain.Exceptions;
+using SharedKernel.Exceptions;
 
 namespace TransactionAggregation.Domain.Entities
 {

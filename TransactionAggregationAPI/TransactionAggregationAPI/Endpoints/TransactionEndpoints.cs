@@ -2,6 +2,7 @@
 using MapsterMapper;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Commands.CategorizeTransaction;
 using TransactionAggregation.Application.Queries.Transaction.GetTransaction;

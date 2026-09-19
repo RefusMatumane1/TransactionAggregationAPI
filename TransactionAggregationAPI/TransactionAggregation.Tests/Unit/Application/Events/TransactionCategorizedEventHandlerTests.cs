@@ -1,13 +1,13 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Application.Features.Transactions.Events;
 using TransactionAggregation.Domain.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events.Transaction;
-using TransactionAggregation.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -23,22 +23,22 @@ public class TransactionCategorizedEventHandlerTests
             TransactionCategory.Uncategorized,
             TransactionSource.Create("test", Guid.NewGuid().ToString()));
 
-    private static TransactionCategorizedEventHandler BuildHandler(ApplicationDbContext context) =>
-        new(NullLogger<TransactionCategorizedEventHandler>.Instance, context);
+    private static TransactionCategorizedEventHandler BuildHandler(IMessagingDbContext messaging) =>
+        new(NullLogger<TransactionCategorizedEventHandler>.Instance, messaging);
 
     [Fact]
     public async Task Handle_EnqueuesTransactionCategorizedOutboxMessageWithCorrectPayload()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction();
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
         var domainEvent = new TransactionCategorizedDomainEvent(
             transaction, TransactionCategory.Uncategorized, TransactionCategory.Groceries, isAutoCategorized: true);
 
         await handler.Handle(domainEvent, CancellationToken.None);
-        await context.SaveChangesAsync();
+        await messaging.SaveChangesAsync();
 
-        var message = context.OutboxMessages.Should().ContainSingle().Subject;
+        var message = messaging.OutboxMessages.Should().ContainSingle().Subject;
         message.Type.Should().Be(OutboxMessageTypes.TransactionCategorized);
 
         var payload = JsonSerializer.Deserialize<TransactionCategorizedOutboxPayload>(message.Payload)!;
@@ -52,16 +52,16 @@ public class TransactionCategorizedEventHandlerTests
     [Fact]
     public async Task Handle_ManualRecategorization_EnqueuesPayloadWithIsAutoCategorizedFalse()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var messaging = InMemoryMessagingDbContextFactory.Create();
         var transaction = MakeTransaction();
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(messaging);
         var domainEvent = new TransactionCategorizedDomainEvent(
             transaction, TransactionCategory.Groceries, TransactionCategory.Dining, isAutoCategorized: false);
 
         await handler.Handle(domainEvent, CancellationToken.None);
-        await context.SaveChangesAsync();
+        await messaging.SaveChangesAsync();
 
-        var message = context.OutboxMessages.Should().ContainSingle().Subject;
+        var message = messaging.OutboxMessages.Should().ContainSingle().Subject;
         var payload = JsonSerializer.Deserialize<TransactionCategorizedOutboxPayload>(message.Payload)!;
         payload.IsAutoCategorized.Should().BeFalse();
     }

@@ -4,12 +4,12 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Messaging.Persistence;
 using TransactionAggregation.Application.Common.Inbox;
-using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
-using TransactionAggregation.Domain.Inbox;
-using TransactionAggregation.Infrastructure.Observability;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices
 {
@@ -63,10 +63,10 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
         private async Task ProcessBatchAsync(CancellationToken cancellationToken)
         {
             using var scope = _scopeFactory.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<IApplicationDbContext>();
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
             var sender = scope.ServiceProvider.GetRequiredService<ISender>();
 
-            var claimed = await context.ClaimInboxMessagesAsync(
+            var claimed = await messaging.ClaimInboxMessagesAsync(
                 _options.BatchSize, TimeSpan.FromMinutes(_options.ClaimTimeoutMinutes), cancellationToken);
             if (claimed.Count == 0)
                 return;
@@ -76,7 +76,7 @@ namespace TransactionAggregation.Infrastructure.BackgroundServices
             foreach (var message in claimed)
                 await ProcessMessageAsync(message, sender, cancellationToken);
 
-            await context.SaveChangesAsync(cancellationToken);
+            await messaging.SaveChangesAsync(cancellationToken);
         }
 
         internal async Task ProcessMessageAsync(

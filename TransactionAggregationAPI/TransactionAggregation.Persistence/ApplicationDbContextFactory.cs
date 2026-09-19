@@ -1,17 +1,24 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using BuildingBlocks.Messaging.Persistence;
 
 namespace TransactionAggregation.Persistence;
 
 public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
+    private const string DesignTimeConnectionString = "Host=localhost;Database=transactiondb;Username=postgres;Password=postgres";
+
     public ApplicationDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        optionsBuilder.UseNpgsql("Host=localhost;Database=transactiondb;Username=postgres;Password=postgres");
+        optionsBuilder.UseNpgsql(DesignTimeConnectionString);
 
-        return new ApplicationDbContext(optionsBuilder.Options, new NoOpMediator());
+        var messagingOptionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
+        messagingOptionsBuilder.UseNpgsql(DesignTimeConnectionString);
+        var messagingDbContext = new MessagingDbContext(messagingOptionsBuilder.Options, new NoOpMediator());
+
+        return new ApplicationDbContext(optionsBuilder.Options, new NoOpMediator(), messagingDbContext);
     }
 
     private sealed class NoOpMediator : IMediator

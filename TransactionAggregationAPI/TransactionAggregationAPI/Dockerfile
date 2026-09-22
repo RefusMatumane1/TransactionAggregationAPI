@@ -38,7 +38,10 @@ COPY ["Modules/WebhookSources/WebhookSources.Domain/WebhookSources.Domain.csproj
 COPY ["Modules/WebhookSources/WebhookSources.Application/WebhookSources.Application.csproj", "Modules/WebhookSources/WebhookSources.Application/"]
 COPY ["Modules/WebhookSources/WebhookSources.Infrastructure/WebhookSources.Infrastructure.csproj", "Modules/WebhookSources/WebhookSources.Infrastructure/"]
 COPY ["Modules/WebhookSources/WebhookSources.Contracts/WebhookSources.Contracts.csproj", "Modules/WebhookSources/WebhookSources.Contracts/"]
-COPY ["Modules/BankLinks/BankLinks.csproj", "Modules/BankLinks/"]
+COPY ["Modules/BankLinks/BankLinks.Domain/BankLinks.Domain.csproj", "Modules/BankLinks/BankLinks.Domain/"]
+COPY ["Modules/BankLinks/BankLinks.Application/BankLinks.Application.csproj", "Modules/BankLinks/BankLinks.Application/"]
+COPY ["Modules/BankLinks/BankLinks.Infrastructure/BankLinks.Infrastructure.csproj", "Modules/BankLinks/BankLinks.Infrastructure/"]
+COPY ["Modules/BankLinks/BankLinks.Contracts/BankLinks.Contracts.csproj", "Modules/BankLinks/BankLinks.Contracts/"]
 RUN dotnet restore "./TransactionAggregationAPI/TransactionAggregationAPI.csproj"
 
 COPY . .

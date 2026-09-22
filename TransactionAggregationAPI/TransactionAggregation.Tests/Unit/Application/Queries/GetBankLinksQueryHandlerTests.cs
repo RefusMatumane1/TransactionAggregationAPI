@@ -1,8 +1,8 @@
 using FluentAssertions;
-using Modules.BankLinks;
-using Modules.BankLinks.Features.GetBankLinks;
-using Modules.BankLinks.Persistence;
-using Modules.BankLinks.ValueObjects;
+using Modules.BankLinks.Application.Features.GetBankLinks;
+using Modules.BankLinks.Application.Persistence;
+using Modules.BankLinks.Domain;
+using Modules.BankLinks.Domain.ValueObjects;
 using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;

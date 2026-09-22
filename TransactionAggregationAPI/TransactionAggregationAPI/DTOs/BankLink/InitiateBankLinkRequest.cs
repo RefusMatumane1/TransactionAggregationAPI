@@ -1,4 +1,4 @@
-using Modules.BankLinks.ValueObjects;
+using Modules.BankLinks.Domain.ValueObjects;
 
 namespace TransactionAggregationAPI.DTOs.BankLink
 {

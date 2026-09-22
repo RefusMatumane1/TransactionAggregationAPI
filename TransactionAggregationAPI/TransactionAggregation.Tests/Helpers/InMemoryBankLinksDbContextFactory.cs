@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
-using Modules.BankLinks.Persistence;
+using Modules.BankLinks.Infrastructure.Persistence;
 
 namespace TransactionAggregation.Tests.Helpers;
 

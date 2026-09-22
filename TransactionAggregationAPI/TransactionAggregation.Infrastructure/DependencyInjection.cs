@@ -4,12 +4,10 @@ using Microsoft.Extensions.Options;
 using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using SharedKernel.Common.Interfaces;
-using Modules.BankLinks;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Infrastructure.Authentication;
 using TransactionAggregation.Infrastructure.BackgroundServices;
-using TransactionAggregation.Infrastructure.Providers;
 using TransactionAggregation.Infrastructure.Services;
 
 namespace TransactionAggregation.Infrastructure
@@ -21,12 +19,6 @@ namespace TransactionAggregation.Infrastructure
             IConfiguration configuration)
         {
             services.AddHttpClient();
-
-            services.Configure<BankAggregatorOptions>(
-                            configuration.GetSection(BankAggregatorOptions.SectionName));
-            services.AddScoped<IBankLinkCredentialProtector, BankLinkCredentialProtector>();
-
-            services.AddHttpClient<IBankAggregatorClient, HttpBankAggregatorClient>();
 
             services.AddDistributedMemoryCache();
             services.AddScoped<ICacheService, RedisCacheService>();

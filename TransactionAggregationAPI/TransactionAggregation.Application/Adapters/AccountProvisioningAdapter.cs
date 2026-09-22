@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.BankLinks.Ports;
+using Modules.BankLinks.Application.Ports;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;

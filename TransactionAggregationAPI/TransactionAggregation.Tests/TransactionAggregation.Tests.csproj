@@ -34,7 +34,10 @@
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Application\WebhookSources.Application.csproj" />
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Infrastructure\WebhookSources.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
-    <ProjectReference Include="..\Modules\BankLinks\BankLinks.csproj" />
+    <ProjectReference Include="..\Modules\BankLinks\BankLinks.Domain\BankLinks.Domain.csproj" />
+    <ProjectReference Include="..\Modules\BankLinks\BankLinks.Application\BankLinks.Application.csproj" />
+    <ProjectReference Include="..\Modules\BankLinks\BankLinks.Infrastructure\BankLinks.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\BankLinks\BankLinks.Contracts\BankLinks.Contracts.csproj" />
   </ItemGroup>
 
 </Project>

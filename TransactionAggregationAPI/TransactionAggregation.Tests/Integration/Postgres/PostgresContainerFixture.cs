@@ -4,7 +4,7 @@ using Npgsql;
 using NSubstitute;
 using Testcontainers.PostgreSql;
 using BuildingBlocks.Messaging.Persistence;
-using Modules.BankLinks.Persistence;
+using Modules.BankLinks.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Persistence;
 using Xunit;

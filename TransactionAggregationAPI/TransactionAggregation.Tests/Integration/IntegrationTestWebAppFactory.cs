@@ -10,7 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
-using Modules.BankLinks.Persistence;
+using Modules.BankLinks.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;

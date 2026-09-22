@@ -1,6 +1,6 @@
 using FluentAssertions;
-using Modules.BankLinks;
-using Modules.BankLinks.ValueObjects;
+using Modules.BankLinks.Domain;
+using Modules.BankLinks.Domain.ValueObjects;
 using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
 using Xunit;

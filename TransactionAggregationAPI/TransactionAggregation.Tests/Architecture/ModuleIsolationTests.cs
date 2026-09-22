@@ -26,7 +26,10 @@ public class ModuleIsolationTests
     private static readonly Assembly WebhookSourcesApplicationAssembly = typeof(Modules.WebhookSources.AssemblyReference).Assembly;
     private static readonly Assembly WebhookSourcesInfrastructureAssembly = typeof(Modules.WebhookSources.Infrastructure.Persistence.WebhookSourcesDbContext).Assembly;
     private static readonly Assembly MessagingAssembly = typeof(BuildingBlocks.Messaging.Inbox.InboxMessage).Assembly;
-    private static readonly Assembly BankLinksAssembly = typeof(Modules.BankLinks.BankLink).Assembly;
+    private static readonly Assembly BankLinksDomainAssembly = typeof(Modules.BankLinks.Domain.BankLink).Assembly;
+    private static readonly Assembly BankLinksApplicationAssembly = typeof(Modules.BankLinks.AssemblyReference).Assembly;
+    private static readonly Assembly BankLinksInfrastructureAssembly = typeof(Modules.BankLinks.Infrastructure.Persistence.BankLinksDbContext).Assembly;
+    private static readonly Assembly BankLinksContractsAssembly = typeof(Modules.BankLinks.Contracts.IBankLinksReadApi).Assembly;
 
     private static readonly string[] LegacyLayers =
     [
@@ -114,19 +117,74 @@ public class ModuleIsolationTests
     }
 
     [Fact]
-    public void BankLinks_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    public void BankLinksDomain_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
     {
-        var result = Types.InAssembly(BankLinksAssembly)
+        var result = Types.InAssembly(BankLinksDomainAssembly)
             .Should()
-            .NotHaveDependencyOnAny(
-                "TransactionAggregation.Domain",
-                "TransactionAggregation.Application",
-                "TransactionAggregation.Infrastructure",
-                "TransactionAggregation.Persistence",
-                "Modules.WebhookSources")
+            .NotHaveDependencyOnAny([.. LegacyLayers, "Modules.WebhookSources"])
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
-            because: "the BankLinks module must depend only on SharedKernel — it needs an Account to exist but reaches it through IAccountProvisioningPort (a port it owns), never by referencing the Account entity or IApplicationDbContext directly");
+            because: "BankLinks.Domain must depend only on SharedKernel — the module needs an Account to exist but reaches it through IAccountProvisioningPort (a port it owns), never by referencing the Account entity or IApplicationDbContext directly");
+    }
+
+    [Fact]
+    public void BankLinksApplication_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(BankLinksApplicationAssembly)
+            .Should()
+            .NotHaveDependencyOnAny([.. LegacyLayers, "Modules.WebhookSources"])
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "BankLinks.Application must depend only on its own Domain/Contracts and SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+    }
+
+    [Fact]
+    public void BankLinksInfrastructure_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(BankLinksInfrastructureAssembly)
+            .Should()
+            .NotHaveDependencyOnAny([.. LegacyLayers, "Modules.WebhookSources"])
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "BankLinks.Infrastructure must depend only on its own Application/Domain/Contracts and SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+    }
+
+    [Fact]
+    public void BankLinksContracts_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(BankLinksContractsAssembly)
+            .Should()
+            .NotHaveDependencyOnAny([.. LegacyLayers, "Modules.WebhookSources"])
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "BankLinks.Contracts must depend only on SharedKernel — it's a leaf project (interfaces + DTOs only) so other modules can reference it without pulling in EF Core or any implementation");
+    }
+
+    [Fact]
+    public void BankLinksDomain_ShouldNotDependOn_ApplicationOrInfrastructure()
+    {
+        var result = Types.InAssembly(BankLinksDomainAssembly)
+            .Should()
+            .NotHaveDependencyOnAny("Modules.BankLinks.Application", "Modules.BankLinks.Infrastructure")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Domain is the innermost layer of the module — it must not depend outward on Application or Infrastructure");
+    }
+
+    [Fact]
+    public void BankLinksApplication_ShouldNotDependOn_Infrastructure()
+    {
+        var result = Types.InAssembly(BankLinksApplicationAssembly)
+            .Should()
+            .NotHaveDependencyOnAny("Modules.BankLinks.Infrastructure")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Application must depend only on Domain/Contracts (+ SharedKernel) — never on Infrastructure, which depends inward on Application, not the reverse");
     }
 }

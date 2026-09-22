@@ -1,10 +1,10 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SharedKernel.Abstractions.Authentication;
-using Modules.BankLinks.DTOs;
-using Modules.BankLinks.Features.CompleteBankLink;
-using Modules.BankLinks.Features.InitiateBankLink;
-using Modules.BankLinks.Features.GetBankLinks;
+using Modules.BankLinks.Application.DTOs;
+using Modules.BankLinks.Application.Features.CompleteBankLink;
+using Modules.BankLinks.Application.Features.InitiateBankLink;
+using Modules.BankLinks.Application.Features.GetBankLinks;
 using TransactionAggregationAPI.DTOs.BankLink;
 using TransactionAggregationAPI.Infrastructure;
 

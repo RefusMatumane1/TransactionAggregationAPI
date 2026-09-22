@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
-using Modules.WebhookSources.Persistence;
+using Modules.WebhookSources.Infrastructure.Persistence;
 
 namespace TransactionAggregation.Tests.Helpers;
 

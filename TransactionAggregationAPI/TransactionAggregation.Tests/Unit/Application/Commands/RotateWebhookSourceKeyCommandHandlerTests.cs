@@ -3,9 +3,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
-using Modules.WebhookSources;
-using Modules.WebhookSources.Features.RotateWebhookSourceKey;
-using Modules.WebhookSources.Persistence;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Application.Features.RotateWebhookSourceKey;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

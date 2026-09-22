@@ -1,6 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
-using Modules.WebhookSources.Endpoints;
+using Modules.WebhookSources.Infrastructure.Endpoints;
 using TransactionAggregation.Application.Common.DTOs;
 using TransactionAggregation.Application.Features.Transactions.Commands.ReceiveBankTransactions;
 using TransactionAggregationAPI.DTOs.Webhooks;

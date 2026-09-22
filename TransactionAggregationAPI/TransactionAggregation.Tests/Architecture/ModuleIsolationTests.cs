@@ -12,32 +12,88 @@ namespace TransactionAggregation.Tests.Architecture;
 /// docs/adr/0001-modular-monolith-not-microservices.md and
 /// docs/adr/0009-schema-per-module-database-strategy.md). These tests make the two
 /// module boundaries introduced so far compiler/CI-enforced, not just documented:
-/// WebhookSources must depend on nothing but SharedKernel, and BuildingBlocks.Messaging
-/// — a shared building block every future module may depend on — must depend on no
-/// business module at all, proving it's genuinely generic and not secretly
-/// Transactions-shaped (it dispatches by message.Type strings, not by referencing
+/// WebhookSources (split into Domain/Application/Infrastructure/Contracts projects —
+/// each checked individually, plus intra-module layering between them) must depend
+/// on nothing but SharedKernel, and BuildingBlocks.Messaging — a shared building
+/// block every future module may depend on — must depend on no business module at
+/// all, proving it's genuinely generic and not secretly Transactions-shaped (it
+/// dispatches by message.Type strings, not by referencing
 /// TransactionAggregation.Application directly).
 /// </summary>
 public class ModuleIsolationTests
 {
-    private static readonly Assembly WebhookSourcesAssembly = typeof(Modules.WebhookSources.WebhookSource).Assembly;
+    private static readonly Assembly WebhookSourcesDomainAssembly = typeof(Modules.WebhookSources.Domain.WebhookSource).Assembly;
+    private static readonly Assembly WebhookSourcesApplicationAssembly = typeof(Modules.WebhookSources.AssemblyReference).Assembly;
+    private static readonly Assembly WebhookSourcesInfrastructureAssembly = typeof(Modules.WebhookSources.Infrastructure.Persistence.WebhookSourcesDbContext).Assembly;
     private static readonly Assembly MessagingAssembly = typeof(BuildingBlocks.Messaging.Inbox.InboxMessage).Assembly;
     private static readonly Assembly BankLinksAssembly = typeof(Modules.BankLinks.BankLink).Assembly;
 
+    private static readonly string[] LegacyLayers =
+    [
+        "TransactionAggregation.Domain",
+        "TransactionAggregation.Application",
+        "TransactionAggregation.Infrastructure",
+        "TransactionAggregation.Persistence"
+    ];
+
     [Fact]
-    public void WebhookSources_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    public void WebhookSourcesDomain_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
     {
-        var result = Types.InAssembly(WebhookSourcesAssembly)
+        var result = Types.InAssembly(WebhookSourcesDomainAssembly)
             .Should()
-            .NotHaveDependencyOnAny(
-                "TransactionAggregation.Domain",
-                "TransactionAggregation.Application",
-                "TransactionAggregation.Infrastructure",
-                "TransactionAggregation.Persistence")
+            .NotHaveDependencyOnAny(LegacyLayers)
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
-            because: "the WebhookSources module must depend only on SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+            because: "WebhookSources.Domain must depend only on SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+    }
+
+    [Fact]
+    public void WebhookSourcesApplication_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(WebhookSourcesApplicationAssembly)
+            .Should()
+            .NotHaveDependencyOnAny(LegacyLayers)
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "WebhookSources.Application must depend only on its own Domain/Contracts and SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+    }
+
+    [Fact]
+    public void WebhookSourcesInfrastructure_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(WebhookSourcesInfrastructureAssembly)
+            .Should()
+            .NotHaveDependencyOnAny(LegacyLayers)
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "WebhookSources.Infrastructure must depend only on its own Application/Domain/Contracts and SharedKernel — reaching into the legacy layers or another module defeats the point of extracting it");
+    }
+
+    [Fact]
+    public void WebhookSourcesDomain_ShouldNotDependOn_ApplicationOrInfrastructure()
+    {
+        var result = Types.InAssembly(WebhookSourcesDomainAssembly)
+            .Should()
+            .NotHaveDependencyOnAny("Modules.WebhookSources.Application", "Modules.WebhookSources.Infrastructure")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Domain is the innermost layer of the module — it must not depend outward on Application or Infrastructure");
+    }
+
+    [Fact]
+    public void WebhookSourcesApplication_ShouldNotDependOn_Infrastructure()
+    {
+        var result = Types.InAssembly(WebhookSourcesApplicationAssembly)
+            .Should()
+            .NotHaveDependencyOnAny("Modules.WebhookSources.Infrastructure")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "Application must depend only on Domain/Contracts (+ SharedKernel) — never on Infrastructure, which depends inward on Application, not the reverse");
     }
 
     [Fact]

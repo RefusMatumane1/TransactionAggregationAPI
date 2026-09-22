@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.WebhookSources.Infrastructure</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- ApiKeyEndpointFilter uses IEndpointFilter/Results — minimal-API shared-framework
+		     types, not available via NuGet in a plain class library; hence FrameworkReference. -->
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\WebhookSources.Application\WebhookSources.Application.csproj" />
+		<ProjectReference Include="..\WebhookSources.Domain\WebhookSources.Domain.csproj" />
+		<ProjectReference Include="..\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+	</ItemGroup>
+</Project>

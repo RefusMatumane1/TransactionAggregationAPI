@@ -3,10 +3,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
-using Modules.WebhookSources;
-using Modules.WebhookSources.Features.ActivateWebhookSource;
-using Modules.WebhookSources.Features.DeactivateWebhookSource;
-using Modules.WebhookSources.Persistence;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Application.Features.ActivateWebhookSource;
+using Modules.WebhookSources.Application.Features.DeactivateWebhookSource;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

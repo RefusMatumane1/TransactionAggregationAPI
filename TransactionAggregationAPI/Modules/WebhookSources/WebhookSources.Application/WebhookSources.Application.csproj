@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.WebhookSources.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<!-- IWebhookSourcesDbContext (the Application-layer persistence port) exposes
+		     DbSet<T> in its signature — EF Core is referenced for that type only, not
+		     for any concrete provider/DbContext, which stays in Infrastructure. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\WebhookSources.Domain\WebhookSources.Domain.csproj" />
+		<ProjectReference Include="..\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+	</ItemGroup>
+</Project>

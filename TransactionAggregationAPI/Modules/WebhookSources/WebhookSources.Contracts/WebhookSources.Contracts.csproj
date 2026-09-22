@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.WebhookSources.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!--
+	No public interface or integration events are published by WebhookSources yet —
+	nothing else in the solution consumes this module. Kept as an explicit project
+	(rather than omitted) so the module's shape matches every other module and so a
+	future cross-module consumer has an obvious place to land, per
+	docs/adr/0001-modular-monolith-not-microservices.md.
+	-->
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+	</ItemGroup>
+</Project>

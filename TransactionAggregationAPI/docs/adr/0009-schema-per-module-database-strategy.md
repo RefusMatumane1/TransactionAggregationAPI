@@ -50,8 +50,8 @@ against the **same physical database** (one connection string,
   (still shared-project business entities pending later extraction phases).
 - `MessagingDbContext` (`BuildingBlocks.Messaging`) — `messaging` schema:
   `InboxMessages`, `OutboxMessages`.
-- `WebhookSourcesDbContext` (`Modules.WebhookSources`) — `webhooksources`
-  schema: `WebhookSources`.
+- `WebhookSourcesDbContext` (`Modules.WebhookSources.Infrastructure.Persistence`) —
+  `webhooksources` schema: `WebhookSources`.
 
 `ApplicationDbContext` and `MessagingDbContext` additionally share one
 scoped `NpgsqlConnection` (registered once in `Program.cs`), not just the

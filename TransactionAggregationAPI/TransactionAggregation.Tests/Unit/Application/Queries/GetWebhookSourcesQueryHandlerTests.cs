@@ -1,6 +1,6 @@
 using FluentAssertions;
-using Modules.WebhookSources;
-using Modules.WebhookSources.Features.GetWebhookSources;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Application.Features.GetWebhookSources;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

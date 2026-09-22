@@ -11,7 +11,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
 using Modules.BankLinks.Persistence;
-using Modules.WebhookSources.Persistence;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Persistence;

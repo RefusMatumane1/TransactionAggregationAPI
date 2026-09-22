@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using System.Text.Json;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregation.Persistence.Configurations

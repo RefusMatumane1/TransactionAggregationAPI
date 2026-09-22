@@ -35,6 +35,7 @@ COPY ["TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.Servi
 COPY ["SharedKernel/SharedKernel.csproj", "SharedKernel/"]
 COPY ["BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj", "BuildingBlocks.Messaging/"]
 COPY ["Modules/WebhookSources/WebhookSources.csproj", "Modules/WebhookSources/"]
+COPY ["Modules/BankLinks/BankLinks.csproj", "Modules/BankLinks/"]
 RUN dotnet restore "./TransactionAggregationAPI/TransactionAggregationAPI.csproj"
 
 COPY . .

@@ -23,37 +23,83 @@ flowchart TB
 ## Container / module diagram
 
 One deployable process (modular monolith — [ADR-0001](adr/0001-modular-monolith-not-microservices.md)),
-with internal module boundaries enforced by `LayerDependencyTests`, not network
-boundaries.
+being migrated one module at a time from a single shared four-layer codebase
+into physically isolated modules — own project, own schema, own `DbContext`,
+own migration history (see [ADR-0009](adr/0009-schema-per-module-database-strategy.md)).
+Boundaries are enforced at the project/compiler level for extracted modules
+(`ModuleIsolationTests`), and by horizontal layering for the rest
+(`LayerDependencyTests`) — not by network boundaries.
+
+**Extracted so far:** `WebhookSources` (phase 1, zero coupling to any other
+module) and `BankLinks` (phase 2, one real dependency on the not-yet-extracted
+Account capability, resolved via a consumer-owned port rather than a direct
+reference — see [ADR-0010](adr/0010-consumer-owned-ports-for-unextracted-dependencies.md)).
+`Customers`/`Accounts`/`Transactions` are still logical-only boundaries inside
+the legacy `TransactionAggregation.Domain/Application/Infrastructure/Persistence`
+projects, pending later extraction phases.
 
 ```mermaid
 flowchart TB
-    subgraph Host["TransactionAggregationAPI (single process)"]
+    subgraph Host["TransactionAggregationAPI (single process, composition root)"]
         direction TB
-        Endpoints["API layer\nMinimal API endpoints, DTOs, ProblemDetails, versioning"]
-        Application["Application layer\nCQRS handlers (MediatR), validators,\npipeline behaviors, Result pattern"]
-        Domain["Domain layer\nEntities, value objects, domain events\n(zero EF Core / ASP.NET references)"]
-        Infrastructure["Infrastructure layer\nInbox/Outbox dispatchers, Redis cache,\nKeycloak admin client, bank aggregator client"]
-        Persistence["Persistence layer\nEF Core DbContext, entity configurations,\nmigrations"]
 
-        Endpoints --> Application
-        Application --> Domain
-        Infrastructure --> Domain
-        Persistence --> Domain
-        Application -.->|via IApplicationDbContext port| Persistence
-        Application -.->|via ports: ICacheService, IBankAggregatorClient, etc.| Infrastructure
+        subgraph Legacy["Legacy shared layers — Customers, Accounts, Transactions (not yet extracted)"]
+            direction TB
+            Endpoints["API layer\nMinimal API endpoints, DTOs, ProblemDetails, versioning"]
+            Application["Application layer\nCQRS handlers (MediatR), validators,\npipeline behaviors, Result pattern"]
+            Domain["Domain layer\nEntities, value objects, domain events\n(zero EF Core / ASP.NET references)"]
+            Infrastructure["Infrastructure layer\nRedis cache, Keycloak admin client,\nbank aggregator HTTP client"]
+            Persistence["Persistence layer\nApplicationDbContext (public schema)"]
+
+            Endpoints --> Application
+            Application --> Domain
+            Infrastructure --> Domain
+            Persistence --> Domain
+            Application -.->|via IApplicationDbContext port| Persistence
+            Application -.->|via ports: ICacheService, IBankAggregatorClient, etc.| Infrastructure
+        end
+
+        subgraph WH["Modules/WebhookSources"]
+            WHDb[("WebhookSourcesDbContext\nwebhooksources schema")]
+        end
+
+        subgraph BL["Modules/BankLinks"]
+            BLDb[("BankLinksDbContext\nbanklinks schema")]
+            BLPort["IAccountProvisioningPort\n(consumer-owned)"]
+            BLApi["IBankLinksReadApi\n(published read contract)"]
+        end
+
+        subgraph Msg["BuildingBlocks.Messaging"]
+            MsgDb[("MessagingDbContext\nmessaging schema")]
+        end
+
+        SK["SharedKernel\nCQRS markers, Result, BaseEntity, pipeline behaviors"]
+
+        Legacy -.->|implements| BLPort
+        Legacy -.->|reads via| BLApi
+        Legacy --> Msg
+        BL --> Msg
+        WH --> SK
+        BL --> SK
+        Msg --> SK
+        Legacy --> SK
     end
 
-    Host --> PG[(PostgreSQL)]
+    Host --> PG[(PostgreSQL\none database, one schema per module)]
     Host --> Redis[(Redis)]
     Host --> KC[(Keycloak)]
 ```
 
-Dependency direction matches the brief's preferred shape (API → Application →
-Domain → Ports → Infrastructure Adapters): the Domain project has no reference
-to EF Core, ASP.NET Core, or provider-specific packages, and Application only
-depends on ports (interfaces) it defines, never on Infrastructure/Persistence
-implementations directly.
+Dependency direction within the still-legacy layers matches the brief's
+preferred shape (API → Application → Domain → Ports → Infrastructure
+Adapters): the Domain project has no reference to EF Core, ASP.NET Core, or
+provider-specific packages, and Application only depends on ports (interfaces)
+it defines, never on Infrastructure/Persistence implementations directly.
+Across module boundaries, the rule is stricter: an extracted module
+(`WebhookSources`, `BankLinks`) may depend only on `SharedKernel` and
+`BuildingBlocks.Messaging`, never on another module or on the legacy layers —
+the legacy layers depend *on* extracted modules' published ports/contracts,
+never the other way around.
 
 ## Event flow: transaction ingestion
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
 using Xunit;
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using SharedKernel.Exceptions;

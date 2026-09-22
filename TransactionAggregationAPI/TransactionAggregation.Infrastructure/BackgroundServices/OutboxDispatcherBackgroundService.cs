@@ -12,6 +12,7 @@ using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregation.Infrastructure.BackgroundServices

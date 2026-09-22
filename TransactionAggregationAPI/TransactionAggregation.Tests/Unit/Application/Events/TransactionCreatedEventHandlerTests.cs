@@ -11,6 +11,7 @@ using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Application.Features.Transactions.Events;
 using TransactionAggregation.Application.Services;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events.Transaction;

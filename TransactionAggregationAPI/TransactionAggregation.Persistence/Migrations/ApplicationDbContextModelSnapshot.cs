@@ -73,56 +73,6 @@ namespace TransactionAggregation.Persistence.Migrations
                     b.ToTable("Accounts", (string)null);
                 });
 
-            modelBuilder.Entity("TransactionAggregation.Domain.Entities.BankLink", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AccountId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("EncryptedAccessToken")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<string>("EncryptedRefreshToken")
-                        .HasMaxLength(4000)
-                        .HasColumnType("character varying(4000)");
-
-                    b.Property<string>("ExternalAccountId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<int>("Institution")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("TokenExpiresAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CustomerId")
-                        .HasDatabaseName("IX_BankLinks_CustomerId");
-
-                    b.HasIndex("CustomerId", "Institution")
-                        .IsUnique()
-                        .HasDatabaseName("IX_BankLinks_CustomerId_Institution");
-
-                    b.ToTable("BankLinks", (string)null);
-                });
-
             modelBuilder.Entity("TransactionAggregation.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")

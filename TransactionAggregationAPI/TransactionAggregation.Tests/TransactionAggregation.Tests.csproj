@@ -31,6 +31,7 @@
     <ProjectReference Include="..\SharedKernel\SharedKernel.csproj" />
     <ProjectReference Include="..\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.csproj" />
+    <ProjectReference Include="..\Modules\BankLinks\BankLinks.csproj" />
   </ItemGroup>
 
 </Project>

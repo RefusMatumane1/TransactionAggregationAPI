@@ -50,7 +50,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [InlineData("Customers", "public")]
         [InlineData("Accounts", "public")]
         [InlineData("Transactions", "public")]
-        [InlineData("BankLinks", "public")]
+        [InlineData("BankLinks", "banklinks")]
         [InlineData("WebhookSources", "webhooksources")]
         [InlineData("InboxMessages", "messaging")]
         [InlineData("OutboxMessages", "messaging")]

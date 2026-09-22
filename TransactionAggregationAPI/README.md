@@ -80,7 +80,7 @@ TransactionAggregationAPI/              ← solution root
 │   ├── AppHost.cs                      ← Wires up API + Postgres + Redis + Seq
 │   └── appsettings.Development.json    ← Fixed postgres-password parameter
 │
-├── TransactionAggregation.Application/ ← Use cases (CQRS / MediatR) — Customers/Accounts/BankLink/Transactions (not yet extracted, see ADR-0001/0009)
+├── TransactionAggregation.Application/ ← Use cases (CQRS / MediatR) — Customers/Accounts/Transactions (not yet extracted, see ADR-0001/0009)
 ├── TransactionAggregation.Domain/      ← Entities, value objects, enums (same modules as above)
 ├── TransactionAggregation.Infrastructure/ ← Redis cache, bank adapters
 ├── TransactionAggregation.Persistence/    ← ApplicationDbContext (`public` schema), migrations
@@ -89,7 +89,8 @@ TransactionAggregationAPI/              ← solution root
 ├── SharedKernel/                       ← Common building blocks every module depends on (Result, ICommand/IQuery, ValueObject, MediatR pipeline behaviors)
 ├── BuildingBlocks.Messaging/            ← Generic Inbox/Outbox reliability mechanism — own DbContext, `messaging` schema
 ├── Modules/
-│   └── WebhookSources/                 ← First fully-extracted module — own DbContext, `webhooksources` schema, depends only on SharedKernel
+│   ├── WebhookSources/                 ← First fully-extracted module — own DbContext, `webhooksources` schema, depends only on SharedKernel
+│   └── BankLinks/                      ← Second extracted module — own DbContext, `banklinks` schema, depends only on SharedKernel; needs Account via a consumer-owned port (ADR-0010)
 │
 ├── monitoring/                         ← Docker Compose monitoring stack
 │   ├── prometheus.yml                  ← Prometheus scrape config (targets api:8080/metrics)

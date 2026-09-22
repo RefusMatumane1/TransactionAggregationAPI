@@ -2,6 +2,7 @@ using System.Reflection;
 using FluentAssertions;
 using NetArchTest.Rules;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Persistence;
 using Xunit;

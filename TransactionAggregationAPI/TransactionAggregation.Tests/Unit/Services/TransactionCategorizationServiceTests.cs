@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Application.Services;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using Xunit;

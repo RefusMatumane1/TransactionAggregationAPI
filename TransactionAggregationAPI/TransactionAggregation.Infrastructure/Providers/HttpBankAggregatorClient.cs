@@ -4,10 +4,9 @@ using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using TransactionAggregation.Application.Common.DTOs;
-using SharedKernel.Common.Interfaces;
-using TransactionAggregation.Application.Common.Interfaces;
-using TransactionAggregation.Domain.Enums;
+using Modules.BankLinks;
+using Modules.BankLinks.DTOs;
+using Modules.BankLinks.ValueObjects;
 
 namespace TransactionAggregation.Infrastructure.Providers
 {

@@ -27,14 +27,12 @@ namespace TransactionAggregation.Persistence
         public DbSet<Transaction> Transactions => Set<Transaction>();
         public DbSet<Customer> Customers => Set<Customer>();
         public DbSet<Account> Accounts => Set<Account>();
-        public DbSet<BankLink> BankLinks => Set<BankLink>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfiguration(new TransactionConfiguration());
             modelBuilder.ApplyConfiguration(new CustomerConfiguration());
             modelBuilder.ApplyConfiguration(new AccountConfiguration());
-            modelBuilder.ApplyConfiguration(new BankLinkConfiguration());
 
             base.OnModelCreating(modelBuilder);
             modelBuilder.Ignore<BaseDomainEvent>();

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
 using SharedKernel.Common.Interfaces;
+using Modules.BankLinks;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Options;
 using TransactionAggregation.Infrastructure.Authentication;

@@ -13,9 +13,13 @@ using Npgsql;
 using StackExchange.Redis;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.BankLinks;
+using Modules.BankLinks.Persistence;
+using Modules.BankLinks.Ports;
 using Modules.WebhookSources;
 using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Application;
+using TransactionAggregation.Application.Adapters;
 using TransactionAggregation.Infrastructure;
 using TransactionAggregation.Persistence;
 using TransactionAggregationAPI;
@@ -80,6 +84,8 @@ try
 
     builder.Services.AddMessagingBuildingBlock(builder.Configuration);
     builder.Services.AddWebhookSourcesModule(builder.Configuration);
+    builder.Services.AddBankLinksModule(builder.Configuration);
+    builder.Services.AddScoped<IAccountProvisioningPort, AccountProvisioningAdapter>();
 
     builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
 
@@ -326,6 +332,7 @@ try
         await app.ApplyMigrationsAsync<ApplicationDbContext>();
         await app.ApplyMigrationsAsync<MessagingDbContext>();
         await app.ApplyMigrationsAsync<WebhookSourcesDbContext>();
+        await app.ApplyMigrationsAsync<BankLinksDbContext>();
     }
 
     if (args.Contains("--migrate-only"))

@@ -8,6 +8,7 @@ using TransactionAggregation.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
 using TransactionAggregation.Application.Common.Models;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregation.Application.Features.Transactions.Queries.ExportTransactions

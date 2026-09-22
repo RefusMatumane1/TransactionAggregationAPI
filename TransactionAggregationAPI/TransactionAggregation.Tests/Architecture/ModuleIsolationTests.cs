@@ -22,6 +22,7 @@ public class ModuleIsolationTests
 {
     private static readonly Assembly WebhookSourcesAssembly = typeof(Modules.WebhookSources.WebhookSource).Assembly;
     private static readonly Assembly MessagingAssembly = typeof(BuildingBlocks.Messaging.Inbox.InboxMessage).Assembly;
+    private static readonly Assembly BankLinksAssembly = typeof(Modules.BankLinks.BankLink).Assembly;
 
     [Fact]
     public void WebhookSources_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
@@ -54,5 +55,22 @@ public class ModuleIsolationTests
 
         result.IsSuccessful.Should().BeTrue(
             because: "BuildingBlocks.Messaging is a shared reliability building block every module may depend on — if it depended back on a business module, it wouldn't be reusable and modules would be coupled through it transitively");
+    }
+
+    [Fact]
+    public void BankLinks_ShouldNotDependOn_AnyOtherBusinessModuleOrLegacyLayer()
+    {
+        var result = Types.InAssembly(BankLinksAssembly)
+            .Should()
+            .NotHaveDependencyOnAny(
+                "TransactionAggregation.Domain",
+                "TransactionAggregation.Application",
+                "TransactionAggregation.Infrastructure",
+                "TransactionAggregation.Persistence",
+                "Modules.WebhookSources")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue(
+            because: "the BankLinks module must depend only on SharedKernel — it needs an Account to exist but reaches it through IAccountProvisioningPort (a port it owns), never by referencing the Account entity or IApplicationDbContext directly");
     }
 }

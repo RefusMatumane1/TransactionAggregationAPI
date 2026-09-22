@@ -1,7 +1,7 @@
 using FluentAssertions;
-using TransactionAggregation.Domain.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.BankLinks;
+using Modules.BankLinks.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
 using Xunit;
 

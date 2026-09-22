@@ -1,8 +1,10 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using NSubstitute;
 using Testcontainers.PostgreSql;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.BankLinks.Persistence;
 using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Persistence;
 using Xunit;
@@ -43,6 +45,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var webhookSources = CreateWebhookSourcesContext();
             await webhookSources.Database.MigrateAsync();
 
+            using var bankLinks = CreateBankLinksContext();
+            await bankLinks.Database.MigrateAsync();
+
             using var context = CreateContext();
             await context.Database.MigrateAsync();
         }
@@ -60,18 +65,27 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         /// an OutboxMessage MUST pass that same instance here, or the write silently
         /// never reaches the database (a different, untracked instance gets flushed
         /// instead). Omit messagingDbContext only when the test never touches Outbox.
+        ///
+        /// Just as important: the returned context is built against the SAME
+        /// NpgsqlConnection as the MessagingDbContext (mirroring Program.cs's shared
+        /// scoped NpgsqlConnection), not merely the same connection string — EF Core's
+        /// Database.UseTransactionAsync throws "the specified transaction is not
+        /// associated with the current connection" if the two contexts hold separate
+        /// physical connections, even to the same database.
         /// </summary>
         public ApplicationDbContext CreateContext(MessagingDbContext? messagingDbContext = null)
         {
+            var messaging = messagingDbContext ?? CreateMessagingContext();
+
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseNpgsql(ConnectionString)
+                .UseNpgsql((NpgsqlConnection)messaging.Database.GetDbConnection())
                 .Options;
 
             var mediator = Substitute.For<IMediator>();
             mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>())
                 .Returns(Task.CompletedTask);
 
-            return new ApplicationDbContext(options, mediator, messagingDbContext ?? CreateMessagingContext());
+            return new ApplicationDbContext(options, mediator, messaging);
         }
 
         public MessagingDbContext CreateMessagingContext()
@@ -98,6 +112,19 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .Returns(Task.CompletedTask);
 
             return new WebhookSourcesDbContext(options, mediator);
+        }
+
+        public BankLinksDbContext CreateBankLinksContext()
+        {
+            var options = new DbContextOptionsBuilder<BankLinksDbContext>()
+                .UseNpgsql(ConnectionString)
+                .Options;
+
+            var mediator = Substitute.For<IMediator>();
+            mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            return new BankLinksDbContext(options, mediator);
         }
     }
 

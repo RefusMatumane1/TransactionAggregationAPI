@@ -10,6 +10,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.BankLinks.Persistence;
 using Modules.WebhookSources.Persistence;
 using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Application.Abstractions.Authentication;
@@ -37,6 +38,7 @@ namespace TransactionAggregation.Tests.Integration
                 ReplaceWithInMemory<ApplicationDbContext>(services);
                 ReplaceWithInMemory<MessagingDbContext>(services);
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
+                ReplaceWithInMemory<BankLinksDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 

@@ -5,6 +5,10 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using System.Text.Json;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.BankLinks;
+using Modules.BankLinks.Contracts;
+using Modules.BankLinks.Persistence;
+using Modules.BankLinks.ValueObjects;
 using TransactionAggregation.Application.Common.DTOs;
 using SharedKernel.Common.Enums;
 using SharedKernel.Common.Interfaces;
@@ -12,6 +16,7 @@ using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Common.Outbox;
 using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Domain.Events.Transaction;
@@ -26,10 +31,12 @@ public class ProcessInboundTransactionsCommandHandlerTests
     private static ProcessInboundTransactionsCommandHandler BuildHandler(
         ApplicationDbContext ctx,
         IMessagingDbContext messaging,
+        IBankLinksDbContext bankLinksCtx,
         ITransactionCategorizationService? categorizationService = null)
         => new(
             ctx,
             messaging,
+            new BankLinksReadApi(bankLinksCtx),
             categorizationService ?? BuildCategorizationService(),
             NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
 
@@ -50,7 +57,7 @@ public class ProcessInboundTransactionsCommandHandlerTests
     }
 
     private static async Task<BankLink> SeedActiveBankLinkAsync(
-        ApplicationDbContext ctx, CustomerId customerId, string externalAccountId = "ext-acc-1")
+        IBankLinksDbContext ctx, CustomerId customerId, string externalAccountId = "ext-acc-1")
     {
         var link = BankLink.Create(customerId, Institution.FNB);
         link.Activate(AccountId.Create(), externalAccountId, "enc-access", "enc-refresh", DateTime.UtcNow.AddHours(1));
@@ -74,9 +81,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging);
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         var result = await handler.Handle(
             new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto()]), CancellationToken.None);
@@ -93,9 +101,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging);
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         var result = await handler.Handle(
             new ProcessInboundTransactionsCommand("test-source",
@@ -111,9 +120,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging, BuildCategorizationService(TransactionCategory.Groceries));
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext, BuildCategorizationService(TransactionCategory.Groceries));
 
         await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto()]), CancellationToken.None);
 
@@ -130,10 +140,11 @@ public class ProcessInboundTransactionsCommandHandlerTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         var messaging = InMemoryMessagingDbContextFactory.Create();
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var context = new ApplicationDbContext(options, mediator, messaging);
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging, BuildCategorizationService(TransactionCategory.Groceries));
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext, BuildCategorizationService(TransactionCategory.Groceries));
 
         await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto()]), CancellationToken.None);
 
@@ -147,9 +158,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging);
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto()]), CancellationToken.None);
 
@@ -168,7 +180,8 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
-        var handler = BuildHandler(context, messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         var result = await handler.Handle(
             new ProcessInboundTransactionsCommand("test-source", "never-linked", [MakeDto()]), CancellationToken.None);
@@ -185,6 +198,7 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var link = BankLink.Create(customer.Id, Institution.FNB);
 
@@ -196,10 +210,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
             else
                 link.MarkNeedsReauthorization();
         }
-        context.BankLinks.Add(link);
-        await context.SaveChangesAsync();
+        bankLinksContext.BankLinks.Add(link);
+        await bankLinksContext.SaveChangesAsync();
 
-        var handler = BuildHandler(context, messaging);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         var result = await handler.Handle(
             new ProcessInboundTransactionsCommand("test-source", "ext-acc-1", [MakeDto()]), CancellationToken.None);
@@ -214,9 +228,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging);
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         var first = await handler.Handle(
             new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto("txn-1")]), CancellationToken.None);
@@ -234,9 +249,10 @@ public class ProcessInboundTransactionsCommandHandlerTests
     {
         var messaging = InMemoryMessagingDbContextFactory.Create();
         var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
-        var link = await SeedActiveBankLinkAsync(context, customer.Id);
-        var handler = BuildHandler(context, messaging);
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customer.Id);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
 
         await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto("txn-1")]), CancellationToken.None);
 

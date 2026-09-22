@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SharedKernel.Common.Enums;
 using TransactionAggregation.Application.Queries.Transaction.GetTransaction;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Tests.Helpers;

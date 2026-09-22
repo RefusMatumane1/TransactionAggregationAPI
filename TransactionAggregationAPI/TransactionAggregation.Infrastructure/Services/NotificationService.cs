@@ -5,6 +5,7 @@ using System.Text.Json;
 using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 
 namespace TransactionAggregation.Infrastructure.Services

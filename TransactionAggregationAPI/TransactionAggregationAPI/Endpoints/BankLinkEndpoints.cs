@@ -1,12 +1,10 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using SharedKernel.Abstractions.Authentication;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Commands.BankLink.CompleteBankLink;
-using TransactionAggregation.Application.Commands.BankLink.InitiateBankLink;
-using TransactionAggregation.Application.Commands.BankLink.RevokeBankLink;
-using TransactionAggregation.Application.Common.DTOs;
-using TransactionAggregation.Application.Queries.BankLink.GetBankLinks;
+using Modules.BankLinks.DTOs;
+using Modules.BankLinks.Features.CompleteBankLink;
+using Modules.BankLinks.Features.InitiateBankLink;
+using Modules.BankLinks.Features.GetBankLinks;
 using TransactionAggregationAPI.DTOs.BankLink;
 using TransactionAggregationAPI.Infrastructure;
 
@@ -36,12 +34,6 @@ public static class BankLinkEndpoints
             .Produces<IReadOnlyList<BankLinkDto>>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status429TooManyRequests);
 
-        group.MapDelete("/{bankLinkId:guid}", RevokeBankLink)
-            .WithName("RevokeBankLink")
-            .WithSummary("Revoke a linked bank account")
-            .Produces(StatusCodes.Status204NoContent)
-            .Produces(StatusCodes.Status404NotFound)
-            .Produces(StatusCodes.Status429TooManyRequests);
 
         var callbackGroup = app.MapGroup("/api/v{version:apiVersion}/bank-links")
                     .WithApiVersionSet()
@@ -93,25 +85,6 @@ public static class BankLinkEndpoints
             return CustomResults.Problem(result);
 
         return Results.Ok(result.Value);
-    }
-
-    private static async Task<IResult> RevokeBankLink(
-        ISender sender,
-        Guid customerId,
-        Guid bankLinkId,
-        IUserContext userContext,
-        CancellationToken cancellationToken)
-    {
-        if (customerId != userContext.UserId)
-            return Results.NotFound();
-
-        var command = new RevokeBankLinkCommand(customerId, bankLinkId);
-        var result = await sender.Send(command, cancellationToken);
-
-        if (result.IsFailure)
-            return CustomResults.Problem(result);
-
-        return Results.NoContent();
     }
 
     private static async Task<IResult> CompleteBankLink(

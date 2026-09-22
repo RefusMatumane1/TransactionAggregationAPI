@@ -4,12 +4,15 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.BankLinks;
+using Modules.BankLinks.Persistence;
+using Modules.BankLinks.ValueObjects;
 using Modules.WebhookSources;
 using Modules.WebhookSources.Persistence;
 using TransactionAggregation.Application.Common.Inbox;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Persistence;
 using Xunit;
 
@@ -32,15 +35,17 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var bankLinksContext = scope.ServiceProvider.GetRequiredService<IBankLinksDbContext>();
 
             var customer = Customer.Create(CustomerId.Create(), $"{Guid.NewGuid()}@example.com", "Webhook Test User");
             context.Customers.Add(customer);
+            await context.SaveChangesAsync();
 
             var link = BankLink.Create(customer.Id, Institution.FNB);
             link.Activate(AccountId.Create(), externalAccountId, "enc-access", "enc-refresh", DateTime.UtcNow.AddHours(1));
-            context.BankLinks.Add(link);
+            bankLinksContext.BankLinks.Add(link);
 
-            await context.SaveChangesAsync();
+            await bankLinksContext.SaveChangesAsync();
             return link;
         }
 

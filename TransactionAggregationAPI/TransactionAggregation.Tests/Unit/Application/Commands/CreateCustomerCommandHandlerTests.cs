@@ -6,6 +6,7 @@ using TransactionAggregation.Application.Abstractions.Authentication;
 using TransactionAggregation.Application.Commands.Customer.CreateCustomer;
 using SharedKernel.Common.Enums;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;

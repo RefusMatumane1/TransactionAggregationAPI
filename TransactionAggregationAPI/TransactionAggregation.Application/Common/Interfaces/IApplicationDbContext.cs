@@ -9,7 +9,6 @@ namespace TransactionAggregation.Application.Common.Interfaces
         DbSet<Transaction> Transactions { get; }
         DbSet<Customer> Customers { get; }
         DbSet<Account> Accounts { get; }
-        DbSet<BankLink> BankLinks { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }

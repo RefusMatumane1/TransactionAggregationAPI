@@ -4,6 +4,7 @@ using SharedKernel.Common.Enums;
 using TransactionAggregation.Application.Queries.Customer.GetCustomer;
 using TransactionAggregation.Persistence;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using TransactionAggregation.Tests.Helpers;

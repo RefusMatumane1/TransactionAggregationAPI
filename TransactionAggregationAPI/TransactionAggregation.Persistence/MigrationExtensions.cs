@@ -52,7 +52,7 @@ namespace TransactionAggregation.Persistence
 
                     logger.LogInformation("Applying database migrations for {ContextType}...", typeof(TContext).Name);
 
-                    await context.Database.MigrateAsync(cancellationToken);
+                    //await context.Database.MigrateAsync(cancellationToken);
 
                     logger.LogInformation("Database migrations applied successfully for {ContextType}", typeof(TContext).Name);
                 }

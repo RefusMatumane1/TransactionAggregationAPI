@@ -27,12 +27,14 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": [
+        "https://localhost:5101/*",
         "http://localhost:7200/authentication/login-callback",
         "http://localhost:7200/authentication/logout-callback",
         "http://ui.transaction.local/authentication/login-callback",
         "http://ui.transaction.local/authentication/logout-callback"
       ],
       "webOrigins": [
+        "https://localhost:5101",
         "http://localhost:7200",
         "http://ui.transaction.local"
       ],
@@ -84,7 +86,7 @@
     {
       "clientId": "transaction-perf-test",
       "name": "Transaction Aggregation Perf Test",
-      "description": "Dev/local-only client for the k6 performance-test scripts in perf/ — uses the Resource Owner Password Credentials grant so an automated script can obtain a token without a browser (see perf/README.md and the README's note on direct password grant). Not present in any production realm; never used by end users or the UI.",
+      "description": "Local k6 performance-test client using the direct password grant. Not used by production or end users.",
       "enabled": true,
       "publicClient": true,
       "protocol": "openid-connect",
@@ -114,7 +116,7 @@
             "jsonType.label": "String",
             "multivalued": "true",
             "id.token.claim": "false",
-            "access.token.claim": "true",
+            "access.token.claim": true,
             "userinfo.token.claim": "false"
           }
         }

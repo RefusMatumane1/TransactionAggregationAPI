@@ -1,5 +1,6 @@
 using SharedKernel.Common;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Enums;
 using SharedKernel.Exceptions;
 

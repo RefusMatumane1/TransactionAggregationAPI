@@ -2,11 +2,15 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using Modules.BankLinks;
+using Modules.BankLinks.Contracts;
+using Modules.BankLinks.ValueObjects;
 using TransactionAggregation.Application.Common.DTOs;
 using SharedKernel.Common.Interfaces;
 using TransactionAggregation.Application.Common.Interfaces;
 using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using TransactionAggregation.Domain.Common.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Domain.Entities;
 using TransactionAggregation.Domain.Enums;
 using Xunit;
@@ -59,11 +63,13 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             // constraint the in-memory provider doesn't enforce.
             var account = customer.AddAccount($"acc-{Guid.NewGuid():N}", "Concurrency Test Account", AccountType.Checking, "ZAR");
             seedContext.Customers.Add(customer);
+            await seedContext.SaveChangesAsync();
 
+            using var bankLinksSeedContext = _fixture.CreateBankLinksContext();
             var link = BankLink.Create(customer.Id, Institution.FNB);
             link.Activate(account.Id, "ext-acc-concurrency", "enc-a", "enc-r", DateTime.UtcNow.AddHours(1));
-            seedContext.BankLinks.Add(link);
-            await seedContext.SaveChangesAsync();
+            bankLinksSeedContext.BankLinks.Add(link);
+            await bankLinksSeedContext.SaveChangesAsync();
 
             var externalId = $"concurrent-txn-{Guid.NewGuid()}";
             var dto = new ExternalTransactionDTO
@@ -84,9 +90,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var messagingB = _fixture.CreateMessagingContext();
             using var contextA = _fixture.CreateContext(messagingA);
             using var contextB = _fixture.CreateContext(messagingB);
+            using var bankLinksA = _fixture.CreateBankLinksContext();
+            using var bankLinksB = _fixture.CreateBankLinksContext();
 
-            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, messagingA, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
-            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, messagingA, new BankLinksReadApi(bankLinksA), BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, new BankLinksReadApi(bankLinksB), BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
 
             var command = new ProcessInboundTransactionsCommand("race-test-source", link.ExternalAccountId!, [dto]);
 

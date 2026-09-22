@@ -22,14 +22,20 @@ var seq = builder.AddSeq("seq")
 var keycloak = builder
     .AddContainer("keycloak", "quay.io/keycloak/keycloak")
     .WithImageTag("26.0")
-    .WithBindMount("../keycloak/realm-export.json", "/opt/keycloak/data/import/realm-export.json", isReadOnly: true)
+    .WithBindMount(
+        "../keycloak/realm-export.json",
+        "/opt/keycloak/data/import/realm-export.json",
+        isReadOnly: true)
     .WithArgs("start-dev", "--import-realm")
     .WithEnvironment("KEYCLOAK_ADMIN", "admin")
     .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", "admin")
-    .WithEnvironment("KC_HOSTNAME", "localhost:8081")
-    .WithEnvironment("KC_HOSTNAME_STRICT_HTTPS", "false")
+    .WithEnvironment("KC_HOSTNAME", "http://localhost:8081")
+    .WithEnvironment("KC_HOSTNAME_STRICT", "false")
     .WithEnvironment("KC_HTTP_ENABLED", "true")
-    .WithHttpEndpoint(port: 8081, targetPort: 8080, name: "http")
+    .WithHttpEndpoint(
+        port: 8081,
+        targetPort: 8080,
+        name: "http")
     .WithLifetime(ContainerLifetime.Persistent);
 
 var api = builder

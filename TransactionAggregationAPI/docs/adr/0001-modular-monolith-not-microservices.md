@@ -44,7 +44,7 @@ physical restructuring, phased to keep each step reviewable — see
 [ADR-0009](0009-schema-per-module-database-strategy.md) for the accompanying
 database strategy.
 
-**Actual state, phase 1 (this review):**
+**Actual state, phase 2 (this review):**
 - **WebhookSources** (`Modules/WebhookSources`) — fully extracted: own project, own
   `WebhookSourcesDbContext`/`webhooksources` schema, references only `SharedKernel`.
   Chosen first because the audit confirmed it had zero existing coupling to any
@@ -53,13 +53,23 @@ database strategy.
   as a genuinely generic shared building block (own project, own
   `MessagingDbContext`/`messaging` schema, no reference to any business module) that
   every module may depend on, the same way every module may depend on `SharedKernel`.
-- **Customers/Accounts, BankLink, Transactions** — **still logical boundaries only**,
-  living in the original shared `TransactionAggregation.Domain/Application/
-  Infrastructure/Persistence` projects, pending later extraction phases. Do not read
-  this ADR as claiming they're physically isolated yet — `ModuleIsolationTests.cs`
-  only asserts isolation for the modules actually extracted so far. Accounts/Customers
-  extraction in particular requires first fixing `Customer.AddAccount()` (Customer's
-  aggregate currently owns Account-creation logic that belongs to Account).
+- **BankLinks** (`Modules/BankLinks`) — fully extracted: own project, own
+  `BankLinksDbContext`/`banklinks` schema, references only `SharedKernel`. Unlike
+  WebhookSources, this module genuinely needed a capability from a not-yet-extracted
+  module (provisioning an `Account` when completing a bank link) — resolved via a
+  consumer-owned port (`IAccountProvisioningPort`) rather than a direct reference;
+  see [ADR-0010](0010-consumer-owned-ports-for-unextracted-dependencies.md). The
+  `Customer.AddAccount()` violation that originally motivated this ADR's audit is
+  fixed at both call sites (`CompleteBankLinkCommandHandler`'s adapter and
+  `CreateAccountCommandHandler`), though `Customer.AddAccount()` itself still exists
+  (unused in the request path, still used by dev seed data) pending the
+  Accounts/Customers extraction phase, which will need to touch the EF relationship
+  it's part of anyway.
+- **Customers/Accounts, Transactions** — **still logical boundaries only**, living
+  in the original shared `TransactionAggregation.Domain/Application/Infrastructure/
+  Persistence` projects, pending later extraction phases. Do not read this ADR as
+  claiming they're physically isolated yet — `ModuleIsolationTests.cs` only asserts
+  isolation for the modules actually extracted so far.
 
 Layering is enforced top-down (API → Application → Domain, with Infrastructure and
 Persistence depending inward, never the reverse) via `TransactionAggregation.Domain`

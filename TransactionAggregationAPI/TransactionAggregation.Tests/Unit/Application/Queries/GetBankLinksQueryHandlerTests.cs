@@ -1,9 +1,9 @@
 using FluentAssertions;
-using TransactionAggregation.Application.Queries.BankLink.GetBankLinks;
-using TransactionAggregation.Domain.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Persistence;
+using Modules.BankLinks;
+using Modules.BankLinks.Features.GetBankLinks;
+using Modules.BankLinks.Persistence;
+using Modules.BankLinks.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -11,24 +11,16 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries;
 
 public class GetBankLinksQueryHandlerTests
 {
-    private static GetBankLinksQueryHandler BuildHandler(ApplicationDbContext ctx) => new(ctx);
-
-    private static async Task<Customer> SeedCustomerAsync(ApplicationDbContext ctx, string email = "user@example.com")
-    {
-        var customer = Customer.Create(CustomerId.Create(), email, "Test User");
-        ctx.Customers.Add(customer);
-        await ctx.SaveChangesAsync();
-        return customer;
-    }
+    private static GetBankLinksQueryHandler BuildHandler(IBankLinksDbContext ctx) => new(ctx);
 
     [Fact]
     public async Task Handle_CustomerWithNoLinks_ReturnsEmptyList()
     {
-        var context = InMemoryDbContextFactory.Create();
-        var customer = await SeedCustomerAsync(context);
+        var context = InMemoryBankLinksDbContextFactory.Create();
+        var customerId = CustomerId.Create();
         var handler = BuildHandler(context);
 
-        var result = await handler.Handle(new GetBankLinksQuery(customer.Id.Value), CancellationToken.None);
+        var result = await handler.Handle(new GetBankLinksQuery(customerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().BeEmpty();
@@ -37,18 +29,18 @@ public class GetBankLinksQueryHandlerTests
     [Fact]
     public async Task Handle_CustomerWithLinks_ReturnsOnlyThatCustomersLinks()
     {
-        var context = InMemoryDbContextFactory.Create();
-        var customer = await SeedCustomerAsync(context, "c1@example.com");
-        var otherCustomer = await SeedCustomerAsync(context, "c2@example.com");
+        var context = InMemoryBankLinksDbContextFactory.Create();
+        var customerId = CustomerId.Create();
+        var otherCustomerId = CustomerId.Create();
 
-        var link = BankLink.Create(customer.Id, Institution.FNB);
-        var otherLink = BankLink.Create(otherCustomer.Id, Institution.Absa);
+        var link = BankLink.Create(customerId, Institution.FNB);
+        var otherLink = BankLink.Create(otherCustomerId, Institution.Absa);
         context.BankLinks.AddRange(link, otherLink);
         await context.SaveChangesAsync();
 
         var handler = BuildHandler(context);
 
-        var result = await handler.Handle(new GetBankLinksQuery(customer.Id.Value), CancellationToken.None);
+        var result = await handler.Handle(new GetBankLinksQuery(customerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().ContainSingle();
@@ -59,10 +51,10 @@ public class GetBankLinksQueryHandlerTests
     [Fact]
     public async Task Handle_MapsStatusAndAccountIdCorrectly()
     {
-        var context = InMemoryDbContextFactory.Create();
-        var customer = await SeedCustomerAsync(context);
+        var context = InMemoryBankLinksDbContextFactory.Create();
+        var customerId = CustomerId.Create();
 
-        var link = BankLink.Create(customer.Id, Institution.StandardBank);
+        var link = BankLink.Create(customerId, Institution.StandardBank);
         var accountId = AccountId.Create();
         link.Activate(accountId, "ext-1", "enc-access", "enc-refresh", DateTime.UtcNow.AddHours(1));
         context.BankLinks.Add(link);
@@ -70,7 +62,7 @@ public class GetBankLinksQueryHandlerTests
 
         var handler = BuildHandler(context);
 
-        var result = await handler.Handle(new GetBankLinksQuery(customer.Id.Value), CancellationToken.None);
+        var result = await handler.Handle(new GetBankLinksQuery(customerId.Value), CancellationToken.None);
 
         var dto = result.Value.Single();
         dto.Status.Should().Be(BankLinkStatus.Active);
@@ -80,7 +72,7 @@ public class GetBankLinksQueryHandlerTests
     [Fact]
     public async Task Handle_NoBankLinksTableRows_ForUnknownCustomer_ReturnsEmptyList()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryBankLinksDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(new GetBankLinksQuery(Guid.NewGuid()), CancellationToken.None);

@@ -1,4 +1,4 @@
-using TransactionAggregation.Domain.Enums;
+using Modules.BankLinks.ValueObjects;
 
 namespace TransactionAggregationAPI.DTOs.BankLink
 {

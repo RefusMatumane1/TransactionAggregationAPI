@@ -23,5 +23,10 @@
 		<ProjectReference Include="..\BankLinks.Application\BankLinks.Application.csproj" />
 		<ProjectReference Include="..\BankLinks.Domain\BankLinks.Domain.csproj" />
 		<ProjectReference Include="..\BankLinks.Contracts\BankLinks.Contracts.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
 	</ItemGroup>
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
 </Project>

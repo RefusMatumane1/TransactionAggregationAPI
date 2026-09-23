@@ -35,7 +35,7 @@ module) and `BankLinks` (phase 2, one real dependency on the not-yet-extracted
 Account capability, resolved via a consumer-owned port rather than a direct
 reference — see [ADR-0010](adr/0010-consumer-owned-ports-for-unextracted-dependencies.md)).
 `Customers`/`Accounts`/`Transactions` are still logical-only boundaries inside
-the legacy `TransactionAggregation.Domain/Application/Infrastructure/Persistence`
+the legacy `Modules/Transactions/Transactions.Domain/Application/Infrastructure/Persistence`
 projects, pending later extraction phases.
 
 ```mermaid
@@ -49,13 +49,13 @@ flowchart TB
             Application["Application layer\nCQRS handlers (MediatR), validators,\npipeline behaviors, Result pattern"]
             Domain["Domain layer\nEntities, value objects, domain events\n(zero EF Core / ASP.NET references)"]
             Infrastructure["Infrastructure layer\nRedis cache, Keycloak admin client,\nbank aggregator HTTP client"]
-            Persistence["Persistence layer\nApplicationDbContext (public schema)"]
+            Persistence["Persistence\nTransactionsDbContext (transactions schema)"]
 
             Endpoints --> Application
             Application --> Domain
             Infrastructure --> Domain
             Persistence --> Domain
-            Application -.->|via IApplicationDbContext port| Persistence
+            Application -.->|via ITransactionsDbContext port| Persistence
             Application -.->|via ports: ICacheService, IBankAggregatorClient, etc.| Infrastructure
         end
 

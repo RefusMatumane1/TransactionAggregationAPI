@@ -1,0 +1,96 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
+using Modules.Customers.Contracts;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Domain.Enums;
+
+namespace Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions
+{
+    internal sealed class GetCustomerWithTransactionsQueryHandler(
+        ITransactionsDbContext _context,
+        ICustomersReadApi _customersReadApi,
+        ILogger<GetCustomerWithTransactionsQueryHandler> logger)
+        : IQueryHandler<GetCustomerWithTransactionsQuery, CustomerWithTransactionsDto>
+    {
+        public async Task<Result<CustomerWithTransactionsDto>> Handle(
+            GetCustomerWithTransactionsQuery request,
+            CancellationToken cancellationToken)
+        {
+            logger.LogInformation("Handling GetCustomerWithTransactionsQuery for CustomerId: {CustomerId}, StartDate: {StartDate}, EndDate: {EndDate}, Category: {Category}, Page: {Page}, PageSize: {PageSize}",
+                request.CustomerId, request.StartDate, request.EndDate, request.Category, request.Page, request.PageSize);
+
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
+
+            var customer = await _customersReadApi.FindCustomerByIdAsync(request.CustomerId, cancellationToken);
+
+            if (customer is null)
+                return Result.Failure<CustomerWithTransactionsDto>(
+                    Error.NotFound("Customer", request.CustomerId));
+
+            var transactionQuery = _context.Transactions
+                .AsNoTracking()
+                .Where(t => t.CustomerId == customerId)
+                .AsQueryable();
+
+            if (request.StartDate.HasValue)
+            {
+                var start = DateTime.SpecifyKind(request.StartDate.Value, DateTimeKind.Utc);
+                transactionQuery = transactionQuery.Where(t => t.Date >= start);
+            }
+
+            if (request.EndDate.HasValue)
+            {
+                var end = DateTime.SpecifyKind(request.EndDate.Value, DateTimeKind.Utc);
+                transactionQuery = transactionQuery.Where(t => t.Date <= end);
+            }
+
+            if (request.Category.HasValue)
+                transactionQuery = transactionQuery.Where(t => t.Category == request.Category.Value);
+
+            var totalTransactionCount = await transactionQuery.CountAsync(cancellationToken);
+
+            var transactions = await transactionQuery
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .ToListAsync(cancellationToken);
+
+            var transactionDtos = transactions.Select(t => new TransactionDto(
+                t.Id.Value,
+                t.CustomerId.Value,
+                t.Amount.Amount,
+                t.Amount.Currency,
+                t.Date,
+                t.Description,
+                t.Category,
+                t.Status,
+                t.Source.Name,
+                t.AccountId != null ? t.AccountId.Value : null));
+
+            var totalIncome = transactions
+                                .Where(t => t.Amount.Amount > 0 && t.Status == TransactionStatus.Settled)
+                                .Sum(t => t.Amount.Amount);
+
+            var totalExpenses = transactions
+                .Where(t => t.Amount.Amount < 0 && t.Status == TransactionStatus.Settled)
+                .Sum(t => Math.Abs(t.Amount.Amount));
+
+            var result = new CustomerWithTransactionsDto(
+                customer.Id,
+                customer.Email,
+                customer.Name,
+                customer.CreatedAt,
+                customer.UpdatedAt,
+                transactionDtos,
+                totalTransactionCount,
+                totalIncome,
+                totalExpenses,
+                totalIncome - totalExpenses);
+
+            return Result.Success(result);
+        }
+    }
+}

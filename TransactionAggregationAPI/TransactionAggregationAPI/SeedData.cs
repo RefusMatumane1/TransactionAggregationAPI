@@ -1,11 +1,13 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Abstractions.Authentication;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Persistence;
+using Modules.Customers.Contracts;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Infrastructure.Persistence;
 
 namespace TransactionAggregationAPI;
 
@@ -244,12 +246,13 @@ new(40000, 55000, false, 10000, 14000, 28, 1,
     public static async Task SeedDatabaseAsync(IServiceProvider serviceProvider)
     {
         using var scope = serviceProvider.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<TransactionsDbContext>();
+        var customersContext = scope.ServiceProvider.GetRequiredService<CustomersDbContext>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
         var keycloak = scope.ServiceProvider.GetRequiredService<IKeycloakAdminClient>();
 
-        if (await context.Customers.AnyAsync()
-            || await context.Accounts.AnyAsync()
+        if (await customersContext.Customers.AnyAsync()
+            || await customersContext.Accounts.AnyAsync()
             || await context.Transactions.AnyAsync())
             return;
 
@@ -294,8 +297,8 @@ new(40000, 55000, false, 10000, 14000, 28, 1,
             customers.Add(customer);
         }
 
-        await context.Customers.AddRangeAsync(customers);
-        await context.SaveChangesAsync();
+        await customersContext.Customers.AddRangeAsync(customers);
+        await customersContext.SaveChangesAsync();
 
         var transactions = new List<Transaction>();
         var seqNum = 0;

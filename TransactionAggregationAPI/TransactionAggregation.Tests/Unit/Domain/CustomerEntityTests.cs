@@ -1,9 +1,6 @@
 using FluentAssertions;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
-using SharedKernel.Exceptions;
+using Modules.Customers.Domain;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;
@@ -15,16 +12,6 @@ public class CustomerEntityTests
         return Customer.Create(CustomerId.Create(), email, name);
     }
 
-    private static Transaction MakeTransaction(CustomerId customerId, decimal amount = -100m)
-    {
-        return Transaction.Create(
-            customerId,
-            Money.Create(amount, "ZAR"),
-            "test description",
-            TransactionCategory.Uncategorized,
-            TransactionSource.Create("TestSource", Guid.NewGuid().ToString()));
-    }
-
     [Fact]
     public void Create_SetsAllProperties()
     {
@@ -34,7 +21,7 @@ public class CustomerEntityTests
         customer.Id.Should().Be(id);
         customer.Email.Should().Be("user@example.com");
         customer.Name.Should().Be("Alice");
-        customer.Transactions.Should().BeEmpty();
+        customer.Accounts.Should().BeEmpty();
     }
 
     [Fact]
@@ -47,39 +34,5 @@ public class CustomerEntityTests
         customer.Email.Should().Be("new@example.com");
         customer.Name.Should().Be("New Name");
         customer.UpdatedAt.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void AddTransaction_WithMatchingCustomerId_AddsSuccessfully()
-    {
-        var customer = MakeCustomer();
-        var transaction = MakeTransaction(customer.Id);
-
-        customer.AddTransaction(transaction);
-
-        customer.Transactions.Should().ContainSingle();
-    }
-
-    [Fact]
-    public void AddTransaction_WithWrongCustomerId_ThrowsDomainException()
-    {
-        var customer = MakeCustomer();
-        var differentCustomerId = CustomerId.Create();
-        var transaction = MakeTransaction(differentCustomerId);
-
-        customer.Invoking(c => c.AddTransaction(transaction))
-                .Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void AddMultipleTransactions_AllAreTracked()
-    {
-        var customer = MakeCustomer();
-
-        customer.AddTransaction(MakeTransaction(customer.Id, -50m));
-        customer.AddTransaction(MakeTransaction(customer.Id, -75m));
-        customer.AddTransaction(MakeTransaction(customer.Id, 1000m));
-
-        customer.Transactions.Should().HaveCount(3);
     }
 }

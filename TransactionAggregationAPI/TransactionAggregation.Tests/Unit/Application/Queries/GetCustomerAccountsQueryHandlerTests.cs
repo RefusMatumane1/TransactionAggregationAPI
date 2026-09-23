@@ -1,11 +1,16 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Application.Queries.Account.GetCustomerAccounts;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Application.Features.GetCustomerAccounts;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Application.Adapters;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,14 +18,19 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries;
 
 public class GetCustomerAccountsQueryHandlerTests
 {
+    // Balances come from the Transactions module via IAccountBalanceProvider; the real
+    // TransactionBalanceProvider is used so the per-account summing is exercised end to end.
     private static GetCustomerAccountsQueryHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
-        => new(ctx, NullLogger<GetCustomerAccountsQueryHandler>.Instance);
+        CustomersDbContext ctx,
+        TransactionsDbContext? transactionsCtx = null)
+        => new(ctx,
+            new TransactionBalanceProvider(transactionsCtx ?? InMemoryDbContextFactory.Create()),
+            NullLogger<GetCustomerAccountsQueryHandler>.Instance);
 
     [Fact]
     public async Task Handle_NonExistentCustomer_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -33,7 +43,7 @@ public class GetCustomerAccountsQueryHandlerTests
     [Fact]
     public async Task Handle_CustomerWithNoAccounts_ReturnsEmpty()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "a@b.com", "Test");
         context.Customers.Add(customer);
         await context.SaveChangesAsync();
@@ -56,26 +66,28 @@ public class GetCustomerAccountsQueryHandlerTests
     [Fact]
     public async Task Handle_MultipleAccountsWithTransactions_SumsBalancePerAccountIndependently()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "a@b.com", "Test");
         context.Customers.Add(customer);
 
         var checking = Account.Create(customer.Id, "ACC-001", "Checking", AccountType.Checking);
         var savings = Account.Create(customer.Id, "ACC-002", "Savings", AccountType.Savings);
         context.Accounts.AddRange(checking, savings);
-
-        context.Transactions.Add(Transaction.Create(
-            customer.Id, Money.Create(1000m, "ZAR"), "Salary",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), checking.Id));
-        context.Transactions.Add(Transaction.Create(
-            customer.Id, Money.Create(-200m, "ZAR"), "Rent",
-            TransactionCategory.Housing, TransactionSource.Create("Bank A", "ext-2"), checking.Id));
-        context.Transactions.Add(Transaction.Create(
-            customer.Id, Money.Create(5000m, "ZAR"), "Deposit",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-3"), savings.Id));
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var transactionsCtx = InMemoryDbContextFactory.Create();
+        transactionsCtx.Transactions.Add(Transaction.Create(
+            customer.Id, Money.Create(1000m, "ZAR"), "Salary",
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), checking.Id));
+        transactionsCtx.Transactions.Add(Transaction.Create(
+            customer.Id, Money.Create(-200m, "ZAR"), "Rent",
+            TransactionCategory.Housing, TransactionSource.Create("Bank A", "ext-2"), checking.Id));
+        transactionsCtx.Transactions.Add(Transaction.Create(
+            customer.Id, Money.Create(5000m, "ZAR"), "Deposit",
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-3"), savings.Id));
+        await transactionsCtx.SaveChangesAsync();
+
+        var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
             new GetCustomerAccountsQuery(customer.Id.Value), CancellationToken.None);
 
@@ -88,7 +100,7 @@ public class GetCustomerAccountsQueryHandlerTests
     [Fact]
     public async Task Handle_AccountWithNoTransactions_ReturnsZeroBalance()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "a@b.com", "Test");
         var account = Account.Create(customer.Id, "ACC-001", "Checking", AccountType.Checking);
         context.Customers.Add(customer);
@@ -110,18 +122,20 @@ public class GetCustomerAccountsQueryHandlerTests
     [Fact]
     public async Task Handle_UnlinkedTransaction_DoesNotAffectAnyAccountBalance()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "a@b.com", "Test");
         var account = Account.Create(customer.Id, "ACC-001", "Checking", AccountType.Checking);
         context.Customers.Add(customer);
         context.Accounts.Add(account);
-
-        context.Transactions.Add(Transaction.Create(
-            customer.Id, Money.Create(300m, "ZAR"), "Unlinked",
-            TransactionCategory.Uncategorized, TransactionSource.Create("Bank A", "ext-1"), accountId: null));
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var transactionsCtx = InMemoryDbContextFactory.Create();
+        transactionsCtx.Transactions.Add(Transaction.Create(
+            customer.Id, Money.Create(300m, "ZAR"), "Unlinked",
+            TransactionCategory.Uncategorized, TransactionSource.Create("Bank A", "ext-1"), accountId: null));
+        await transactionsCtx.SaveChangesAsync();
+
+        var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
             new GetCustomerAccountsQuery(customer.Id.Value), CancellationToken.None);
 

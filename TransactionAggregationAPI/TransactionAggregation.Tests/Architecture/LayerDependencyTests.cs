@@ -1,10 +1,9 @@
 using System.Reflection;
 using FluentAssertions;
 using NetArchTest.Rules;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Domain.Entities;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture;
@@ -12,14 +11,11 @@ namespace TransactionAggregation.Tests.Architecture;
 public class LayerDependencyTests
 {
     private static readonly Assembly DomainAssembly = typeof(Transaction).Assembly;
-    private static readonly Assembly ApplicationAssembly = typeof(TransactionAggregation.Application.DependencyInjection).Assembly;
-    private static readonly Assembly InfrastructureAssembly = typeof(TransactionAggregation.Infrastructure.DependencyInjection).Assembly;
-    private static readonly Assembly PersistenceAssembly = typeof(ApplicationDbContext).Assembly;
+    private static readonly Assembly ApplicationAssembly = typeof(Modules.Transactions.TransactionsApplicationDependencyInjection).Assembly;
 
-    private const string DomainNs = "TransactionAggregation.Domain";
-    private const string ApplicationNs = "TransactionAggregation.Application";
-    private const string InfrastructureNs = "TransactionAggregation.Infrastructure";
-    private const string PersistenceNs = "TransactionAggregation.Persistence";
+    private const string DomainNs = "Modules.Transactions.Domain";
+    private const string ApplicationNs = "Modules.Transactions.Application";
+    private const string InfrastructureNs = "Modules.Transactions.Infrastructure";
 
     [Fact]
     public void Domain_ShouldNot_DependOn_Application()
@@ -44,17 +40,6 @@ public class LayerDependencyTests
     }
 
     [Fact]
-    public void Domain_ShouldNot_DependOn_Persistence()
-    {
-        var result = Types.InAssembly(DomainAssembly)
-            .Should().NotHaveDependencyOn(PersistenceNs)
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue(
-            because: "Domain must not depend on Persistence");
-    }
-
-    [Fact]
     public void Application_ShouldNot_DependOn_Infrastructure()
     {
         var result = Types.InAssembly(ApplicationAssembly)
@@ -63,28 +48,6 @@ public class LayerDependencyTests
 
         result.IsSuccessful.Should().BeTrue(
             because: "Application must not depend on Infrastructure; use interfaces instead");
-    }
-
-    [Fact]
-    public void Application_ShouldNot_DependOn_Persistence()
-    {
-        var result = Types.InAssembly(ApplicationAssembly)
-            .Should().NotHaveDependencyOn(PersistenceNs)
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue(
-            because: "Application must not depend on Persistence; use IApplicationDbContext instead");
-    }
-
-    [Fact]
-    public void Infrastructure_ShouldNot_DependOn_Persistence()
-    {
-        var result = Types.InAssembly(InfrastructureAssembly)
-            .Should().NotHaveDependencyOn(PersistenceNs)
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue(
-            because: "Infrastructure must not depend on Persistence");
     }
 
     [Fact]
@@ -114,7 +77,7 @@ public class LayerDependencyTests
     public void ApplicationInterfaces_ShouldStartWith_I()
     {
         var result = Types.InAssembly(ApplicationAssembly)
-            .That().ResideInNamespace("TransactionAggregation.Application.Common.Interfaces")
+            .That().ResideInNamespace("Modules.Transactions.Application.Common.Interfaces")
             .And().AreInterfaces()
             .Should().HaveNameStartingWith("I")
             .GetResult();
@@ -127,7 +90,7 @@ public class LayerDependencyTests
     public void DomainEntities_ShouldBeSealed()
     {
         var result = Types.InAssembly(DomainAssembly)
-            .That().ResideInNamespace("TransactionAggregation.Domain.Entities")
+            .That().ResideInNamespace("Modules.Transactions.Domain.Entities")
             .Should().BeSealed()
             .GetResult();
 
@@ -139,7 +102,7 @@ public class LayerDependencyTests
     public void ValueObjects_ShouldInheritFromValueObject()
     {
         var result = Types.InAssembly(DomainAssembly)
-            .That().ResideInNamespace("TransactionAggregation.Domain.Common.ValueObjects")
+            .That().ResideInNamespace("Modules.Transactions.Domain.Common.ValueObjects")
             .And().AreNotAbstract()
             .Should().Inherit(typeof(SharedKernel.Common.ValueObjects.ValueObject))
             .GetResult();
@@ -152,7 +115,7 @@ public class LayerDependencyTests
     public void DomainEvents_ShouldInheritFromBaseDomainEvent()
     {
         var result = Types.InAssembly(DomainAssembly)
-            .That().ResideInNamespace("TransactionAggregation.Domain.Events")
+            .That().ResideInNamespace("Modules.Transactions.Domain.Events")
             .Should().Inherit(typeof(SharedKernel.Common.BaseDomainEvent))
             .GetResult();
 
@@ -177,7 +140,7 @@ public class LayerDependencyTests
     {
         var result = Types.InAssembly(DomainAssembly)
             .That().Inherit(typeof(Exception))
-            .Should().ResideInNamespace("TransactionAggregation.Domain.Exceptions")
+            .Should().ResideInNamespace("Modules.Transactions.Domain.Exceptions")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(

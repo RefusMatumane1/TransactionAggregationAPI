@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Application.Commands.Account.DeactivateAccount;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Application.Features.DeactivateAccount;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -14,11 +14,11 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 public class DeactivateAccountCommandHandlerTests
 {
     private static DeactivateAccountCommandHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
+        CustomersDbContext ctx)
         => new(ctx, NullLogger<DeactivateAccountCommandHandler>.Instance);
 
     private static async Task<Account> SeedActiveAccountAsync(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
+        CustomersDbContext ctx)
     {
         var customerId = CustomerId.Create();
         var account = Account.Create(customerId, "ACC-001", "Test Account", AccountType.Checking);
@@ -30,7 +30,7 @@ public class DeactivateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_ActiveAccount_DeactivatesSuccessfully()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedActiveAccountAsync(context);
         var handler = BuildHandler(context);
 
@@ -44,7 +44,7 @@ public class DeactivateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_ActiveAccount_SetsUpdatedAt()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedActiveAccountAsync(context);
         var handler = BuildHandler(context);
 
@@ -57,7 +57,7 @@ public class DeactivateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_AlreadyInactiveAccount_StillReturnsSuccess()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedActiveAccountAsync(context);
         account.Deactivate();
         await context.SaveChangesAsync();
@@ -73,7 +73,7 @@ public class DeactivateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_NonExistentAccount_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -86,7 +86,7 @@ public class DeactivateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_DeactivateOneOfMultipleAccounts_OtherRemainsActive()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customerId = CustomerId.Create();
         var acc1 = Account.Create(customerId, "ACC-001", "First", AccountType.Checking);
         var acc2 = Account.Create(customerId, "ACC-002", "Second", AccountType.Savings);

@@ -2,11 +2,11 @@ using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Infrastructure.Persistence;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
@@ -26,7 +26,7 @@ namespace TransactionAggregation.Tests.Integration
     Guid customerId, decimal amount = -150.00m, string description = "grocery store purchase")
         {
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<TransactionsDbContext>();
 
             var transaction = Transaction.Create(
                 CustomerId.CreateFrom(customerId),

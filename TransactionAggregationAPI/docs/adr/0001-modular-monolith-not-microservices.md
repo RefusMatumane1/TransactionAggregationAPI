@@ -33,7 +33,7 @@ architecture tests over shared assemblies. Not by network boundaries.
 
 **This ADR originally claimed the module boundaries below were already real.**
 They weren't: a later audit found only *logical* boundaries inside four shared
-projects (`TransactionAggregation.Domain/Application/Infrastructure/Persistence`),
+projects (`Modules/Transactions/Transactions.Domain/Application/Infrastructure/Persistence`),
 enforced solely by `LayerDependencyTests.cs` — which checks horizontal layering
 (Domain must not depend on Infrastructure) and enforces nothing about one module
 reaching into another's. In practice it hadn't: ~10 handlers were found directly
@@ -66,13 +66,13 @@ database strategy.
   Accounts/Customers extraction phase, which will need to touch the EF relationship
   it's part of anyway.
 - **Customers/Accounts, Transactions** — **still logical boundaries only**, living
-  in the original shared `TransactionAggregation.Domain/Application/Infrastructure/
+  in the original shared `Modules/Transactions/Transactions.Domain/Application/Infrastructure/
   Persistence` projects, pending later extraction phases. Do not read this ADR as
   claiming they're physically isolated yet — `ModuleIsolationTests.cs` only asserts
   isolation for the modules actually extracted so far.
 
 Layering is enforced top-down (API → Application → Domain, with Infrastructure and
-Persistence depending inward, never the reverse) via `TransactionAggregation.Domain`
+Persistence depending inward, never the reverse) via `Modules.Transactions.Domain`
 having zero references to EF Core, ASP.NET Core, or provider-specific packages.
 
 ## Consequences

@@ -18,7 +18,7 @@ namespace TransactionAggregation.Tests.Architecture;
 /// block every future module may depend on — must depend on no business module at
 /// all, proving it's genuinely generic and not secretly Transactions-shaped (it
 /// dispatches by message.Type strings, not by referencing
-/// TransactionAggregation.Application directly).
+/// Modules.Transactions.Application directly).
 /// </summary>
 public class ModuleIsolationTests
 {
@@ -33,10 +33,10 @@ public class ModuleIsolationTests
 
     private static readonly string[] LegacyLayers =
     [
-        "TransactionAggregation.Domain",
-        "TransactionAggregation.Application",
-        "TransactionAggregation.Infrastructure",
-        "TransactionAggregation.Persistence"
+        "Modules.Transactions.Domain",
+        "Modules.Transactions.Application",
+        "Modules.Transactions.Infrastructure",
+        "Modules.Transactions.Infrastructure.Persistence"
     ];
 
     [Fact]
@@ -105,10 +105,10 @@ public class ModuleIsolationTests
         var result = Types.InAssembly(MessagingAssembly)
             .Should()
             .NotHaveDependencyOnAny(
-                "TransactionAggregation.Domain",
-                "TransactionAggregation.Application",
-                "TransactionAggregation.Infrastructure",
-                "TransactionAggregation.Persistence",
+                "Modules.Transactions.Domain",
+                "Modules.Transactions.Application",
+                "Modules.Transactions.Infrastructure",
+                "Modules.Transactions.Infrastructure.Persistence",
                 "Modules.WebhookSources")
             .GetResult();
 
@@ -125,7 +125,7 @@ public class ModuleIsolationTests
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue(
-            because: "BankLinks.Domain must depend only on SharedKernel — the module needs an Account to exist but reaches it through IAccountProvisioningPort (a port it owns), never by referencing the Account entity or IApplicationDbContext directly");
+            because: "BankLinks.Domain must depend only on SharedKernel — the module needs an Account to exist but reaches it through IAccountProvisioningPort (a port it owns), never by referencing the Account entity or ITransactionsDbContext directly");
     }
 
     [Fact]

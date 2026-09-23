@@ -33,15 +33,15 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\TransactionAggregation.Application\TransactionAggregation.Application.csproj" />
-		<ProjectReference Include="..\TransactionAggregation.Domain\TransactionAggregation.Domain.csproj" />
-		<ProjectReference Include="..\TransactionAggregation.Infrastructure\TransactionAggregation.Infrastructure.csproj" />
-		<ProjectReference Include="..\TransactionAggregation.Persistence\TransactionAggregation.Persistence.csproj" />
+		<ProjectReference Include="..\Modules\Transactions\Transactions.Application\Transactions.Application.csproj" />
+		<ProjectReference Include="..\Modules\Transactions\Transactions.Domain\Transactions.Domain.csproj" />
+		<ProjectReference Include="..\Modules\Transactions\Transactions.Infrastructure\Transactions.Infrastructure.csproj" />
 		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
 		<ProjectReference Include="..\SharedKernel\SharedKernel.csproj" />
 		<ProjectReference Include="..\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
 		<ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Infrastructure\WebhookSources.Infrastructure.csproj" />
 		<ProjectReference Include="..\Modules\BankLinks\BankLinks.Infrastructure\BankLinks.Infrastructure.csproj" />
+		<ProjectReference Include="..\Modules\Customers\Customers.Infrastructure\Customers.Infrastructure.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

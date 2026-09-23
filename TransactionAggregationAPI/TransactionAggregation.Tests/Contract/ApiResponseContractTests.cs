@@ -1,7 +1,7 @@
 using FluentAssertions;
 using System.Net.Http.Json;
 using System.Text.Json;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Domain.ValueObjects;
 using TransactionAggregation.Tests.Integration;
 using Xunit;
 
@@ -115,7 +115,7 @@ namespace TransactionAggregation.Tests.Contract
                 }
                 """;
 
-            var dto = JsonSerializer.Deserialize<TransactionAggregation.Application.Common.DTOs.ExternalTransactionDTO>(
+            var dto = JsonSerializer.Deserialize<Modules.Transactions.Application.Common.DTOs.ExternalTransactionDTO>(
                 providerPayload, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
             dto.Should().NotBeNull();

@@ -18,7 +18,7 @@ same modular monolith. There is no second service on the other end of a topic.
 ## Decision
 Implement **Inbox** and **Outbox** as PostgreSQL tables with polling background
 dispatchers (`InboxDispatcherBackgroundService`, `OutboxDispatcherBackgroundService`
-in `TransactionAggregation.Infrastructure/BackgroundServices`), not a message
+in `Modules/Transactions/Transactions.Infrastructure/BackgroundServices`), not a message
 broker.
 
 - **Outbox** (`OutboxMessage`, indexed on `(Status, NextAttemptAt)`): transaction

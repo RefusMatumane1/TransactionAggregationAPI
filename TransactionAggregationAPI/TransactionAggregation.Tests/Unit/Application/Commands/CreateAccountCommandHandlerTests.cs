@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Application.Commands.Account.CreateAccount;
+using Modules.Customers.Application.Features.CreateAccount;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,12 +13,11 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 
 public class CreateAccountCommandHandlerTests
 {
-    private static CreateAccountCommandHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
+    private static CreateAccountCommandHandler BuildHandler(CustomersDbContext ctx)
         => new(ctx, NullLogger<CreateAccountCommandHandler>.Instance);
 
     private static async Task<Customer> SeedCustomerAsync(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx,
+        CustomersDbContext ctx,
         string email = "user@example.com")
     {
         var customer = Customer.Create(CustomerId.Create(), email, "Test User");
@@ -30,7 +29,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_CreatesAccountAndReturnsId()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -47,7 +46,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_PersistsAccountInDatabase()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -65,7 +64,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_ReturnedIdMatchesStoredAccount()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -87,7 +86,7 @@ public class CreateAccountCommandHandlerTests
     [InlineData(AccountType.Loan)]
     public async Task Handle_AllAccountTypes_Succeed(AccountType accountType)
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -103,7 +102,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_NonExistentCustomer_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -119,7 +118,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_DuplicateAccountNumber_ReturnsValidationFailure()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -142,7 +141,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_DuplicateAccountNumber_OnlyOneAccountPersisted()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context);
         var handler = BuildHandler(context);
 
@@ -160,7 +159,7 @@ public class CreateAccountCommandHandlerTests
     [Fact]
     public async Task Handle_SameAccountNumberForDifferentCustomers_BothSucceed()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var c1 = await SeedCustomerAsync(context, "c1@example.com");
         var c2 = await SeedCustomerAsync(context, "c2@example.com");
         var handler = BuildHandler(context);

@@ -5,7 +5,7 @@ using NSubstitute;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Behaviors;
 using SharedKernel.Common.Models;
-using TransactionAggregation.Application.Common.Models;
+using Modules.Transactions.Application.Common.Models;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Behaviors;

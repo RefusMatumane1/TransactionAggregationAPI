@@ -25,5 +25,6 @@
 		<ProjectReference Include="..\WebhookSources.Application\WebhookSources.Application.csproj" />
 		<ProjectReference Include="..\WebhookSources.Domain\WebhookSources.Domain.csproj" />
 		<ProjectReference Include="..\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
 	</ItemGroup>
 </Project>

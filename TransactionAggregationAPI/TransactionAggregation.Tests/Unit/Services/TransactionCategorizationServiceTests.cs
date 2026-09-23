@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using TransactionAggregation.Application.Common.Options;
-using TransactionAggregation.Application.Services;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Application.Common.Options;
+using Modules.Transactions.Application.Services;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Services;

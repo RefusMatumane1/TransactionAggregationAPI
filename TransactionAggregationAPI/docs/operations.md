@@ -130,7 +130,7 @@ state).
    unreachable at pod *startup* (not mid-run), the app falls back to
    `UseEphemeralDataProtectionProvider()` automatically (failure-scenarios.md
    scenario 2) — no manual step, but this directly affects bank-link token
-   encryption: `BankLinkCredentialProtector` (`TransactionAggregation.Infrastructure/
+   encryption: `BankLinkCredentialProtector` (`Modules/Transactions/Transactions.Infrastructure/
    Authentication/`) is built on `IDataProtectionProvider.CreateProtector("BankLink.Tokens.v1")`,
    not a separate mechanism. Any bank-link token protected during an
    ephemeral-key episode becomes **unrecoverable** once the pod restarts or
@@ -167,7 +167,7 @@ as a page/notification.
    FROM "OutboxMessages" WHERE "Status" = 3 -- DeadLettered (OutboxMessageStatus enum: same ordering)
    ORDER BY "OccurredAt" DESC LIMIT 20;
    ```
-   Re-check `TransactionAggregation.Domain/Inbox/InboxMessageStatus.cs` /
+   Re-check `Modules/Transactions/Transactions.Domain/Inbox/InboxMessageStatus.cs` /
    `.../Outbox/OutboxMessageStatus.cs` if either enum is ever reordered —
    these queries hardcode the numeric value, and EF Core stores enums as
    plain integers here, not as strings.

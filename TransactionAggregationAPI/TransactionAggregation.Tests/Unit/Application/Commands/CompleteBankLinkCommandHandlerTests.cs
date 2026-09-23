@@ -13,10 +13,10 @@ using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
 using SharedKernel.Common.Enums;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Application.Adapters;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
-using TransactionAggregation.Persistence;
+using Modules.Customers.Application.Adapters;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -28,7 +28,7 @@ public class CompleteBankLinkCommandHandlerTests
 
     private static CompleteBankLinkCommandHandler BuildHandler(
         IBankLinksDbContext bankLinksCtx,
-        ApplicationDbContext appCtx,
+        CustomersDbContext appCtx,
         IBankAggregatorClient client,
         IDistributedCache cache,
         IBankLinkCredentialProtector? protector = null)
@@ -59,7 +59,7 @@ public class CompleteBankLinkCommandHandlerTests
         return client;
     }
 
-    private static async Task<Customer> SeedCustomerAsync(ApplicationDbContext ctx, string email = "user@example.com")
+    private static async Task<Customer> SeedCustomerAsync(CustomersDbContext ctx, string email = "user@example.com")
     {
         var customer = Customer.Create(CustomerId.Create(), email, "Test User");
         ctx.Customers.Add(customer);
@@ -85,7 +85,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_ValidStateAndCode_ActivatesLinkAndReturnsAccountId()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();
@@ -103,7 +103,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_ValidStateAndCode_CreatesAccountForCustomer()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();
@@ -124,7 +124,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_ValidStateAndCode_EncryptsTokensBeforePersisting()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();
@@ -145,7 +145,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_ValidState_IsOneTimeUse_RemovedFromCacheAfterCompletion()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();
@@ -164,7 +164,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_UnknownState_ReturnsValidationFailure()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var handler = BuildHandler(bankLinksContext, appContext, BuildClient(), new FakeDistributedCache());
 
@@ -177,7 +177,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_StateReferencesLinkThatIsNoLongerPending_ReturnsValidationFailure()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();
@@ -197,7 +197,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_StateReferencesMissingCustomer_ReturnsNotFound()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var cache = new FakeDistributedCache();
         var missingCustomerId = CustomerId.Create();
@@ -219,7 +219,7 @@ public class CompleteBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_ReLinkingPreviouslyKnownAccountNumber_ReusesExistingAccountInsteadOfFailing()
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var existingAccount = Account.Create(customer.Id, "ACC-001", "Cheque Account", AccountType.Checking, "ZAR");
@@ -252,7 +252,7 @@ public class CompleteBankLinkCommandHandlerTests
     [InlineData("something-unrecognised", AccountType.Checking)]
     public async Task Handle_MapsAggregatorAccountType(string aggregatorType, AccountType expected)
     {
-        var appContext = InMemoryDbContextFactory.Create();
+        var appContext = InMemoryCustomersDbContextFactory.Create();
         var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
         var customer = await SeedCustomerAsync(appContext);
         var cache = new FakeDistributedCache();

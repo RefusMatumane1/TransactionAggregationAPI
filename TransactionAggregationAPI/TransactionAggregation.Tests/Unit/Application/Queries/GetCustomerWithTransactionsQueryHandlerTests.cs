@@ -1,12 +1,15 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Application.Queries.Customer.GetCustomer;
-using TransactionAggregation.Persistence;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions;
+using Modules.Transactions.Infrastructure.Persistence;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Customers.Application.Contracts;
+using Modules.Customers.Domain;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -33,14 +36,15 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     }
 
     private static GetCustomerWithTransactionsQueryHandler BuildHandler(
-        ApplicationDbContext context)
-        => new(context, NullLogger<GetCustomerWithTransactionsQueryHandler>.Instance);
+        TransactionsDbContext context, CustomersDbContext customersContext)
+        => new(context, new CustomersReadApi(customersContext), NullLogger<GetCustomerWithTransactionsQueryHandler>.Instance);
 
     [Fact]
     public async Task Handle_CustomerNotFound_ReturnsNotFoundError()
     {
         var context = InMemoryDbContextFactory.Create();
-        var handler = BuildHandler(context);
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
+        var handler = BuildHandler(context, customersContext);
 
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(Guid.NewGuid()), CancellationToken.None);
@@ -53,15 +57,17 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_TotalTransactionsReflectsAllPages_NotJustCurrentPage()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
 
         for (int i = 1; i <= 25; i++)
             context.Transactions.Add(MakeTransaction(customer.Id, -(i * 10m)));
 
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(customer.Id.Value, Page: 1, PageSize: 5),
             CancellationToken.None);
@@ -75,8 +81,10 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_CategoryFilter_ReturnsOnlyMatchingTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "test@example.com", "Test");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
 
         context.Transactions.AddRange(
             MakeTransaction(customer.Id, -50m, TransactionCategory.Groceries),
@@ -86,7 +94,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
 
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(
                 customer.Id.Value, Category: TransactionCategory.Groceries),
@@ -102,8 +110,10 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_DateRangeIncludingNow_ReturnsAllTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "date@example.com", "Date Test");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
 
         context.Transactions.AddRange(
                     MakeTransaction(customer.Id, -100m),
@@ -111,7 +121,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
 
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(
                 customer.Id.Value,
@@ -127,12 +137,14 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_DateRangeInPast_ExcludesAllCurrentTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "past@example.com", "Past Test");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
         context.Transactions.Add(MakeTransaction(customer.Id, -100m));
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(
                 customer.Id.Value,
@@ -148,8 +160,10 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_SummaryCalculatesIncomeAndExpenses_ForSettledTransactions()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "fin@example.com", "Finance");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
 
         context.Transactions.AddRange(
             MakeTransaction(customer.Id, 3000m, status: TransactionStatus.Settled),
@@ -160,7 +174,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
 
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(customer.Id.Value), CancellationToken.None);
 
@@ -174,11 +188,13 @@ public class GetCustomerWithTransactionsQueryHandlerTests
     public async Task Handle_ReturnsCorrectCustomerInfo()
     {
         var context = InMemoryDbContextFactory.Create();
+        var customersContext = InMemoryCustomersDbContextFactory.Create();
         var customer = Customer.Create(CustomerId.Create(), "info@example.com", "Info User");
-        context.Customers.Add(customer);
+        customersContext.Customers.Add(customer);
+        await customersContext.SaveChangesAsync();
         await context.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, customersContext);
         var result = await handler.Handle(
             new GetCustomerWithTransactionsQuery(customer.Id.Value), CancellationToken.None);
 

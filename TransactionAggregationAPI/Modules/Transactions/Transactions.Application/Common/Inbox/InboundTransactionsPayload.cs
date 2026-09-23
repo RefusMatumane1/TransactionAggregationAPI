@@ -1,0 +1,7 @@
+using Modules.Transactions.Application.Common.DTOs;
+
+namespace Modules.Transactions.Application.Common.Inbox
+{
+    public sealed record InboundTransactionsPayload(
+    string ExternalAccountId, IReadOnlyList<ExternalTransactionDTO> Transactions);
+}

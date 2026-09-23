@@ -2,7 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using BuildingBlocks.Messaging.Persistence;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Infrastructure.Persistence;
 
 namespace TransactionAggregation.Tests.Helpers;
 
@@ -17,19 +17,19 @@ public static class InMemoryDbContextFactory
     }
 
     /// <summary>
-    /// ApplicationDbContext.SaveChangesAsync flushes the exact MessagingDbContext
+    /// TransactionsDbContext.SaveChangesAsync flushes the exact MessagingDbContext
     /// instance it was constructed with — pass one in (e.g. from
     /// InMemoryMessagingDbContextFactory.Create()) when a test needs to assert on
     /// Outbox messages an event handler wrote during this context's own save;
     /// omit it when the test never touches Outbox.
     /// </summary>
-    public static ApplicationDbContext Create(string? dbName = null, MessagingDbContext? messagingDbContext = null)
+    public static TransactionsDbContext Create(string? dbName = null, MessagingDbContext? messagingDbContext = null)
     {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+        var options = new DbContextOptionsBuilder<TransactionsDbContext>()
             .UseInMemoryDatabase(dbName ?? Guid.NewGuid().ToString())
             .Options;
 
-        return new ApplicationDbContext(options, BuildNoOpMediator(), messagingDbContext ?? InMemoryMessagingDbContextFactory.Create());
+        return new TransactionsDbContext(options, BuildNoOpMediator(), messagingDbContext ?? InMemoryMessagingDbContextFactory.Create());
     }
 }
 

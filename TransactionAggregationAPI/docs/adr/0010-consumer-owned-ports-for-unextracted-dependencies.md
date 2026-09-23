@@ -11,7 +11,7 @@ lowest possible risk. BankLinks is the second module extracted, and it does
 **not** have that luxury: `CompleteBankLinkCommandHandler` needs an `Account` to
 exist for a newly linked external bank account, but Accounts/Customers haven't
 been extracted into their own module yet — they're still logical-only, living in
-the original shared `TransactionAggregation.Domain/Application/Infrastructure/
+the original shared `Modules/Transactions/Transactions.Domain/Application/Infrastructure/
 Persistence` projects (see ADR-0001's phase tracking).
 
 The original code (`CompleteBankLinkCommandHandler`) resolved this by loading a
@@ -39,7 +39,7 @@ Concretely, for BankLinks → Account:
   takes only primitives (`Guid customerId, string accountNumber, ...`), returns
   a `SharedKernel.Common.Models.Result<Guid>`. BankLinks has zero reference to
   the `Account` entity, `AccountType` enum, or `IApplicationDbContext`.
-- `TransactionAggregation.Application.Adapters.AccountProvisioningAdapter` —
+- `Modules.Transactions.Application.Adapters.AccountProvisioningAdapter` —
   implements the port. Lives in the still-unextracted Application project
   (which already has `IApplicationDbContext` and `Account`), so it's a
   perfectly normal same-module operation from Application's point of view:

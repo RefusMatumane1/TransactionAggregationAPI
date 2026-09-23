@@ -1,7 +1,7 @@
 using FluentAssertions;
 using System.Net;
 using System.Net.Http.Json;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Domain.ValueObjects;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration

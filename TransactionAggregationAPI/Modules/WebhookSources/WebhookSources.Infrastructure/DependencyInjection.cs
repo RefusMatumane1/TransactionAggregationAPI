@@ -20,7 +20,7 @@ namespace Modules.WebhookSources
             {
                 options.UseNpgsql(connectionString, npgsqlOptions =>
                 {
-                    npgsqlOptions.MigrationsAssembly("Modules.WebhookSources.Infrastructure");
+                    npgsqlOptions.MigrationsAssembly("WebhookSources.Infrastructure");
                     npgsqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(30),

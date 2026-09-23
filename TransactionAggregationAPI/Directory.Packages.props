@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- Core -->
+    <PackageVersion Include="Asp.Versioning.Http" Version="10.0.0" />
     <PackageVersion Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" />
     <PackageVersion Include="Bogus" Version="35.6.5" />
     <PackageVersion Include="Mapster.DependencyInjection" Version="10.0.6" />

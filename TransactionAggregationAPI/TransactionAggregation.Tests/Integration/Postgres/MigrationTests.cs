@@ -47,9 +47,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         /// the previous test alone couldn't catch a table landing in the wrong schema.
         /// </summary>
         [Theory]
-        [InlineData("Customers", "public")]
-        [InlineData("Accounts", "public")]
-        [InlineData("Transactions", "public")]
+        [InlineData("Customers", "customers")]
+        [InlineData("Accounts", "customers")]
+        [InlineData("Transactions", "transactions")]
         [InlineData("BankLinks", "banklinks")]
         [InlineData("WebhookSources", "webhooksources")]
         [InlineData("InboxMessages", "messaging")]

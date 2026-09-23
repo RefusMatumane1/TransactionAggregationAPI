@@ -1,0 +1,108 @@
+using BuildingBlocks.Web;
+using MediatR;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Routing;
+using SharedKernel.Abstractions.Authentication;
+using Modules.BankLinks.Application.DTOs;
+using Modules.BankLinks.Application.Features.CompleteBankLink;
+using Modules.BankLinks.Application.Features.GetBankLinks;
+using Modules.BankLinks.Application.Features.InitiateBankLink;
+using Modules.BankLinks.Infrastructure.Endpoints;
+
+namespace Modules.BankLinks
+{
+    public static class BankLinksEndpoints
+    {
+        public static IEndpointRouteBuilder MapBankLinksEndpoints(this IEndpointRouteBuilder app)
+        {
+            var group = app.MapGroup("/api/v{version:apiVersion}/customers/{customerId:guid}/bank-links")
+                          .WithApiVersionSet()
+                          .WithTags("BankLinks")
+                          .RequireRateLimiting("FixedWindow")
+                          .RequireAuthorization();
+
+            group.MapPost("/", InitiateBankLink)
+                .WithName("InitiateBankLink")
+                .WithSummary("Start the consent flow to link a South African bank account via the account aggregator")
+                .Produces<InitiateBankLinkResponse>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status404NotFound)
+                .Produces(StatusCodes.Status409Conflict)
+                .Produces(StatusCodes.Status429TooManyRequests);
+
+            group.MapGet("/", GetBankLinks)
+                .WithName("GetBankLinks")
+                .WithSummary("List the customer's linked bank accounts and their status")
+                .Produces<IReadOnlyList<BankLinkDto>>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status429TooManyRequests);
+
+
+            var callbackGroup = app.MapGroup("/api/v{version:apiVersion}/bank-links")
+                        .WithApiVersionSet()
+                        .WithTags("BankLinks");
+
+            callbackGroup.MapGet("/callback", CompleteBankLink)
+                .WithName("CompleteBankLink")
+                .WithSummary("OAuth redirect target the aggregator sends the customer's browser back to")
+                .RequireRateLimiting("FixedWindow")
+                .AllowAnonymous()
+                .Produces<CompleteBankLinkResponse>(StatusCodes.Status200OK)
+                .Produces(StatusCodes.Status400BadRequest);
+
+            return app;
+        }
+
+        private static async Task<IResult> InitiateBankLink(
+            ISender sender,
+            Guid customerId,
+            IUserContext userContext,
+            [FromBody] InitiateBankLinkRequest request,
+            CancellationToken cancellationToken)
+        {
+            if (customerId != userContext.UserId)
+                return Results.NotFound();
+
+            var command = new InitiateBankLinkCommand(customerId, request.Institution);
+            var result = await sender.Send(command, cancellationToken);
+
+            if (result.IsFailure)
+                return CustomResults.Problem(result);
+
+            return Results.Ok(new InitiateBankLinkResponse(result.Value));
+        }
+
+        private static async Task<IResult> GetBankLinks(
+            ISender sender,
+            Guid customerId,
+            IUserContext userContext,
+            CancellationToken cancellationToken)
+        {
+            if (customerId != userContext.UserId)
+                return Results.NotFound();
+
+            var query = new GetBankLinksQuery(customerId);
+            var result = await sender.Send(query, cancellationToken);
+
+            if (result.IsFailure)
+                return CustomResults.Problem(result);
+
+            return Results.Ok(result.Value);
+        }
+
+        private static async Task<IResult> CompleteBankLink(
+            ISender sender,
+            string code,
+            string state,
+            CancellationToken cancellationToken)
+        {
+            var command = new CompleteBankLinkCommand(code, state);
+            var result = await sender.Send(command, cancellationToken);
+
+            if (result.IsFailure)
+                return CustomResults.Problem(result);
+
+            return Results.Ok(new CompleteBankLinkResponse(result.Value));
+        }
+    }
+}

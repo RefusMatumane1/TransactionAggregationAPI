@@ -2,9 +2,9 @@ using FluentAssertions;
 using System.Text.Json;
 using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Persistence;
-using TransactionAggregation.Application.Common.DTOs;
-using TransactionAggregation.Application.Common.Inbox;
-using TransactionAggregation.Application.Features.Transactions.Commands.ReceiveBankTransactions;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.Inbox;
+using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

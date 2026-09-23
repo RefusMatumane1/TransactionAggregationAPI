@@ -13,7 +13,7 @@ have a well-defined, stable shape per the domain model.
 
 ## Decision
 Use PostgreSQL as the single relational system of record, accessed through EF
-Core (`TransactionAggregation.Persistence`). Money is stored as `decimal` with an
+Core (`Modules.Transactions.Persistence`). Money is stored as `decimal` with an
 explicit currency column (`Money` value object), never `float`/`double`.
 
 Concretely:

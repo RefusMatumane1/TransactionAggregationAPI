@@ -1,11 +1,16 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Application.Queries.Account.GetAccountById;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Customers.Application.Features.GetAccountById;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Application.Adapters;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,12 +18,17 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries;
 
 public class GetAccountByIdQueryHandlerTests
 {
+    // Balances come from the Transactions module via IAccountBalanceProvider; the real
+    // TransactionBalanceProvider is used so the summing logic is exercised end to end.
     private static GetAccountByIdQueryHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
-        => new(ctx, NullLogger<GetAccountByIdQueryHandler>.Instance);
+        CustomersDbContext ctx,
+        TransactionsDbContext? transactionsCtx = null)
+        => new(ctx,
+            new TransactionBalanceProvider(transactionsCtx ?? InMemoryDbContextFactory.Create()),
+            NullLogger<GetAccountByIdQueryHandler>.Instance);
 
     private static async Task<Account> SeedAccountAsync(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx,
+        CustomersDbContext ctx,
         string accountNumber = "ACC-001",
         string accountName = "Test Account",
         AccountType type = AccountType.Checking,
@@ -33,7 +43,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_ExistingAccount_ReturnsMappedDto()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedAccountAsync(context, "ACC-123", "My Savings", AccountType.Savings, "USD");
         var handler = BuildHandler(context);
 
@@ -53,7 +63,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_ExistingAccount_MapsCustomerIdCorrectly()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customerId = CustomerId.Create();
         var account = Account.Create(customerId, "ACC-001", "My Account", AccountType.Checking);
         context.Accounts.Add(account);
@@ -69,7 +79,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_DeactivatedAccount_ReturnsIsActiveFalse()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedAccountAsync(context);
         account.Deactivate();
         await context.SaveChangesAsync();
@@ -85,7 +95,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_NonExistentAccount_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -98,7 +108,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_WithMultipleAccounts_ReturnsCorrectOne()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var acc1 = await SeedAccountAsync(context, "ACC-001", "First");
         var acc2 = await SeedAccountAsync(context, "ACC-002", "Second");
 
@@ -114,7 +124,7 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_ExistingAccount_MapsCreatedAtCorrectly()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedAccountAsync(context);
         var handler = BuildHandler(context);
 
@@ -135,18 +145,19 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_AccountWithLinkedTransactions_ReturnsSummedBalance()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
+        var transactionsCtx = InMemoryDbContextFactory.Create();
         var account = await SeedAccountAsync(context);
 
-        context.Transactions.Add(Transaction.Create(
+        transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(1000m, "ZAR"), "Salary",
             TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id));
-        context.Transactions.Add(Transaction.Create(
+        transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(-150m, "ZAR"), "Groceries",
             TransactionCategory.Groceries, TransactionSource.Create("Bank A", "ext-2"), account.Id));
-        await context.SaveChangesAsync();
+        await transactionsCtx.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
             new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
 
@@ -156,19 +167,20 @@ public class GetAccountByIdQueryHandlerTests
     [Fact]
     public async Task Handle_TransactionLinkedToAnotherAccount_IsExcludedFromBalance()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var account = await SeedAccountAsync(context, "ACC-001");
         var otherAccount = await SeedAccountAsync(context, "ACC-002");
 
-        context.Transactions.Add(Transaction.Create(
+        var transactionsCtx = InMemoryDbContextFactory.Create();
+        transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(500m, "ZAR"), "This account's income",
             TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id));
-        context.Transactions.Add(Transaction.Create(
+        transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(999m, "ZAR"), "Other account's income",
             TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-2"), otherAccount.Id));
-        await context.SaveChangesAsync();
+        await transactionsCtx.SaveChangesAsync();
 
-        var handler = BuildHandler(context);
+        var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
             new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
 

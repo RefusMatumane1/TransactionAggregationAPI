@@ -4,9 +4,10 @@ using Npgsql;
 using NSubstitute;
 using Testcontainers.PostgreSql;
 using BuildingBlocks.Messaging.Persistence;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.BankLinks.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Infrastructure.Persistence;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
@@ -19,7 +20,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
     /// idempotency guarantee are both Postgres-specific and were previously verified
     /// only manually (docker run + docker exec psql), not by any automated test.
     ///
-    /// Three DbContexts now migrate against this one database, each owning its own
+    /// Each module DbContext migrates against this one database, each owning its own
     /// schema/migration history — see docs/adr/0009-schema-per-module-database-strategy.md.
     /// </summary>
     public sealed class PostgresContainerFixture : IAsyncLifetime
@@ -48,6 +49,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var bankLinks = CreateBankLinksContext();
             await bankLinks.Database.MigrateAsync();
 
+            using var customers = CreateCustomersContext();
+            await customers.Database.MigrateAsync();
+
             using var context = CreateContext();
             await context.Database.MigrateAsync();
         }
@@ -59,7 +63,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         }
 
         /// <summary>
-        /// ApplicationDbContext.SaveChangesAsync flushes the exact MessagingDbContext
+        /// TransactionsDbContext.SaveChangesAsync flushes the exact MessagingDbContext
         /// instance it was constructed with (see the Outbox-atomicity comment on that
         /// class) — a caller that separately creates its own MessagingDbContext to add
         /// an OutboxMessage MUST pass that same instance here, or the write silently
@@ -73,11 +77,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         /// associated with the current connection" if the two contexts hold separate
         /// physical connections, even to the same database.
         /// </summary>
-        public ApplicationDbContext CreateContext(MessagingDbContext? messagingDbContext = null)
+        public TransactionsDbContext CreateContext(MessagingDbContext? messagingDbContext = null)
         {
             var messaging = messagingDbContext ?? CreateMessagingContext();
 
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            var options = new DbContextOptionsBuilder<TransactionsDbContext>()
                 .UseNpgsql((NpgsqlConnection)messaging.Database.GetDbConnection())
                 .Options;
 
@@ -85,7 +89,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>())
                 .Returns(Task.CompletedTask);
 
-            return new ApplicationDbContext(options, mediator, messaging);
+            return new TransactionsDbContext(options, mediator, messaging);
         }
 
         public MessagingDbContext CreateMessagingContext()
@@ -112,6 +116,19 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .Returns(Task.CompletedTask);
 
             return new WebhookSourcesDbContext(options, mediator);
+        }
+
+        public CustomersDbContext CreateCustomersContext()
+        {
+            var options = new DbContextOptionsBuilder<CustomersDbContext>()
+                .UseNpgsql(ConnectionString)
+                .Options;
+
+            var mediator = Substitute.For<IMediator>();
+            mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            return new CustomersDbContext(options, mediator);
         }
 
         public BankLinksDbContext CreateBankLinksContext()

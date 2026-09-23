@@ -1,9 +1,10 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Application.Queries.Customer.GetCustomer;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
+using Modules.Customers.Application.Features.GetAllCustomers;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -17,7 +18,7 @@ public class GetAllCustomersQueryHandlerTests
     [Fact]
     public async Task Handle_ReturnsAllCustomers_WithCorrectTotalCount()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         context.Customers.AddRange(
             MakeCustomer("alice@example.com", "Alice"),
             MakeCustomer("bob@example.com", "Bob"),
@@ -38,7 +39,7 @@ public class GetAllCustomersQueryHandlerTests
     [Fact]
     public async Task Handle_PaginationLimitsReturnedItems()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         for (int i = 1; i <= 5; i++)
             context.Customers.Add(MakeCustomer($"user{i}@example.com", $"User {i}"));
         await context.SaveChangesAsync();
@@ -58,7 +59,7 @@ public class GetAllCustomersQueryHandlerTests
     [Fact]
     public async Task Handle_SearchByName_FiltersCorrectly()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         context.Customers.AddRange(
             MakeCustomer("alice@example.com", "Alice Smith"),
             MakeCustomer("bob@example.com", "Bob Jones"),
@@ -80,7 +81,7 @@ public class GetAllCustomersQueryHandlerTests
     [Fact]
     public async Task Handle_SearchByEmail_FiltersCorrectly()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         context.Customers.AddRange(
             MakeCustomer("alice@gmail.com", "Alice"),
             MakeCustomer("bob@company.com", "Bob"));
@@ -99,7 +100,7 @@ public class GetAllCustomersQueryHandlerTests
     [Fact]
     public async Task Handle_EmptyDatabase_ReturnsEmptyPage()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = new GetAllCustomersQueryHandler(
             context, NullLogger<GetAllCustomersQueryHandler>.Instance);
 

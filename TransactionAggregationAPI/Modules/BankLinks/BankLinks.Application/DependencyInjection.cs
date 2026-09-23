@@ -15,7 +15,7 @@ namespace Modules.BankLinks
 
             // Handler registration only — pipeline behaviors (Validation/Logging/
             // Performance/Caching) are registered exactly once, centrally, in
-            // TransactionAggregation.Application.AddApplication(). Adding them again
+            // AddTransactionsApplication(). Adding them again
             // here would execute every behavior twice for this module's requests.
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));

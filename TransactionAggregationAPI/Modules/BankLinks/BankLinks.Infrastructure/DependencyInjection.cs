@@ -23,7 +23,7 @@ namespace Modules.BankLinks
             {
                 options.UseNpgsql(connectionString, npgsqlOptions =>
                 {
-                    npgsqlOptions.MigrationsAssembly("Modules.BankLinks.Infrastructure");
+                    npgsqlOptions.MigrationsAssembly("BankLinks.Infrastructure");
                     npgsqlOptions.EnableRetryOnFailure(
                         maxRetryCount: 5,
                         maxRetryDelay: TimeSpan.FromSeconds(30),

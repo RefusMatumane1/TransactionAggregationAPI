@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+	HTTP-facing helpers shared by every module's endpoints (ProblemDetails mapping for
+	Result failures, API versioning). Kept out of SharedKernel so Domain/Application
+	projects, which reference SharedKernel, never pick up an ASP.NET Core dependency.
+	-->
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Asp.Versioning.Http" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\SharedKernel\SharedKernel.csproj" />
+	</ItemGroup>
+</Project>

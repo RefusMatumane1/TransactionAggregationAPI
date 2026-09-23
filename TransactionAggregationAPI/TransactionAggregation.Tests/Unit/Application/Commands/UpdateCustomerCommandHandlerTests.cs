@@ -1,10 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Application.Commands.Customer.UpdateCustomer;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
+using Modules.Customers.Application.Features.UpdateCustomer;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -13,11 +14,11 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 public class UpdateCustomerCommandHandlerTests
 {
     private static UpdateCustomerCommandHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx)
+        CustomersDbContext ctx)
         => new(ctx, new NoOpCacheService(), NullLogger<UpdateCustomerCommandHandler>.Instance);
 
     private static async Task<Customer> SeedCustomerAsync(
-        TransactionAggregation.Persistence.ApplicationDbContext ctx,
+        CustomersDbContext ctx,
         string email, string name)
     {
         var customer = Customer.Create(CustomerId.Create(), email, name);
@@ -29,7 +30,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidUpdate_UpdatesEmailAndName()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context, "old@example.com", "Old Name");
         var handler = BuildHandler(context);
 
@@ -46,7 +47,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidUpdate_SetsUpdatedAt()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context, "user@example.com", "User");
         var handler = BuildHandler(context);
 
@@ -60,7 +61,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_SameEmail_UpdatesNameSuccessfully()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var customer = await SeedCustomerAsync(context, "same@example.com", "Old Name");
         var handler = BuildHandler(context);
 
@@ -75,7 +76,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_NonExistentCustomer_ReturnsNotFound()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
@@ -89,7 +90,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_EmailAlreadyUsedByOtherCustomer_ReturnsConflict()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         await SeedCustomerAsync(context, "taken@example.com", "Existing User");
         var customerToUpdate = await SeedCustomerAsync(context, "other@example.com", "Another User");
         var handler = BuildHandler(context);
@@ -105,7 +106,7 @@ public class UpdateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_EmailConflict_DoesNotPersistChanges()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         await SeedCustomerAsync(context, "taken@example.com", "Existing");
         var customerToUpdate = await SeedCustomerAsync(context, "original@example.com", "Original Name");
         var handler = BuildHandler(context);

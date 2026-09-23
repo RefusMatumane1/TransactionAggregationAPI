@@ -2,6 +2,8 @@ using System.Reflection;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
+using Modules.WebhookSources.Application.Contracts;
+using Modules.WebhookSources.Contracts;
 
 namespace Modules.WebhookSources
 {
@@ -13,10 +15,12 @@ namespace Modules.WebhookSources
 
             // Handler registration only — pipeline behaviors (Validation/Logging/
             // Performance/Caching) are registered exactly once, centrally, in
-            // TransactionAggregation.Application.AddApplication(). Adding them again
+            // AddTransactionsApplication(). Adding them again
             // here would execute every behavior twice for this module's requests.
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
+
+            services.AddScoped<IWebhookSourceAuthenticator, WebhookSourceAuthenticator>();
 
             return services;
         }

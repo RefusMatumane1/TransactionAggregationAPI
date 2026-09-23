@@ -80,10 +80,9 @@ TransactionAggregationAPI/              ← solution root
 │   ├── AppHost.cs                      ← Wires up API + Postgres + Redis + Seq
 │   └── appsettings.Development.json    ← Fixed postgres-password parameter
 │
-├── TransactionAggregation.Application/ ← Use cases (CQRS / MediatR) — Customers/Accounts/Transactions (not yet extracted, see ADR-0001/0009)
-├── TransactionAggregation.Domain/      ← Entities, value objects, enums (same modules as above)
-├── TransactionAggregation.Infrastructure/ ← Redis cache, bank adapters
-├── TransactionAggregation.Persistence/    ← ApplicationDbContext (`public` schema), migrations
+├── Modules/Transactions/Transactions.Application/    ← Transaction use cases (CQRS / MediatR), categorization
+├── Modules/Transactions/Transactions.Domain/         ← Transaction entity, value objects, domain events
+├── Modules/Transactions/Transactions.Infrastructure/ ← TransactionsDbContext (`transactions` schema), migrations, inbox/outbox dispatchers
 ├── TransactionAggregationAPI.ServiceDefaults/ ← Health checks, OpenTelemetry, prometheus-net
 │
 ├── SharedKernel/                       ← Common building blocks every module depends on (Result, ICommand/IQuery, ValueObject, MediatR pipeline behaviors)
@@ -551,7 +550,7 @@ hash of each key is ever stored; the plaintext is shown exactly once, when it's 
 rotated, and can't be retrieved afterwards. Keys are per-source, not one shared secret: if one
 source's key leaks, only that entry needs rotating (from the UI, no redeploy), and whichever key
 a request presents tells the API which source it actually came from (logged as `SourceName` on
-every ingest — see `ApiKeyEndpointFilter`/`ReceiveBankTransactionsCommand`), not just "someone
+every ingest — see `WebhookApiKeyEndpointFilter`/`ReceiveBankTransactionsCommand`), not just "someone
 with a valid key." The payload identifies the linked account by `externalAccountId`; the API
 resolves it to the matching (active) `BankLink` to find which customer/internal account it
 belongs to:

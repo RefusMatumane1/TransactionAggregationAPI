@@ -2,17 +2,19 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
 using Modules.BankLinks.Application.Contracts;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
-using TransactionAggregation.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.DTOs;
 using SharedKernel.Common.Interfaces;
-using TransactionAggregation.Application.Common.Interfaces;
-using TransactionAggregation.Application.Features.Transactions.Commands.ProcessInboundTransactions;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Domain.Enums;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
@@ -53,17 +55,17 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [Fact]
         public async Task Handle_SameExternalTransactionIdSubmittedConcurrently_PersistsExactlyOnce()
         {
-            using var seedContext = _fixture.CreateContext();
+            using var customersSeedContext = _fixture.CreateCustomersContext();
             var customer = Customer.Create(CustomerId.Create(), $"{Guid.NewGuid()}@example.com", "Concurrency Test User");
-            // Real flow (CompleteBankLinkCommandHandler): the Account is created via
-            // customer.AddAccount(...) before the link is activated with its real ID,
-            // both saved together — satisfying FK_Transactions_Accounts_AccountId.
-            // A throwaway AccountId.Create() here (as several in-memory-provider unit
-            // tests elsewhere use) would violate that FK against a real Postgres
-            // constraint the in-memory provider doesn't enforce.
-            var account = customer.AddAccount($"acc-{Guid.NewGuid():N}", "Concurrency Test Account", AccountType.Checking, "ZAR");
-            seedContext.Customers.Add(customer);
-            await seedContext.SaveChangesAsync();
+            // Real flow (CompleteBankLinkCommandHandler -> AccountProvisioningAdapter): the
+            // Account is created in the Customers module before the link is activated with
+            // its real ID. A throwaway AccountId.Create() here (as several in-memory-provider
+            // unit tests elsewhere use) would hide any FK against a real Postgres constraint
+            // the in-memory provider doesn't enforce.
+            var account = Account.Create(customer.Id, $"acc-{Guid.NewGuid():N}", "Concurrency Test Account", AccountType.Checking, "ZAR");
+            customersSeedContext.Customers.Add(customer);
+            customersSeedContext.Accounts.Add(account);
+            await customersSeedContext.SaveChangesAsync();
 
             using var bankLinksSeedContext = _fixture.CreateBankLinksContext();
             var link = BankLink.Create(customer.Id, Institution.FNB);
@@ -84,7 +86,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             // Two independent DbContexts (as two concurrent requests would have),
             // both racing to insert the same external transaction ID. Each
-            // ApplicationDbContext must be constructed with the SAME MessagingDbContext
+            // TransactionsDbContext must be constructed with the SAME MessagingDbContext
             // instance the handler also receives — see the CreateContext doc comment.
             using var messagingA = _fixture.CreateMessagingContext();
             using var messagingB = _fixture.CreateMessagingContext();

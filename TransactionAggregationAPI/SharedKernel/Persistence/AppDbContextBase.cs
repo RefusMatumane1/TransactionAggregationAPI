@@ -7,7 +7,7 @@ namespace SharedKernel.Persistence
     /// <summary>
     /// Every per-module DbContext inherits this instead of duplicating the same
     /// CreatedAt/UpdatedAt stamping + domain-event dispatch that
-    /// TransactionAggregation.Persistence/ApplicationDbContext.cs already implemented
+    /// Modules/Transactions/Transactions.Persistence/TransactionsDbContext.cs already implemented
     /// generically over ChangeTracker.Entries&lt;BaseEntity&gt;() — the logic itself
     /// never referenced any specific entity type, so it belongs here, not repeated
     /// per module.

@@ -73,7 +73,7 @@ data:
   # an actual source: the HTTP/runtime series match k8s/monitoring/grafana/
   # configmap-dashboards.yaml's own panel queries (prometheus-net's real metric
   # names, not assumed ones); the dead-letter counters are
-  # TransactionAggregation.Infrastructure/Observability/DeadLetterMetrics.cs.
+  # Modules/Transactions/Transactions.Infrastructure/Observability/DeadLetterMetrics.cs.
   # Thresholds mirror the dashboard's own existing color-threshold steps
   # (5% error rate, 1s P99) rather than inventing new numbers.
   rules.yml: |

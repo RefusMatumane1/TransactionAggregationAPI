@@ -16,7 +16,7 @@ today. Anyone reading this repo should not infer otherwise from the schema
 names introduced below.
 
 What changed is the actual question. This session began restructuring the
-codebase from four shared layer projects (`TransactionAggregation.Domain/
+codebase from four shared layer projects (`Modules/Transactions/Transactions.Domain/
 Application/Infrastructure/Persistence`) into true per-module projects (see
 the updated [ADR-0001](0001-modular-monolith-not-microservices.md)) — and a
 full audit found the existing single `IApplicationDbContext`, with every
@@ -45,7 +45,7 @@ Each module gets its own `DbContext` and its own Postgres schema, all
 against the **same physical database** (one connection string,
 `ConnectionStrings:transactiondb`):
 
-- `ApplicationDbContext` (`TransactionAggregation.Persistence`) — `public`
+- `ApplicationDbContext` (`Modules.Transactions.Persistence`) — `public`
   schema, unchanged: `Customers`, `Accounts`, `Transactions`, `BankLinks`
   (still shared-project business entities pending later extraction phases).
 - `MessagingDbContext` (`BuildingBlocks.Messaging`) — `messaging` schema:

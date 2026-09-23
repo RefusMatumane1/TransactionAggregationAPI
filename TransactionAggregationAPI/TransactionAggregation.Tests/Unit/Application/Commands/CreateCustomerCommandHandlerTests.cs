@@ -2,12 +2,13 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Application.Commands.Customer.CreateCustomer;
 using SharedKernel.Common.Enums;
-using TransactionAggregation.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
+using Modules.Customers.Application.Features.CreateCustomer;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
+using Modules.Customers.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -16,10 +17,10 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands;
 public class CreateCustomerCommandHandlerTests
 {
     private static CreateCustomerCommandHandler BuildHandler(
-        TransactionAggregation.Persistence.ApplicationDbContext? ctx = null,
+        CustomersDbContext? ctx = null,
         IKeycloakAdminClient? keycloakAdminClient = null)
     {
-        ctx ??= InMemoryDbContextFactory.Create();
+        ctx ??= InMemoryCustomersDbContextFactory.Create();
         keycloakAdminClient ??= BuildKeycloakAdminClient();
         return new CreateCustomerCommandHandler(ctx, keycloakAdminClient,
             NullLogger<CreateCustomerCommandHandler>.Instance);
@@ -37,7 +38,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_CreatesCustomerAndReturnsId()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
         var command = new CreateCustomerCommand("alice@example.com", "Alice Smith", "password");
 
@@ -50,7 +51,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_PersistsCustomerInDatabase()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
         var command = new CreateCustomerCommand("bob@example.com", "Bob Jones", "password");
 
@@ -64,7 +65,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_ReturnedIdMatchesStoredCustomer()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
         var command = new CreateCustomerCommand("carol@example.com", "Carol White", "password");
 
@@ -77,7 +78,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_ValidCommand_UsesKeycloakUserIdAsCustomerId()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var keycloakUserId = Guid.NewGuid();
         var handler = BuildHandler(context, BuildKeycloakAdminClient(keycloakUserId));
         var command = new CreateCustomerCommand("dave@example.com", "Dave King", "password");
@@ -91,7 +92,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_KeycloakReportsUserAlreadyExists_ReturnsConflictFailure()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var keycloakAdminClient = Substitute.For<IKeycloakAdminClient>();
         keycloakAdminClient
             .CreateUserAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -109,7 +110,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_DuplicateEmail_ReturnsConflictFailure()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "Existing User");
         context.Customers.Add(existing);
         await context.SaveChangesAsync();
@@ -126,7 +127,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_DuplicateEmail_DoesNotPersistSecondCustomer()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var existing = Customer.Create(CustomerId.Create(), "dup@example.com", "User A");
         context.Customers.Add(existing);
         await context.SaveChangesAsync();
@@ -140,7 +141,7 @@ public class CreateCustomerCommandHandlerTests
     [Fact]
     public async Task Handle_TwoDistinctEmails_BothSucceed()
     {
-        var context = InMemoryDbContextFactory.Create();
+        var context = InMemoryCustomersDbContextFactory.Create();
         var handler = BuildHandler(context);
 
         await handler.Handle(new CreateCustomerCommand("a@example.com", "Alice", "password"), CancellationToken.None);

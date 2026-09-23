@@ -8,6 +8,7 @@ using SharedKernel.Common.ValueObjects;
 using Modules.BankLinks.Application.Features.InitiateBankLink;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Application.Ports;
+using Modules.BankLinks.Contracts;
 using Modules.BankLinks.Domain.ValueObjects;
 
 namespace Modules.BankLinks.Application.Features.CompleteBankLink

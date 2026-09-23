@@ -1,5 +1,5 @@
 using FluentAssertions;
-using TransactionAggregation.Domain.Entities;
+using Modules.Transactions.Domain.Entities;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

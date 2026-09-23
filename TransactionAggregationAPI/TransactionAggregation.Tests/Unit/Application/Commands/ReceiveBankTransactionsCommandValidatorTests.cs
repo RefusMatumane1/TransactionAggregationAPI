@@ -1,6 +1,6 @@
 using FluentAssertions;
-using TransactionAggregation.Application.Common.DTOs;
-using TransactionAggregation.Application.Features.Transactions.Commands.ReceiveBankTransactions;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Commands;

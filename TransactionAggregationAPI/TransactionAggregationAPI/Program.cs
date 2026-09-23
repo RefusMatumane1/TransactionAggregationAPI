@@ -14,16 +14,18 @@ using StackExchange.Redis;
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Persistence;
 using Modules.BankLinks;
-using Modules.BankLinks.Application.Ports;
 using Modules.BankLinks.Infrastructure.Persistence;
+using Modules.Customers;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.WebhookSources;
 using Modules.WebhookSources.Infrastructure.Persistence;
-using TransactionAggregation.Application;
-using TransactionAggregation.Application.Adapters;
-using TransactionAggregation.Infrastructure;
-using TransactionAggregation.Persistence;
+using Modules.Transactions;
+using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Abstractions.Authentication;
+using SharedKernel.Common.Interfaces;
 using TransactionAggregationAPI;
-using TransactionAggregationAPI.Endpoints;
+using TransactionAggregationAPI.Authentication;
+using TransactionAggregationAPI.Caching;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
 using TransactionAggregationAPI.RateLimiting;
@@ -53,8 +55,8 @@ try
 
     var connectionString = builder.Configuration.GetConnectionString("transactiondb");
 
-    // ApplicationDbContext and MessagingDbContext share one scoped NpgsqlConnection
-    // (rather than each opening its own) so ApplicationDbContext.SaveChangesAsync can
+    // TransactionsDbContext and MessagingDbContext share one scoped NpgsqlConnection
+    // (rather than each opening its own) so TransactionsDbContext.SaveChangesAsync can
     // share one real transaction across both — required for an Outbox write to commit
     // atomically with the business-entity change that triggered it. See
     // docs/adr/0009-schema-per-module-database-strategy.md. WebhookSourcesDbContext
@@ -62,30 +64,13 @@ try
     // keeps its own independent connection, registered inside AddWebhookSourcesModule.
     builder.Services.AddScoped(_ => new NpgsqlConnection(connectionString));
 
-    builder.Services.AddDbContext<ApplicationDbContext>((sp, options) =>
-    {
-        options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(), npgsqlOptions =>
-        {
-            npgsqlOptions.MigrationsAssembly("TransactionAggregation.Persistence");
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
-
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableDetailedErrors();
-            options.EnableSensitiveDataLogging();
-        }
-    });
-
-    builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
-
     builder.Services.AddMessagingBuildingBlock(builder.Configuration);
     builder.Services.AddWebhookSourcesModule(builder.Configuration);
     builder.Services.AddBankLinksModule(builder.Configuration);
-    builder.Services.AddScoped<IAccountProvisioningPort, AccountProvisioningAdapter>();
+    builder.Services.AddCustomersModule(builder.Configuration);
+    builder.Services.AddTransactionsModule(builder.Configuration, builder.Environment.IsDevelopment());
+
+    builder.EnrichNpgsqlDbContext<TransactionsDbContext>();
 
     builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
 
@@ -128,9 +113,10 @@ try
             .UseEphemeralDataProtectionProvider();
     }
 
-    builder.Services.AddApplication(builder.Configuration);
-    builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddPersistence();
+    // Host-level services shared by every module (not owned by any one of them).
+    builder.Services.AddDistributedMemoryCache();
+    builder.Services.AddScoped<ICacheService, RedisCacheService>();
+    builder.Services.AddScoped<IUserContext, UserContext>();
 
     var keycloakAuthority = builder.Configuration["Keycloak:Authority"];
     var keycloakRealm = builder.Configuration["Keycloak:Realm"];
@@ -315,12 +301,10 @@ try
 
     app.UseRateLimiter();
 
-    app.MapCustomerEndpoints();
-    app.MapTransactionEndpoints();
-    app.MapAccountEndpoints();
-    app.MapBankLinkEndpoints();
-    app.MapWebhookEndpoints();
-    app.MapWebhookSourceEndpoints();
+    app.MapCustomersEndpoints();
+    app.MapTransactionsEndpoints();
+    app.MapBankLinksEndpoints();
+    app.MapWebhookSourcesEndpoints();
 
     app.MapFallbackToFile("index.html");
 
@@ -329,10 +313,11 @@ try
     // independently. Order doesn't matter: no schema references another's tables.
     static async Task ApplyAllMigrationsAsync(WebApplication app)
     {
-        await app.ApplyMigrationsAsync<ApplicationDbContext>();
+        await app.ApplyMigrationsAsync<TransactionsDbContext>();
         await app.ApplyMigrationsAsync<MessagingDbContext>();
         await app.ApplyMigrationsAsync<WebhookSourcesDbContext>();
         await app.ApplyMigrationsAsync<BankLinksDbContext>();
+        await app.ApplyMigrationsAsync<CustomersDbContext>();
     }
 
     if (args.Contains("--migrate-only"))

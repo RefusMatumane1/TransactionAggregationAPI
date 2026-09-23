@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
-using SharedKernel.Abstractions.Authentication;
-using TransactionAggregation.Application.Abstractions.Authentication;
+using Modules.Customers.Contracts;
 
 namespace TransactionAggregation.Tests.Helpers;
 

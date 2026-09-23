@@ -9,11 +9,12 @@ using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
 using Modules.WebhookSources.Domain;
 using Modules.WebhookSources.Application.Persistence;
-using TransactionAggregation.Application.Common.Inbox;
-using TransactionAggregation.Domain.Common.ValueObjects;
+using Modules.Transactions.Application.Common.Inbox;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.ValueObjects;
-using TransactionAggregation.Domain.Entities;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Domain.Entities;
+using Modules.Customers.Application.Persistence;
+using Modules.Customers.Domain;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
@@ -34,7 +35,7 @@ namespace TransactionAggregation.Tests.Integration
         private async Task<BankLink> SeedActiveBankLinkAsync(string externalAccountId)
         {
             using var scope = _factory.Services.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var context = scope.ServiceProvider.GetRequiredService<ICustomersDbContext>();
             var bankLinksContext = scope.ServiceProvider.GetRequiredService<IBankLinksDbContext>();
 
             var customer = Customer.Create(CustomerId.Create(), $"{Guid.NewGuid()}@example.com", "Webhook Test User");

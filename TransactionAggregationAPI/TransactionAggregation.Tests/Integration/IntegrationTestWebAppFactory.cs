@@ -11,10 +11,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
 using Modules.BankLinks.Infrastructure.Persistence;
+using Modules.Customers.Contracts;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
-using SharedKernel.Abstractions.Authentication;
-using TransactionAggregation.Application.Abstractions.Authentication;
-using TransactionAggregation.Persistence;
+using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 
 namespace TransactionAggregation.Tests.Integration
@@ -35,10 +35,11 @@ namespace TransactionAggregation.Tests.Integration
 
             builder.ConfigureServices(services =>
             {
-                ReplaceWithInMemory<ApplicationDbContext>(services);
+                ReplaceWithInMemory<TransactionsDbContext>(services);
                 ReplaceWithInMemory<MessagingDbContext>(services);
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
                 ReplaceWithInMemory<BankLinksDbContext>(services);
+                ReplaceWithInMemory<CustomersDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 
@@ -74,7 +75,7 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         /// <summary>
-        /// Program.cs registers ApplicationDbContext/MessagingDbContext against a
+        /// Program.cs registers TransactionsDbContext/MessagingDbContext against a
         /// shared NpgsqlConnection (see docs/adr/0009-schema-per-module-database-strategy.md)
         /// and WebhookSourcesDbContext against its own Npgsql connection string —
         /// none reachable in this test host. Swaps each for its own isolated

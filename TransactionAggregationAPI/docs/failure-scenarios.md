@@ -285,7 +285,7 @@ since other pending messages are picked up independently.
 
 **Fixed, this review**: dead-lettering was previously visible only as a log
 line — a growing pile of poison messages had no metric an alert could fire
-on. `DeadLetterMetrics` (`TransactionAggregation.Infrastructure/Observability/`)
+on. `DeadLetterMetrics` (`Modules/Transactions/Transactions.Infrastructure/Observability/`)
 now exposes `inbox_messages_dead_lettered_total{source_name}` and
 `outbox_messages_dead_lettered_total{message_type}` Prometheus counters,
 incremented at the exact point a message's status transitions to

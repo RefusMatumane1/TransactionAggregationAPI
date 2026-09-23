@@ -1,5 +1,5 @@
 using SharedKernel.Common.Interfaces;
-using TransactionAggregation.Application.Common.Interfaces;
+using Modules.Transactions.Application.Common.Interfaces;
 
 namespace TransactionAggregation.Tests.Helpers;
 

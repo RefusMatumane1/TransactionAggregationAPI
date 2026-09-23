@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Customers.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<PackageReference Include="Mapster" />
+		<!-- ICustomersDbContext (the Application-layer persistence port) exposes
+		     DbSet<T> in its signature — EF Core is referenced for that type only, not
+		     for any concrete provider/DbContext, which stays in Infrastructure. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Customers.Domain\Customers.Domain.csproj" />
+		<ProjectReference Include="..\Customers.Contracts\Customers.Contracts.csproj" />
+		<!-- AccountProvisioningAdapter implements BankLinks' published
+		     IAccountProvisioningPort — see docs/adr/0010-consumer-owned-ports-for-unextracted-dependencies.md. -->
+		<ProjectReference Include="..\..\BankLinks\BankLinks.Contracts\BankLinks.Contracts.csproj" />
+	</ItemGroup>
+</Project>

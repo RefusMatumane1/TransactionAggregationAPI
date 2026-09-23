@@ -4,17 +4,17 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using TransactionAggregation.Application.Common.Inbox;
+using Modules.Transactions.Application.Common.Inbox;
 using SharedKernel.Common.Interfaces;
-using TransactionAggregation.Application.Common.Interfaces;
+using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
-using TransactionAggregation.Application.Common.Models;
-using TransactionAggregation.Application.Common.Options;
-using TransactionAggregation.Application.Common.Outbox;
+using Modules.Transactions.Application.Common.Models;
+using Modules.Transactions.Application.Common.Options;
+using Modules.Transactions.Application.Common.Outbox;
 using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Outbox;
 using BuildingBlocks.Messaging.Observability;
-using TransactionAggregation.Infrastructure.BackgroundServices;
+using Modules.Transactions.Infrastructure.BackgroundServices;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices
@@ -43,7 +43,7 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
 
             await sut.ProcessMessageAsync(
                 message,
-                Substitute.For<IApplicationDbContext>(),
+                Substitute.For<ITransactionsDbContext>(),
                 Substitute.For<ICacheService>(),
                 Substitute.For<IAnalyticsService>(),
                 Substitute.For<INotificationService>(),

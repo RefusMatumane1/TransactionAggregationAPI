@@ -38,26 +38,14 @@ namespace Modules.Transactions.Infrastructure.Persistence
         }
 
         /// <summary>
-        /// Domain-event handlers dispatched below (e.g. TransactionCreatedEventHandler)
-        /// write an OutboxMessage to the separate MessagingDbContext/"messaging" schema
-        /// — see docs/adr/0009-schema-per-module-database-strategy.md. ADR-0003 requires
-        /// that write commit atomically with this context's own changes (the whole point
-        /// of the Outbox pattern), so both contexts are registered against one shared
-        /// NpgsqlConnection (registered in TransactionAggregation.Hosting) and explicitly
-        /// share one transaction here.
+        /// Commits this context's changes and the outbox/inbox rows staged on the shared
+        /// MessagingDbContext in one transaction (ADR-0003, ADR-0009).
         ///
-        /// EnableRetryOnFailure forbids a manually-managed transaction unless it runs inside
-        /// CreateExecutionStrategy().ExecuteAsync, which re-runs the whole lambda after a
-        /// transient failure. Both saves therefore pass acceptAllChangesOnSuccess: false and
-        /// changes are accepted only after the commit: had the first save accepted its
-        /// changes, a failure in the second save or the commit would roll the rows back
-        /// while leaving them marked Unchanged, and the retry would commit the outbox/inbox
-        /// rows without the transactions they describe. Covered against real Postgres by
-        /// OutboxAtomicityTests.
-        ///
-        /// The in-memory provider (unit/integration tests) doesn't support real
-        /// transactions — BeginTransactionAsync throws there — so it saves both contexts in
-        /// sequence, which exercises the business logic but not the atomicity guarantee.
+        /// The retrying execution strategy re-runs the whole lambda after a transient failure, so both
+        /// saves defer AcceptAllChanges until the commit has succeeded. Otherwise a failed commit would
+        /// leave the rows marked Unchanged and the retry would commit the outbox rows without them
+        /// (IngestionIntegrityTests). The in-memory provider has no transactions, so tests save the
+        /// two contexts in sequence.
         /// </summary>
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

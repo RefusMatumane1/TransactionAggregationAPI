@@ -1,6 +1,5 @@
 using BuildingBlocks.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -9,27 +8,12 @@ namespace BuildingBlocks.Messaging
     public static class DependencyInjection
     {
         /// <summary>
-        /// MessagingDbContext is registered against the SAME scoped NpgsqlConnection as
-        /// TransactionsDbContext (registered once in TransactionAggregation.Hosting) rather than its own
-        /// connection string/connection — required for the two contexts to share a
-        /// transaction (Database.UseTransactionAsync) so an Outbox write commits
-        /// atomically with the business-entity write that triggered it. See
-        /// docs/adr/0009-schema-per-module-database-strategy.md.
-        ///
-        /// No EnableRetryOnFailure here deliberately: a retrying execution strategy
-        /// forbids a context from participating in a transaction it didn't open itself
-        /// via CreateExecutionStrategy().ExecuteAsync, which TransactionsDbContext's
-        /// SaveChangesAsync already does for the shared transaction — adding a second,
-        /// independent retrying strategy on this context risks exactly that guard
-        /// throwing when it's writing under a transaction TransactionsDbContext owns.
-        /// The dispatcher background services (which use this context standalone, with
-        /// no shared transaction) simply don't get automatic retry on transient
-        /// connection failures as a result — a deliberate, narrower trade-off, not an
-        /// oversight.
+        /// MessagingDbContext uses the same scoped NpgsqlConnection as TransactionsDbContext so the
+        /// two can share one transaction: an outbox write commits atomically with the change that
+        /// caused it (ADR-0009). No EnableRetryOnFailure here: a retrying strategy can't enlist in a
+        /// transaction another context opened, and TransactionsDbContext already retries that one.
         /// </summary>
-        public static IServiceCollection AddMessagingBuildingBlock(
-            this IServiceCollection services,
-            IConfiguration configuration)
+        public static IServiceCollection AddMessagingBuildingBlock(this IServiceCollection services)
         {
             services.AddDbContext<MessagingDbContext>((sp, options) =>
             {

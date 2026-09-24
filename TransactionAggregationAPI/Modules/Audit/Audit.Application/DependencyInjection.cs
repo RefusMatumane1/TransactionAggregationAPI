@@ -12,8 +12,8 @@ namespace Modules.Audit
         {
             services.AddValidatorsFromAssembly(typeof(AssemblyReference).Assembly);
 
-            // Handler registration only — pipeline behaviors are registered once, centrally,
-            // in AddTransactionsApplication().
+            // Handlers only: pipeline behaviors are registered once in AddTransactionsApplication();
+            // registering them here too would run each behavior twice.
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
 
@@ -23,9 +23,6 @@ namespace Modules.Audit
         }
     }
 
-    /// <summary>
-    /// Anchor type for locating this assembly (MediatR/FluentValidation scanning,
-    /// architecture tests) without relying on <see cref="Assembly.GetExecutingAssembly"/>.
-    /// </summary>
+    /// <summary>Anchor type for locating this assembly (MediatR/FluentValidation scanning, architecture tests).</summary>
     internal sealed class AssemblyReference;
 }

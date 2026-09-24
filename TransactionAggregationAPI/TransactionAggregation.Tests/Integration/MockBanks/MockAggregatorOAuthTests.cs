@@ -47,12 +47,10 @@ public sealed class MockAggregatorFactory : WebApplicationFactory<MockAggregator
 /// </summary>
 public class MockAggregatorOAuthTests : IClassFixture<MockAggregatorFactory>
 {
-    private readonly MockAggregatorFactory _factory;
     private readonly HttpClient _http;
 
     public MockAggregatorOAuthTests(MockAggregatorFactory factory)
     {
-        _factory = factory;
         _http = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
     }
 

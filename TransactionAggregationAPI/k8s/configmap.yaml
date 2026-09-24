@@ -102,10 +102,6 @@ data:
   BankAggregator__RedirectUri: "https://api.transaction.local/api/v1/bank-links/callback"
 
   # ── Notification options ───────────────────────────────────────────────
-  NotificationOptions__FraudTeamEmail: "fraud@yourcompany.com"
-  NotificationOptions__FraudWebhookUrl: "https://your-webhook.com/fraud-alerts"
-  NotificationOptions__EnablePushNotifications: "true"
-  NotificationOptions__SmsEnabled: "true"
   # Where DuplicateInboundDetected alerts are POSTed; empty = log + metric only.
   NotificationOptions__DuplicateAlertWebhookUrl: ""
 

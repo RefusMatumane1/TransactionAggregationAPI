@@ -26,7 +26,7 @@ ways to run it locally.
 
 ## What this project does
 
-- Aggregates transactions from multiple mock bank sources (BankA, BankB), received by REST webhook or Kafka, with idempotent ingestion
+- Aggregates transactions from multiple banks (mock FNB, Absa, Capitec and Standard Bank feeds in development), received by REST webhook or Kafka, with idempotent ingestion
 - Categorises transactions automatically by keyword (Groceries, Dining, Transport …)
 - Exposes a versioned REST API (`/api/v1/…`) secured with Keycloak-issued JWT bearer tokens
 - Caches query results in Redis to reduce database round-trips
@@ -835,7 +835,7 @@ Requires the Keycloak `admin` realm role — a customer JWT without it gets `403
 | `minAmount` | decimal | Absolute amount lower bound |
 | `maxAmount` | decimal | Absolute amount upper bound |
 | `searchTerm` | string | Matches description or source name |
-| `source` | string | `BankA` / `BankB` / `Internal` |
+| `source` | string | Institution the transaction came from, e.g. `FNB`, `Absa`, `Capitec`, `StandardBank` |
 | `sortBy` | string | `date` / `amount` / `category` / `status` / `description` |
 | `sortDescending` | bool | Default `true` |
 

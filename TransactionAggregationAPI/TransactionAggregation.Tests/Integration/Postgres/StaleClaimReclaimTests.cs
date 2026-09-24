@@ -1,4 +1,3 @@
-using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Outbox;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -7,16 +6,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
     /// <summary>
-    /// Automates the manual verification performed during this review: a message
-    /// stuck in Processing status (simulating a dispatcher that claimed it, then
-    /// crashed before the final SaveChangesAsync) was inserted by hand via
-    /// `docker exec psql`, and a live OutboxDispatcherBackgroundService run was
-    /// watched to confirm it got reclaimed. This is the permanent, CI-enforced
-    /// version of that check — see docs/failure-scenarios.md scenarios 10/11/13
-    /// and ADR discussion of the claim SQL (FOR UPDATE SKIP LOCKED), which the
-    /// in-memory EF Core provider used everywhere else in this suite cannot run.
-    /// Inbox/Outbox now live in the "messaging" schema — see
-    /// docs/adr/0009-schema-per-module-database-strategy.md.
+    /// A message stuck in Processing (claimed by a dispatcher that crashed before saving) is reclaimed
+    /// once the claim timeout passes, and not before. Needs real Postgres for FOR UPDATE SKIP LOCKED.
     /// </summary>
     [Collection(PostgresCollection.Name)]
     public class StaleClaimReclaimTests

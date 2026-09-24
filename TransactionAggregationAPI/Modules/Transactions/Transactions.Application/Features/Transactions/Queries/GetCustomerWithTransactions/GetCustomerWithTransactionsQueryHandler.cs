@@ -73,9 +73,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetCust
                 t.Source.Name,
                 t.AccountId != null ? t.AccountId.Value : null));
 
-            // Totals cover the whole filtered range, not just the page being returned (they used
-            // to be summed over the current page only, so they changed as you paged), and use
-            // the shared booked/pending rule so they match the summary and account balances.
+            // Totals cover the whole filtered range, not just the returned page, and use the shared
+            // booked/pending rule so they match the summary and account balances.
             var booked = transactionQuery.Where(TransactionTotals.IsBooked);
             var pending = transactionQuery.Where(TransactionTotals.IsPending);
 

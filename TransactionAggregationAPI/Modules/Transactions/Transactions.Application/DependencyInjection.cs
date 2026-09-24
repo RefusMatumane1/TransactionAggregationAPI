@@ -10,7 +10,6 @@ using Modules.Transactions.Application.Features.Transactions.Queries.GetTransact
 using Modules.Transactions.Application.Mappings;
 using Modules.Transactions.Application.Services;
 using SharedKernel.Common.Behaviors;
-using SharedKernel.Common.Interfaces;
 using System.Reflection;
 
 namespace Modules.Transactions

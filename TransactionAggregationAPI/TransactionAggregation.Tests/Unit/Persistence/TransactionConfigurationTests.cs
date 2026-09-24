@@ -6,16 +6,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Unit.Persistence
 {
     /// <summary>
-    /// Transaction.Metadata's EF Core ValueComparer previously called
-    /// c1.SequenceEqual(c2) directly. That's called on every SaveChangesAsync
-    /// change-tracking pass, and neither the property's own IsRequired() (never
-    /// set) nor its converter's read-side "?? new()" protects against a null
-    /// reaching the comparer some other way (a raw SQL write of jsonb `null`,
-    /// or any future EF Core materialization path that doesn't run the domain's
-    /// object initializer first) — a null there would have thrown
-    /// ArgumentNullException/NullReferenceException out of SaveChangesAsync and
-    /// aborted an otherwise-unrelated save. These pin the fixed, null-tolerant
-    /// comparer directly against the real EF Core model, not a hand-rolled copy.
+    /// The Metadata ValueComparer runs on every SaveChanges and must tolerate null (e.g. a raw jsonb
+    /// `null`): a throw there would abort an unrelated save. Pinned against the real EF Core model.
     /// </summary>
     public class TransactionConfigurationTests
     {

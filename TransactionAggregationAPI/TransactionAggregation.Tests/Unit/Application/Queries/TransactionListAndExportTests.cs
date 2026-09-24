@@ -17,10 +17,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Queries;
 
-/// <summary>
-/// Filtering, sorting, pagination and export — the brief's "support filtering, sorting and
-/// pagination" requirement, pinned rule by rule rather than by a single unfiltered call.
-/// </summary>
+/// <summary>Filtering, sorting, pagination and export, pinned rule by rule.</summary>
 public class TransactionListAndExportTests
 {
     private static readonly DateTime Day = new(2026, 9, 1, 12, 0, 0, DateTimeKind.Utc);
@@ -62,7 +59,7 @@ public class TransactionListAndExportTests
     private async Task<IReadOnlyList<string>> ListAsync(Func<GetTransactionsQuery, GetTransactionsQuery> configure)
     {
         var context = await SeedAsync();
-        var handler = new GetTransactionsQueryHandler(context, Mapper(), NullLogger<GetTransactionsQueryHandler>.Instance);
+        var handler = new GetTransactionsQueryHandler(context, Mapper());
 
         var result = await handler.Handle(configure(new GetTransactionsQuery { CustomerId = _customer, PageSize = 100 }), CancellationToken.None);
 
@@ -118,7 +115,7 @@ public class TransactionListAndExportTests
     public async Task Paging_ReturnsTheRequestedSlice_AndTheTotalCount()
     {
         var context = await SeedAsync();
-        var handler = new GetTransactionsQueryHandler(context, Mapper(), NullLogger<GetTransactionsQueryHandler>.Instance);
+        var handler = new GetTransactionsQueryHandler(context, Mapper());
 
         var page2 = await handler.Handle(
             new GetTransactionsQuery { CustomerId = _customer, PageNumber = 2, PageSize = 3, SortDescending = false },

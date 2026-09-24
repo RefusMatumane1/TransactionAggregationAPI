@@ -18,11 +18,6 @@ namespace SharedKernel.Common
             _domainEvents.Add(domainEvent);
         }
 
-        public void RemoveDomainEvent(BaseDomainEvent domainEvent)
-        {
-            _domainEvents.Remove(domainEvent);
-        }
-
         public void ClearDomainEvents()
         {
             _domainEvents.Clear();

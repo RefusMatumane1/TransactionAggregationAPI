@@ -14,15 +14,9 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
     /// <summary>
-    /// Spins up a real, throwaway PostgreSQL container and applies the actual EF Core
-    /// migrations against it once per test class — closing the gap flagged repeatedly
-    /// in docs/failure-scenarios.md and docs/production-readiness-checklist.md: the
-    /// Inbox/Outbox claim SQL (FOR UPDATE SKIP LOCKED) and the unique-constraint
-    /// idempotency guarantee are both Postgres-specific and were previously verified
-    /// only manually (docker run + docker exec psql), not by any automated test.
-    ///
-    /// Each module DbContext migrates against this one database, each owning its own
-    /// schema/migration history — see docs/adr/0009-schema-per-module-database-strategy.md.
+    /// A throwaway PostgreSQL container with every module's real migrations applied, for what only
+    /// Postgres can prove: the inbox/outbox claim SQL (FOR UPDATE SKIP LOCKED) and the
+    /// unique-constraint idempotency guarantees. Each module migrates its own schema (ADR-0009).
     /// </summary>
     public sealed class PostgresContainerFixture : IAsyncLifetime
     {

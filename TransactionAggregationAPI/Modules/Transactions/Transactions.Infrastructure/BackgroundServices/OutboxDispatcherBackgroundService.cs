@@ -13,7 +13,6 @@ using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using SharedKernel.Common.Interfaces;
-using SharedKernel.Common.ValueObjects;
 using System.Text.Json;
 
 namespace Modules.Transactions.Infrastructure.BackgroundServices
@@ -212,7 +211,7 @@ namespace Modules.Transactions.Infrastructure.BackgroundServices
             if (!payload.IsAutoCategorized)
             {
                 await notifications.SendTransactionNotificationAsync(
-                    transaction, NotificationType.TransactionCreated, cancellationToken);
+                    transaction, NotificationType.TransactionCategorized, cancellationToken);
             }
         }
 

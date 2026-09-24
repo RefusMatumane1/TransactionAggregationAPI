@@ -31,7 +31,7 @@ public class GetCustomerWithTransactionsQueryHandlerTests
             category,
             TransactionSource.Create("Test", Guid.NewGuid().ToString()));
 
-        tx.UpdateStatus(status, "test");
+        tx.UpdateStatus(status);
         return tx;
     }
 

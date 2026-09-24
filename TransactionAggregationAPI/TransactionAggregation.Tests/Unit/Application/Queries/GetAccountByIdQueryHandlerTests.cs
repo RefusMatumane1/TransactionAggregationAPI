@@ -135,12 +135,8 @@ public class GetAccountByIdQueryHandlerTests
     }
 
     /// <summary>
-    /// Account.Balance is never maintained by any handler (Credit()/Debit() are
-    /// domain-tested but unwired) — reading it directly is always 0. The handler
-    /// computes Balance from linked transactions instead; these pin that it
-    /// actually reflects reality, not just that it defaults to 0 like the tests
-    /// above (seeded with no transactions) would still pass even if the computed
-    /// path silently fell back to the dead stored field.
+    /// The balance is computed from the account's transactions; these pin non-zero cases, so a
+    /// fallback to zero can't pass unnoticed.
     /// </summary>
     [Fact]
     public async Task Handle_AccountWithLinkedTransactions_ReturnsSummedBalance()

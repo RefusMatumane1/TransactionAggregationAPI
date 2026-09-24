@@ -14,7 +14,6 @@ namespace Modules.Customers.Domain
         public string AccountNumber { get; private set; } = null!;
         public string AccountName { get; private set; } = null!;
         public AccountType AccountType { get; private set; }
-        public decimal Balance { get; private set; }
         public string Currency { get; private set; } = null!;
         public bool IsActive { get; private set; }
 
@@ -41,45 +40,14 @@ namespace Modules.Customers.Domain
                 AccountNumber = accountNumber.Trim(),
                 AccountName = accountName.Trim(),
                 AccountType = accountType,
-                Balance = 0m,
                 Currency = currency.ToUpperInvariant(),
                 IsActive = true
             };
         }
 
-        public void Credit(decimal amount)
-        {
-            if (amount <= 0)
-                throw new DomainException("Credit amount must be positive");
-
-            if (!IsActive)
-                throw new DomainException("Cannot credit an inactive account");
-
-            Balance += amount;
-            UpdatedAt = DateTime.UtcNow;
-        }
-
-        public void Debit(decimal amount)
-        {
-            if (amount <= 0)
-                throw new DomainException("Debit amount must be positive");
-
-            if (!IsActive)
-                throw new DomainException("Cannot debit an inactive account");
-
-            Balance -= amount;
-            UpdatedAt = DateTime.UtcNow;
-        }
-
         public void Deactivate()
         {
             IsActive = false;
-            UpdatedAt = DateTime.UtcNow;
-        }
-
-        public void Reactivate()
-        {
-            IsActive = true;
             UpdatedAt = DateTime.UtcNow;
         }
     }

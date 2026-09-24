@@ -1,10 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Errors;
 using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Application.Common.Models;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Abstractions;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
 

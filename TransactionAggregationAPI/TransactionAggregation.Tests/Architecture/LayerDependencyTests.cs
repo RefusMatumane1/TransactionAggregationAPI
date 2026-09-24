@@ -1,8 +1,6 @@
 using FluentAssertions;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using NetArchTest.Rules;
-using SharedKernel.Common.ValueObjects;
 using System.Reflection;
 using Xunit;
 

@@ -8,11 +8,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Contract
 {
     /// <summary>
-    /// Locks down the JSON shape API consumers depend on (Instructions.md section 31,
-    /// "contract tests... between API consumers"). These are deliberately shallow —
-    /// property-name/shape checks, not business-logic assertions (those live in the
-    /// Unit/Integration suites) — so a rename or dropped field fails CI instead of
-    /// breaking an external consumer silently.
+    /// Pins the JSON shape API consumers depend on. Deliberately shallow (property names and
+    /// shapes), so a rename or dropped field fails CI instead of silently breaking a consumer.
     /// </summary>
     public class ApiResponseContractTests : IClassFixture<IntegrationTestWebAppFactory>
     {
@@ -100,9 +97,7 @@ namespace TransactionAggregation.Tests.Contract
         [Fact]
         public void ExternalTransactionDto_AcceptsTheProviderPayloadShapeProvidersActuallySend()
         {
-            // Pins the inbound provider contract (Instructions.md section 31, "contracts
-            // between provider events"): if a provider integration relies on these exact
-            // property names/casing, a rename here must be a deliberate, visible change.
+            // Pins the inbound provider contract: renaming these properties must be a deliberate change.
             const string providerPayload = """
                 {
                   "Id": "ext-txn-123",

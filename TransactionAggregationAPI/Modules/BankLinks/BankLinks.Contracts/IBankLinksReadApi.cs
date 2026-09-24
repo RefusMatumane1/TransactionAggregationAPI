@@ -1,12 +1,6 @@
 namespace Modules.BankLinks.Contracts
 {
-    /// <summary>
-    /// Published read contract for other modules — deliberately narrower than exposing
-    /// IBankLinksDbContext's DbSet (which stays internal to this module). Returns
-    /// primitives/DTOs, never the BankLink entity, so consumers can't reach through
-    /// into this module's internals the way the old shared ITransactionsDbContext let
-    /// handlers reach into other modules' DbSets.
-    /// </summary>
+    /// <summary>Read contract for other modules: returns DTOs, never the BankLink entity or its DbSet.</summary>
     public interface IBankLinksReadApi
     {
         /// <summary>

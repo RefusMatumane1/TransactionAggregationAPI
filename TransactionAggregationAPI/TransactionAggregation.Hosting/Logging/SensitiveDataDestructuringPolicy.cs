@@ -21,9 +21,6 @@ namespace TransactionAggregation.Hosting.Logging
 
             if (!properties.Any(p => p.GetCustomAttribute<SensitiveAttribute>() != null))
             {
-                // Standard Try-pattern: `result` is only meaningful when this returns true,
-                // same contract as the interface it implements (Serilog's own
-                // IDestructuringPolicy.TryDestructure declares a non-nullable `out` here).
                 result = null!;
                 return false;
             }

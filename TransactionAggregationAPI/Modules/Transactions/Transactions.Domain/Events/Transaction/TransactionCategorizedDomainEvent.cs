@@ -1,5 +1,4 @@
-﻿using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
+﻿using Modules.Transactions.Domain.Enums;
 using SharedKernel.Common;
 
 namespace Modules.Transactions.Domain.Events.Transaction

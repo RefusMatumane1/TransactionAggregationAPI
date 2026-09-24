@@ -8,7 +8,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Modules.Audit;
 using Modules.BankLinks;
 using Modules.Customers;
@@ -71,16 +70,11 @@ namespace TransactionAggregation.Hosting
 
             var connectionString = builder.Configuration.GetConnectionString("transactiondb");
 
-            // TransactionsDbContext and MessagingDbContext share one scoped NpgsqlConnection
-            // (rather than each opening its own) so TransactionsDbContext.SaveChangesAsync can
-            // share one real transaction across both — required for an Outbox write to commit
-            // atomically with the business-entity change that triggered it. See
-            // docs/adr/0009-schema-per-module-database-strategy.md. WebhookSourcesDbContext
-            // has no such requirement (every write there is a standalone unit of work) and
-            // keeps its own independent connection, registered inside AddWebhookSourcesModule.
+            // TransactionsDbContext and MessagingDbContext share one scoped connection so an outbox write
+            // commits in the same transaction as the change that caused it (ADR-0009).
             builder.Services.AddScoped(_ => new NpgsqlConnection(connectionString));
 
-            builder.Services.AddMessagingBuildingBlock(builder.Configuration);
+            builder.Services.AddMessagingBuildingBlock();
             builder.Services.AddAuditModule(builder.Configuration);
             builder.Services.AddWebhookSourcesModule(builder.Configuration);
             builder.Services.AddBankLinksModule(builder.Configuration);
@@ -92,7 +86,6 @@ namespace TransactionAggregation.Hosting
             builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
             builder.AddSharedState();
 
-            // Host-level services shared by every module (not owned by any one of them).
             builder.Services.AddScoped<ICacheService, RedisCacheService>();
 
             return builder;
@@ -125,17 +118,14 @@ namespace TransactionAggregation.Hosting
         }
 
         /// <summary>
-        /// Redis backs the two pieces of state that must be shared by every replica and survive
-        /// restarts: the Data Protection key ring (bank-link tokens are encrypted with it) and
-        /// IDistributedCache (OAuth state between bank-link initiation and its callback, which
-        /// can land on a different pod). Both reuse the Aspire-managed IConnectionMultiplexer
-        /// rather than opening their own connections.
+        /// Redis holds the state every replica must share and that must survive restarts: the Data
+        /// Protection key ring (bank-link tokens are encrypted with it) and IDistributedCache (OAuth
+        /// state between bank-link initiation and its callback, which can land on another pod). Both
+        /// reuse the Aspire-managed IConnectionMultiplexer.
         ///
-        /// Outside Development a missing Redis connection is a startup failure, not a warning:
-        /// the previous ephemeral-key fallback let a misconfigured production pod start
-        /// "healthy" and then make every stored bank-link token undecryptable on its next
-        /// restart, and an in-process cache broke bank linking whenever the API ran more than
-        /// one replica. Development keeps both fallbacks so the app runs without Redis.
+        /// Outside Development a missing Redis connection fails startup: ephemeral keys would make stored
+        /// tokens undecryptable after a restart. Development falls back to ephemeral keys and an
+        /// in-process cache so the app runs without Redis.
         /// </summary>
         private static void AddSharedState(this WebApplicationBuilder builder)
         {

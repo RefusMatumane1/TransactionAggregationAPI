@@ -9,13 +9,8 @@ using SharedKernel.Common.ValueObjects;
 namespace Modules.Customers.Application.Adapters
 {
     /// <summary>
-    /// Implements the port BankLinks owns. Lives here (Customers) because it needs
-    /// direct access to the Account entity and ICustomersDbContext — neither of which
-    /// BankLinks should depend on. Calls Account.Create(...) directly instead of
-    /// Customer.AddAccount(...): the latter is Customer's aggregate reaching into
-    /// Account's own "create an account" use case, which is exactly the cross-module
-    /// coupling this restructuring is fixing (see ADR-0001/ADR-0009). Registered as
-    /// IAccountProvisioningPort by Customers.Infrastructure's AddCustomersModule.
+    /// Implements BankLinks' IAccountProvisioningPort next to the Account entity, so BankLinks never
+    /// depends on Customers' persistence.
     /// </summary>
     public sealed class AccountProvisioningAdapter(ICustomersDbContext _context) : IAccountProvisioningPort
     {

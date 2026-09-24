@@ -6,11 +6,7 @@ using SharedKernel.Persistence;
 
 namespace BuildingBlocks.Messaging.Persistence
 {
-    /// <summary>
-    /// Owns its own "messaging" Postgres schema and its own EF Core migrations
-    /// history, independent of every business module's DbContext — see
-    /// docs/adr/0009-schema-per-module-database-strategy.md.
-    /// </summary>
+    /// <summary>Owns the "messaging" schema and its own migrations history (ADR-0009).</summary>
     public class MessagingDbContext : AppDbContextBase, IMessagingDbContext
     {
         public MessagingDbContext(DbContextOptions<MessagingDbContext> options, IMediator mediator)

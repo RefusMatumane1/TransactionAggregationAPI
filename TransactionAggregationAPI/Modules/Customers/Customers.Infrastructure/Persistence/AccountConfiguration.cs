@@ -35,10 +35,6 @@ namespace Modules.Customers.Infrastructure.Persistence
                 .HasConversion<int>()
                 .IsRequired();
 
-            builder.Property(a => a.Balance)
-                .HasPrecision(18, 2)
-                .IsRequired();
-
             builder.Property(a => a.Currency)
                 .HasMaxLength(3)
                 .IsRequired();

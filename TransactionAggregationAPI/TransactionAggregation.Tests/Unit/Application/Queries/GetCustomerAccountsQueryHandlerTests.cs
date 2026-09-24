@@ -57,11 +57,8 @@ public class GetCustomerAccountsQueryHandlerTests
     }
 
     /// <summary>
-    /// Account.Balance is never maintained by any handler (Credit()/Debit() are
-    /// domain-tested but unwired) — reading it directly is always 0. This handler
-    /// computes each account's balance from its own linked transactions; the
-    /// critical case (missed in a naive fix) is that transactions must be summed
-    /// per-account, not pooled across every account the customer owns.
+    /// Each account's balance comes from its own transactions: they must be summed per account, not
+    /// pooled across every account the customer owns.
     /// </summary>
     [Fact]
     public async Task Handle_MultipleAccountsWithTransactions_SumsBalancePerAccountIndependently()

@@ -169,11 +169,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         }
 
         /// <summary>
-        /// Before the fix, the first attempt's transaction rows were accepted by the change
-        /// tracker as soon as they were written; the commit then failed transiently, the
-        /// execution strategy re-ran the transaction, and the retry committed the outbox rows
-        /// without the transaction they announce — the ingested transaction was lost while the
-        /// inbox message was marked processed.
+        /// If the first attempt accepted its changes before a transient commit failure, the retry would
+        /// commit the outbox rows without the transaction they announce: the transaction would be lost
+        /// while the inbox message was marked processed.
         /// </summary>
         [Fact]
         public async Task SaveChanges_TransientFailureOnCommit_RetriesAndCommitsRowsAndOutboxTogether()

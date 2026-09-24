@@ -76,13 +76,7 @@ namespace TransactionAggregation.Tests.Integration
             });
         }
 
-        /// <summary>
-        /// Program.cs registers TransactionsDbContext/MessagingDbContext against a
-        /// shared NpgsqlConnection (see docs/adr/0009-schema-per-module-database-strategy.md)
-        /// and WebhookSourcesDbContext against its own Npgsql connection string —
-        /// none reachable in this test host. Swaps each for its own isolated
-        /// in-memory database, same as the single-context swap this replaced.
-        /// </summary>
+        /// <summary>Swaps a module DbContext (unreachable from this host) for its own in-memory database.</summary>
         private static void ReplaceWithInMemory<TContext>(IServiceCollection services) where TContext : DbContext
         {
             services.RemoveAll<DbContextOptions<TContext>>();

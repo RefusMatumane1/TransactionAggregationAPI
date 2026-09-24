@@ -8,12 +8,8 @@ using SharedKernel.Common.ValueObjects;
 namespace Modules.Transactions.Application.Adapters
 {
     /// <summary>
-    /// Implements the port Customers owns. Lives here (not in Customers) because it needs
-    /// direct access to the Transaction entity and ITransactionsDbContext — neither of
-    /// which Customers should depend on. Registered by Transactions.Infrastructure's AddTransactionsModule.
-    ///
-    /// Uses the shared TransactionTotals rule: the balance is booked (Settled) transactions
-    /// only; pending ones are reported separately; every other status counts toward neither.
+    /// Implements Customers' IAccountBalanceProvider. The balance is booked (Settled) transactions only;
+    /// pending ones are reported separately (TransactionTotals).
     /// </summary>
     public sealed class TransactionBalanceProvider(ITransactionsDbContext _context) : IAccountBalanceProvider
     {

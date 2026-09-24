@@ -1,6 +1,5 @@
 using FluentAssertions;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
 using Xunit;
 
@@ -12,12 +11,10 @@ public class TransactionSourceValueObjectTests
     [Fact]
     public void Create_WithValidParameters_SetsAllProperties()
     {
-        var source = TransactionSource.Create("Bank A", "EXT-123", "BankA Corp", "2.0");
+        var source = TransactionSource.Create("Bank A", "EXT-123");
 
         source.Name.Should().Be("Bank A");
         source.ExternalId.Should().Be("EXT-123");
-        source.Provider.Should().Be("BankA Corp");
-        source.Version.Should().Be("2.0");
     }
 
     [Fact]
@@ -55,85 +52,6 @@ public class TransactionSourceValueObjectTests
     }
 
     [Fact]
-    public void Create_WithNullOptionalParams_SetsProviderAndVersionToNull()
-    {
-        var source = TransactionSource.Create("Bank A", "EXT-123");
-
-        source.Provider.Should().BeNull();
-        source.Version.Should().BeNull();
-    }
-
-    [Fact]
-    public void CreateFromBankA_SetsCorrectNameAndProvider()
-    {
-        var source = TransactionSource.CreateFromBankA("EXT-001");
-
-        source.Name.Should().Be("Bank A");
-        source.ExternalId.Should().Be("EXT-001");
-        source.Provider.Should().Be("BankA Corp");
-        source.Version.Should().Be("2.0");
-    }
-
-    [Fact]
-    public void CreateFromBankB_SetsCorrectNameAndProvider()
-    {
-        var source = TransactionSource.CreateFromBankB("EXT-002");
-
-        source.Name.Should().Be("Bank B");
-        source.ExternalId.Should().Be("EXT-002");
-        source.Provider.Should().Be("BankB Financial");
-        source.Version.Should().Be("1.5");
-    }
-
-    [Fact]
-    public void CreateFromWallet_SetsCorrectNameAndProvider()
-    {
-        var source = TransactionSource.CreateFromWallet("EXT-003");
-
-        source.Name.Should().Be("Digital Wallet");
-        source.ExternalId.Should().Be("EXT-003");
-        source.Provider.Should().Be("WalletPay");
-        source.Version.Should().Be("3.2");
-    }
-
-    [Fact]
-    public void UpdateLastSyncDate_SetsLastSyncDate()
-    {
-        var source = TransactionSource.Create("Bank A", "EXT-123");
-        var syncDate = DateTime.UtcNow;
-
-        source.UpdateLastSyncDate(syncDate);
-
-        source.LastSyncDate.Should().Be(syncDate);
-    }
-
-    [Fact]
-    public void IsOlderThan_WhenSyncDateIsOlderThanAge_ReturnsTrue()
-    {
-        var source = TransactionSource.Create("Bank A", "EXT-123");
-        source.UpdateLastSyncDate(DateTime.UtcNow.AddHours(-2));
-
-        source.IsOlderThan(TimeSpan.FromHours(1)).Should().BeTrue();
-    }
-
-    [Fact]
-    public void IsOlderThan_WhenSyncDateIsRecent_ReturnsFalse()
-    {
-        var source = TransactionSource.Create("Bank A", "EXT-123");
-        source.UpdateLastSyncDate(DateTime.UtcNow.AddMinutes(-5));
-
-        source.IsOlderThan(TimeSpan.FromHours(1)).Should().BeFalse();
-    }
-
-    [Fact]
-    public void IsOlderThan_WhenNoSyncDate_ReturnsFalse()
-    {
-        var source = TransactionSource.Create("Bank A", "EXT-123");
-
-        source.IsOlderThan(TimeSpan.FromHours(1)).Should().BeFalse();
-    }
-
-    [Fact]
     public void TwoSources_WithSameNameAndExternalId_AreEqual()
     {
         var a = TransactionSource.Create("Bank A", "EXT-123");
@@ -158,16 +76,6 @@ public class TransactionSourceValueObjectTests
         var b = TransactionSource.Create("Bank A", "EXT-002");
 
         a.Should().NotBe(b);
-    }
-
-    [Fact]
-    public void TwoSources_WithSameNameAndId_DifferentProvider_AreStillEqual()
-    {
-
-        var a = TransactionSource.Create("Bank A", "EXT-123", "ProviderX");
-        var b = TransactionSource.Create("Bank A", "EXT-123", "ProviderY");
-
-        a.Should().Be(b);
     }
 
     [Fact]

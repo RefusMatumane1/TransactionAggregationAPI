@@ -28,19 +28,6 @@ public class AccountService
         }
     }
 
-    public async Task<AccountModel?> GetAccountByIdAsync(Guid customerId, Guid accountId)
-    {
-        try
-        {
-            return await Client.GetFromJsonAsync<AccountModel>(
-                $"api/v1/customers/{customerId}/accounts/{accountId}");
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     public async Task<(bool success, string? error)> CreateAccountAsync(Guid customerId, CreateAccountModel model)
     {
         try

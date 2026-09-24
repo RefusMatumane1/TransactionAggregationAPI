@@ -6,15 +6,7 @@ using SharedKernel.Persistence;
 
 namespace Modules.WebhookSources.Infrastructure.Persistence
 {
-    /// <summary>
-    /// Owns its own "webhooksources" Postgres schema and its own EF Core migrations
-    /// history, independent of every other module's DbContext — see
-    /// docs/adr/0009-schema-per-module-database-strategy.md. No cross-context
-    /// transaction sharing needed here (unlike TransactionsDbContext/MessagingDbContext):
-    /// every write in this module (create/activate/deactivate/rotate a webhook source,
-    /// or record its usage in ApiKeyEndpointFilter) is a standalone unit of work with
-    /// no other module's data changing alongside it.
-    /// </summary>
+    /// <summary>Owns the "webhooksources" schema and its own migrations history (ADR-0009).</summary>
     public class WebhookSourcesDbContext : AppDbContextBase, IWebhookSourcesDbContext
     {
         public WebhookSourcesDbContext(DbContextOptions<WebhookSourcesDbContext> options, IMediator mediator)

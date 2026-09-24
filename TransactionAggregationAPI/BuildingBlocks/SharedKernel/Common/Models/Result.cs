@@ -51,9 +51,6 @@ namespace SharedKernel.Common.Models
 
         public static implicit operator Result<TValue>(TValue? value) =>
             value is not null ? Success(value) : Failure<TValue>(Error.NullValue);
-
-        public static Result<TValue> ValidationFailure(Error error) =>
-            new(default, false, error);
     }
 
     public record Error

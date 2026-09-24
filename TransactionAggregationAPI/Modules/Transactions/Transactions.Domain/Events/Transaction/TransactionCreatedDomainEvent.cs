@@ -1,5 +1,4 @@
-﻿using Modules.Transactions.Domain.Entities;
-using SharedKernel.Common;
+﻿using SharedKernel.Common;
 
 namespace Modules.Transactions.Domain.Events.Transaction
 {

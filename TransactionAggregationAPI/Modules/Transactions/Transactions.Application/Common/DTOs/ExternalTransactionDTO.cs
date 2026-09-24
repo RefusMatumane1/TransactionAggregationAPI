@@ -1,5 +1,3 @@
-using System;
-
 namespace Modules.Transactions.Application.Common.DTOs
 {
     public record ExternalTransactionDTO

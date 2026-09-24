@@ -36,10 +36,7 @@ namespace Modules.Customers.Application.Features.GetAccountById
                     AccountErrors.NotFound(request.AccountId));
             }
 
-            // Account.Balance is never maintained by any handler (Credit()/Debit() are
-            // domain-tested but unwired) — always 0 if used directly. Balance is the sum
-            // of linked transactions instead, resolved through IAccountBalanceProvider
-            // since Transactions lives in a different module/schema now.
+            // Balances are derived from the account's transactions, which the Transactions module owns.
             var balance = await _balanceProvider.GetBalanceAsync(accountId.Value, cancellationToken);
 
             var dto = new AccountDto(

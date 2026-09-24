@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Modules.Transactions.Application.Common.Models;
 using Modules.Transactions.Domain.Enums;
 using SharedKernel.Common.Models;
 

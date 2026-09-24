@@ -1,13 +1,10 @@
 using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
 
@@ -17,16 +14,11 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
     {
         private readonly ITransactionsDbContext _context;
         private readonly IMapper _mapper;
-        private readonly ILogger<GetTransactionsQueryHandler> _logger;
 
-        public GetTransactionsQueryHandler(
-            ITransactionsDbContext context,
-            IMapper mapper,
-            ILogger<GetTransactionsQueryHandler> logger)
+        public GetTransactionsQueryHandler(ITransactionsDbContext context, IMapper mapper)
         {
             _context = context;
             _mapper = mapper;
-            _logger = logger;
         }
 
         public async Task<Result<PaginatedResponse<TransactionListItemDto>>> Handle(

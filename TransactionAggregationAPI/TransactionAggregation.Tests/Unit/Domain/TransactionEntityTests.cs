@@ -38,93 +38,12 @@ public class TransactionEntityTests
     }
 
     [Fact]
-    public void Approve_FromPending_SetsStatusAndRaisesEvent()
-    {
-        var tx = CreatePending();
-        tx.Approve("reviewer@bank.com");
-
-        tx.Status.Should().Be(TransactionStatus.Approved);
-        tx.ApprovedBy.Should().Be("reviewer@bank.com");
-        tx.ApprovedAt.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void Approve_WhenAlreadyApproved_IsNoOp()
-    {
-        var tx = CreatePending();
-        tx.Approve();
-        var eventCountBefore = tx.DomainEvents.Count;
-
-        tx.Approve();
-
-        tx.DomainEvents.Count.Should().Be(eventCountBefore);
-    }
-
-    [Fact]
-    public void Approve_WhenRejected_Throws()
-    {
-        var tx = CreatePending();
-        tx.Reject("fraud", "system");
-
-        tx.Invoking(t => t.Approve())
-          .Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Reject_FromPending_SetsRejectedStatus()
-    {
-        var tx = CreatePending();
-        tx.Reject("insufficient funds");
-
-        tx.Status.Should().Be(TransactionStatus.Rejected);
-    }
-
-    [Fact]
-    public void Reject_WhenAlreadyApproved_Throws()
-    {
-        var tx = CreatePending();
-        tx.Approve();
-
-        tx.Invoking(t => t.Reject("late rejection"))
-          .Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Refund_WhenApproved_SetsRefundedStatus()
-    {
-        var tx = CreatePending();
-        tx.Approve();
-        tx.Refund("customer request");
-
-        tx.Status.Should().Be(TransactionStatus.Refunded);
-    }
-
-    [Fact]
-    public void Refund_WhenStillPending_Throws()
-    {
-        var tx = CreatePending();
-
-        tx.Invoking(t => t.Refund("too early"))
-          .Should().Throw<DomainException>();
-    }
-
-    [Fact]
     public void AddMetadata_StoresKeyValue()
     {
         var tx = CreatePending();
         tx.AddMetadata("invoiceId", "INV-001");
 
         tx.Metadata.Should().ContainKey("invoiceId").WhoseValue.Should().Be("INV-001");
-    }
-
-    [Fact]
-    public void RemoveMetadata_RemovesExistingKey()
-    {
-        var tx = CreatePending();
-        tx.AddMetadata("invoiceId", "INV-001");
-        tx.RemoveMetadata("invoiceId");
-
-        tx.Metadata.Should().NotContainKey("invoiceId");
     }
 
     [Fact]
@@ -151,7 +70,6 @@ public class TransactionEntityTests
         tx.Settle();
 
         tx.Status.Should().Be(TransactionStatus.Settled);
-        tx.IsSettled.Should().BeTrue();
         tx.Amount.Amount.Should().Be(-100m);
     }
 
@@ -185,7 +103,7 @@ public class TransactionEntityTests
     public void Settle_VoidedTransaction_Throws(TransactionStatus status)
     {
         var tx = CreatePending();
-        tx.UpdateStatus(status, "test");
+        tx.UpdateStatus(status);
 
         var act = () => tx.Settle();
 

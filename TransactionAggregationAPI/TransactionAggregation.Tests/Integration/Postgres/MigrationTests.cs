@@ -5,11 +5,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
     /// <summary>
-    /// Automates the manual verification performed during this review: running
-    /// `--migrate-only` against a throwaway real Postgres and inspecting the schema
-    /// with psql. MigrationExtensions.ApplyMigrationsAsync previously acquired the
-    /// advisory lock and logged success without ever calling MigrateAsync() — this
-    /// is the regression test for that class of bug.
+    /// Applies every module's migrations to a real Postgres and inspects the schema, so a migration
+    /// step that silently does nothing fails CI.
     /// </summary>
     [Collection(PostgresCollection.Name)]
     public class MigrationTests
@@ -41,11 +38,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             }
         }
 
-        /// <summary>
-        /// Pins the schema-per-module split (docs/adr/0009-schema-per-module-database-strategy.md):
-        /// each table must live in its owning module's schema, not just "exist somewhere" —
-        /// the previous test alone couldn't catch a table landing in the wrong schema.
-        /// </summary>
+        /// <summary>Pins the schema-per-module split (ADR-0009): each table lives in its owning module's schema.</summary>
         [Theory]
         [InlineData("Customers", "customers")]
         [InlineData("Accounts", "customers")]

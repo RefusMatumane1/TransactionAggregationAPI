@@ -12,7 +12,6 @@ using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Domain.Events.Transaction;
 using NSubstitute;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.ValueObjects;
 using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;

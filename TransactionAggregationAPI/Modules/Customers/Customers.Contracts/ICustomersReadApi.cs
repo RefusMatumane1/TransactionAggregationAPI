@@ -1,14 +1,6 @@
 namespace Modules.Customers.Contracts
 {
-    /// <summary>
-    /// Published read contract for other modules — deliberately narrower
-    /// than exposing ICustomersDbContext's DbSet (which stays internal to this module).
-    /// Returns primitives/DTOs, never the Customer entity, so consumers can't reach
-    /// through into this module's internals the way the old shared ITransactionsDbContext
-    /// let handlers reach into other modules' DbSets. Used by the Transactions module
-    /// (GetCustomerWithTransactionsQueryHandler) to resolve Customer facts
-    /// without a cross-schema join.
-    /// </summary>
+    /// <summary>Read contract for other modules: returns DTOs, never the Customer entity or its DbSet.</summary>
     public interface ICustomersReadApi
     {
         Task<CustomerSummary?> FindCustomerByIdAsync(

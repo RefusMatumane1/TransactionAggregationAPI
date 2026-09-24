@@ -1,5 +1,4 @@
-﻿using Microsoft.AspNetCore.Http;
-using SharedKernel.Abstractions.Authentication;
+﻿using SharedKernel.Abstractions.Authentication;
 
 namespace TransactionAggregationAPI.Authentication;
 

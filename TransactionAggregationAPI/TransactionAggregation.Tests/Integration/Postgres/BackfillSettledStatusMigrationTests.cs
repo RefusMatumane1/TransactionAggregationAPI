@@ -57,7 +57,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 var tx = Transaction.Create(customer.Id, Money.Create(-10m, "ZAR"), "backfill", TransactionCategory.Uncategorized,
                     TransactionSource.Create("FNB", externalId), account.Id);
                 if (status != TransactionStatus.Pending)
-                    tx.UpdateStatus(status, "test");
+                    tx.UpdateStatus(status);
                 return tx;
             }
 

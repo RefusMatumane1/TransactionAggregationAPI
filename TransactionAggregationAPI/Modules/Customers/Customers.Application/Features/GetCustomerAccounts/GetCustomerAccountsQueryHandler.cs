@@ -39,10 +39,7 @@ namespace Modules.Customers.Application.Features.GetCustomerAccounts
                 .Where(a => a.CustomerId == customerId)
                 .ToListAsync(cancellationToken);
 
-            // Account.Balance is never maintained by any handler (Credit()/Debit() are
-            // domain-tested but unwired) — always 0 if used directly. Balance is the sum
-            // of each account's linked transactions instead, resolved through
-            // IAccountBalanceProvider since Transactions lives in a different module/schema.
+            // Balances are derived from each account's transactions, which the Transactions module owns.
             var balancesByAccountId = await _balanceProvider.GetBalancesByCustomerAsync(customerId.Value, cancellationToken);
 
             var dtos = accounts.Select(a =>

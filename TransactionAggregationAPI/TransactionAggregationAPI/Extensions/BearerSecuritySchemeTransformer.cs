@@ -7,16 +7,8 @@ using System.Text.RegularExpressions;
 namespace TransactionAggregationAPI.Extensions;
 
 /// <summary>
-/// Instructions.md section 38 asks for OpenAPI documentation that makes the API
-/// "understandable without reading the source code" — including how to
-/// authenticate. AddOpenApi() alone doesn't add that: the generated spec had zero
-/// security schemes defined, so a consumer reading only the docs (or using
-/// Scalar's "Try it out") had no way to know a Bearer token was required, or how
-/// to supply one. This wires the JWT Bearer scheme into the document and marks
-/// only the endpoints that actually require it — customer registration
-/// (AllowAnonymous), the bank-link OAuth callback, and the webhook ingestion
-/// endpoint (API-key auth, a different scheme entirely) are correctly left
-/// without it, rather than blanket-applying to every operation.
+/// Adds the JWT Bearer scheme to the OpenAPI document, and a security requirement only to the
+/// operations that need it: anonymous endpoints and the API-key webhook are left without one.
 /// </summary>
 public sealed class BearerSecuritySchemeTransformer(IAuthenticationSchemeProvider authenticationSchemeProvider)
     : IOpenApiDocumentTransformer
@@ -71,9 +63,8 @@ public sealed class BearerSecuritySchemeTransformer(IAuthenticationSchemeProvide
         var hasAuthorizeData = endpointMetadata.OfType<IAuthorizeData>().Any();
         var allowsAnonymous = endpointMetadata.OfType<IAllowAnonymous>().Any();
 
-        // The webhook ingestion endpoint requires ApiKeyEndpointFilter, not JWT —
-        // it carries no IAuthorizeData at all, so it's already excluded by the
-        // hasAuthorizeData check without needing a special case here.
+        // The webhook endpoint authenticates with WebhookApiKeyEndpointFilter and carries no
+        // IAuthorizeData, so the check above already excludes it.
         return hasAuthorizeData && !allowsAnonymous;
     }
 

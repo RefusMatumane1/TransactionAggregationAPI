@@ -169,9 +169,8 @@ public class InitiateBankLinkCommandHandlerTests
     [Fact]
     public async Task Handle_AggregatorClientThrows_PropagatesToCentralizedExceptionHandling()
     {
-        // Unexpected exceptions are no longer swallowed into a generic Result.Unexpected
-        // by the handler — they propagate so the centralized exception-handling
-        // middleware (and its trace-ID-bearing ProblemDetails response) handles them.
+        // Unexpected exceptions propagate to the exception-handling middleware, which returns a
+        // ProblemDetails response carrying the trace id.
         var context = InMemoryBankLinksDbContextFactory.Create();
         var customerId = CustomerId.Create();
         var client = Substitute.For<IBankAggregatorClient>();

@@ -5,16 +5,9 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration
 {
     /// <summary>
-    /// Instructions.md section 38 requires the API to be "understandable without
-    /// reading the source code" — including how to authenticate. These tests pin
-    /// the behavior of BearerSecuritySchemeTransformer against the actual generated
-    /// document rather than the handler wiring in isolation, since the thing that
-    /// can silently break is the RelativePath-to-document.Paths lookup itself
-    /// (mismatched leading slash or a stray query string suffix), not the security
-    /// scheme construction. Program.cs registers the real JWT "Bearer" scheme
-    /// unconditionally (IntegrationTestWebAppFactory only overrides which scheme is
-    /// the *default*, so requests authenticate via the "Test" scheme instead), so
-    /// the transformer sees the same "Bearer"-named scheme here as in production.
+    /// Pins BearerSecuritySchemeTransformer against the generated document: what can silently break
+    /// is the RelativePath-to-document path lookup, not building the scheme. The real JWT "Bearer"
+    /// scheme is registered here too; the test host only changes the default scheme.
     /// </summary>
     public class OpenApiSecuritySchemeTests : IClassFixture<IntegrationTestWebAppFactory>
     {

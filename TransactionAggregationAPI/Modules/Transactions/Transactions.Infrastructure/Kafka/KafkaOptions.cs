@@ -20,11 +20,10 @@ namespace Modules.Transactions.Infrastructure.Kafka
         public string GroupId { get; set; } = "transaction-aggregation-api";
 
         /// <summary>
-        /// The SourceName for records that carry no "source" header. SourceName scopes
-        /// idempotency keys — Kafka and webhook deliveries of the same batch are deduplicated
-        /// separately, and at the transaction level (external ID per customer) regardless of
-        /// channel. Unlike a header value, this default is trusted as configured and not
-        /// checked against the WebhookSources registry.
+        /// The SourceName for records that carry no "source" header. SourceName scopes idempotency
+        /// keys, so Kafka and webhook deliveries of the same batch are deduplicated separately at the
+        /// delivery level, and together at the transaction level. Unlike a header value, this default
+        /// is trusted as configured and not checked against the WebhookSources registry.
         /// </summary>
         public string SourceName { get; set; } = "kafka-bank-aggregator";
 

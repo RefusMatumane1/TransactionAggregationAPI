@@ -1,5 +1,4 @@
 using FluentValidation;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.WebhookSources.Application.Contracts;
 using Modules.WebhookSources.Contracts;
@@ -13,10 +12,8 @@ namespace Modules.WebhookSources
         {
             services.AddValidatorsFromAssembly(typeof(AssemblyReference).Assembly);
 
-            // Handler registration only — pipeline behaviors (Validation/Logging/
-            // Performance/Caching) are registered exactly once, centrally, in
-            // AddTransactionsApplication(). Adding them again
-            // here would execute every behavior twice for this module's requests.
+            // Handlers only: pipeline behaviors are registered once in AddTransactionsApplication();
+            // registering them here too would run each behavior twice.
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
 
@@ -27,11 +24,6 @@ namespace Modules.WebhookSources
         }
     }
 
-    /// <summary>
-    /// Anchor type for locating this assembly (MediatR/FluentValidation scanning,
-    /// architecture tests) without relying on <see cref="Assembly.GetExecutingAssembly"/>,
-    /// which would resolve to the wrong assembly once this method is called from
-    /// Infrastructure's DependencyInjection.
-    /// </summary>
+    /// <summary>Anchor type for locating this assembly (MediatR/FluentValidation scanning, architecture tests).</summary>
     internal sealed class AssemblyReference;
 }

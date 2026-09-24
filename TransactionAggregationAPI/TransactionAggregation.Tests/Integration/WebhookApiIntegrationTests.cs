@@ -7,8 +7,6 @@ using Modules.BankLinks.Domain.ValueObjects;
 using Modules.Customers.Application.Persistence;
 using Modules.Customers.Domain;
 using Modules.Transactions.Application.Common.Inbox;
-using Modules.Transactions.Domain.Common.ValueObjects;
-using Modules.Transactions.Domain.Entities;
 using Modules.WebhookSources.Application.Persistence;
 using Modules.WebhookSources.Domain;
 using SharedKernel.Common.ValueObjects;

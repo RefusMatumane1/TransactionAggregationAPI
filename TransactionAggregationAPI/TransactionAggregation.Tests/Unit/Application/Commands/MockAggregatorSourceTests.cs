@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.WebhookSources.Domain;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using TransactionAggregationAPI;
 using Xunit;

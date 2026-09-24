@@ -61,16 +61,9 @@ try
             options.MetadataAddress =
                             $"{keycloakAuthority.TrimEnd('/')}/realms/{keycloakRealm}/.well-known/openid-configuration";
 
-            // Decoupled from IsDevelopment() on purpose: whether this specific
-            // in-cluster hop needs HTTPS is an infrastructure fact (is there a TLS
-            // listener on the other end?), not a proxy for "is this environment
-            // Production." The in-cluster Keycloak service currently serves plain
-            // HTTP (see k8s/keycloak — KC_HTTP_ENABLED), with TLS terminated at the
-            // Ingress for external traffic only; NetworkPolicy isolates the
-            // namespace. Explicitly set Keycloak:RequireHttpsMetadata=false in that
-            // ConfigMap to reflect that reviewed decision — defaulting here to
-            // "true unless Development" only when the value isn't set at all, so
-            // this doesn't silently downgrade security for anyone who hasn't set it.
+            // Whether this in-cluster hop needs HTTPS is an infrastructure fact, not an environment one: the
+            // k8s Keycloak serves plain HTTP behind the ingress, so its ConfigMap sets this to false
+            // explicitly. Unset, it defaults to true outside Development.
             options.RequireHttpsMetadata = builder.Configuration.GetValue<bool?>("Keycloak:RequireHttpsMetadata")
                 ?? !builder.Environment.IsDevelopment();
 
@@ -152,10 +145,9 @@ try
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
 
-    // X-Forwarded-For is only honoured from the reverse proxies listed in
-    // ForwardedHeaders:KnownNetworks (the ingress controller's pod CIDR in k8s). Trusting
-    // it from anyone let a client pick its own "remote IP" — and so a fresh anonymous
-    // rate-limit partition — per request. With nothing configured only loopback is trusted.
+    // X-Forwarded-For is honoured only from ForwardedHeaders:KnownNetworks (the ingress CIDR in
+    // k8s); otherwise a client could pick its own rate-limit partition. Unconfigured, only
+    // loopback is trusted.
     var knownProxyNetworks = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [];
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
@@ -259,13 +251,8 @@ try
         return;
     }
 
-    // Staging/Production apply migrations via the dedicated db-migrate Job
-    // (k8s/api/migration-job.yaml, run with --migrate-only above) before this
-    // Deployment rolls out — see the comment in k8s/api/deployment.yaml explaining
-    // why no pod self-migrates there. Auto-migrating and seeding demo data here is
-    // a Development-only convenience for docker-compose/local dev, which has no
-    // separate migration step. Never seed demo customers (fake accounts with a
-    // well-known password) into a real environment.
+    // Outside Development the db-migrate Job (--migrate-only) applies migrations before rollout.
+    // Auto-migrating and seeding demo customers (well-known passwords) is Development-only.
     if (app.Environment.IsDevelopment())
     {
         await ApplyAllMigrationsAsync(app);

@@ -6,19 +6,9 @@ using Xunit;
 namespace TransactionAggregation.Tests.Architecture;
 
 /// <summary>
-/// LayerDependencyTests enforces horizontal layering (Domain must not depend on
-/// Infrastructure, etc.) within the original shared projects — it enforces nothing
-/// about module isolation, which was the actual gap this restructuring closes (see
-/// docs/adr/0001-modular-monolith-not-microservices.md and
-/// docs/adr/0009-schema-per-module-database-strategy.md). These tests make the two
-/// module boundaries introduced so far compiler/CI-enforced, not just documented:
-/// WebhookSources (split into Domain/Application/Infrastructure/Contracts projects —
-/// each checked individually, plus intra-module layering between them) must depend
-/// on nothing but SharedKernel, and BuildingBlocks.Messaging — a shared building
-/// block every future module may depend on — must depend on no business module at
-/// all, proving it's genuinely generic and not secretly Transactions-shaped (it
-/// dispatches by message.Type strings, not by referencing
-/// Modules.Transactions.Application directly).
+/// WebhookSources depends only on SharedKernel (each of its layers only on the ones below), and
+/// BuildingBlocks.Messaging depends on no business module: it dispatches by message type
+/// string, never by referencing a module.
 /// </summary>
 public class ModuleIsolationTests
 {

@@ -1,13 +1,8 @@
 namespace Modules.Customers.Contracts
 {
     /// <summary>
-    /// Owned by Customers: Account.Balance is never stored (see GetAccountByIdQueryHandler)
-    /// — it's always the sum of the account's linked transactions, which belong to the
-    /// Transactions module. The implementation (TransactionBalanceProvider in
-    /// Transactions.Application, registered by Transactions.Infrastructure's
-    /// AddTransactionsModule) sums them — Customers itself has no dependency on the
-    /// Transaction entity or its persistence. Mirrors IAccountProvisioningPort's shape
-    /// (BankLinks -> Customers), in the opposite direction (Customers -> Transactions).
+    /// Owned by Customers, implemented by Transactions (TransactionBalanceProvider): an account's
+    /// balance is derived from its transactions, which Customers can't read directly.
     /// </summary>
     public interface IAccountBalanceProvider
     {

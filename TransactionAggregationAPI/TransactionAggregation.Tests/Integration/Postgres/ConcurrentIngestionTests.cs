@@ -9,11 +9,9 @@ using Modules.Customers.Domain.ValueObjects;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using NSubstitute;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
@@ -21,17 +19,9 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
     /// <summary>
-    /// The exact race Instructions.md section 6 describes:
-    ///   Request A -> check transaction -> not found
-    ///   Request B -> check transaction -> not found
-    ///   Request A -> insert
-    ///   Request B -> insert
-    /// This only proves anything against a real database — the in-memory EF Core
-    /// provider used by ProcessInboundTransactionsCommandHandlerTests doesn't
-    /// enforce the unique constraint the same way real Postgres does, and the
-    /// handler's unique-violation retry (DbUpdateException.IsUniqueViolation, a
-    /// Postgres-specific SQLSTATE) is something no in-memory-provider test could ever
-    /// trigger. These tests are the only ones in the suite that exercise it.
+    /// The check-then-insert race: two requests both find a transaction missing, then both insert.
+    /// Only a real database enforces the unique index and raises the SQLSTATE the handler's
+    /// conflict retry depends on.
     /// </summary>
     [Collection(PostgresCollection.Name)]
     public class ConcurrentIngestionTests

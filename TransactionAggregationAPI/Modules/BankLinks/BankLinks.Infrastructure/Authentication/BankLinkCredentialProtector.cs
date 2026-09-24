@@ -13,7 +13,5 @@ namespace Modules.BankLinks.Infrastructure.Authentication
         }
 
         public string Protect(string plaintext) => _protector.Protect(plaintext);
-
-        public string Unprotect(string protectedValue) => _protector.Unprotect(protectedValue);
     }
 }

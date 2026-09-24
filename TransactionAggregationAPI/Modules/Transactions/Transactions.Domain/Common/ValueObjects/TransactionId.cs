@@ -1,7 +1,4 @@
 ﻿using SharedKernel.Common.ValueObjects;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
 namespace Modules.Transactions.Domain.Common.ValueObjects
 {

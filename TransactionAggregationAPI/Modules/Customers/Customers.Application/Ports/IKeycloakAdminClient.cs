@@ -1,11 +1,6 @@
 namespace Modules.Customers.Application.Ports
 {
-    /// <summary>
-    /// Customer registration provisions a Keycloak identity. This is the port for that;
-    /// KeycloakAdminClient in Customers.Infrastructure implements it. It lives in
-    /// Application.Ports, not Contracts, because only this module's own Infrastructure
-    /// implements it and no other module consumes it.
-    /// </summary>
+    /// <summary>Provisions the Keycloak identity for a newly registered customer.</summary>
     public interface IKeycloakAdminClient
     {
         Task<Guid> CreateUserAsync(string email, string name, string password, CancellationToken cancellationToken = default);

@@ -91,7 +91,7 @@ public class PendingExpiryTests
     {
         var tx = Transaction.Create(CustomerId.Create(), Money.Create(-1m, "ZAR"), "x",
             TransactionCategory.Uncategorized, TransactionSource.Create("FNB", "ext-1"));
-        tx.UpdateStatus(status, "test");
+        tx.UpdateStatus(status);
 
         var act = () => tx.Expire();
 

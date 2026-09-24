@@ -6,15 +6,7 @@ using SharedKernel.Persistence;
 
 namespace Modules.Customers.Infrastructure.Persistence
 {
-    /// <summary>
-    /// Owns its own "customers" Postgres schema and its own EF Core migrations history,
-    /// independent of every other module's DbContext — see
-    /// docs/adr/0009-schema-per-module-database-strategy.md. No cross-context
-    /// transaction sharing with TransactionsDbContext: creating a Customer/Account here
-    /// and writing a Transaction against it (the Transactions module's
-    /// TransactionsDbContext, read back via IAccountBalanceProvider) are two separate units of work, same trade-off already
-    /// accepted for WebhookSourcesDbContext/BankLinksDbContext.
-    /// </summary>
+    /// <summary>Owns the "customers" schema and its own migrations history (ADR-0009).</summary>
     public class CustomersDbContext : AppDbContextBase, ICustomersDbContext
     {
         public CustomersDbContext(DbContextOptions<CustomersDbContext> options, IMediator mediator)

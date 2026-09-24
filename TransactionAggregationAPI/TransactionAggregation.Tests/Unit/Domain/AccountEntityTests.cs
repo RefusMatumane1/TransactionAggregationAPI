@@ -21,7 +21,6 @@ public class AccountEntityTests
         account.AccountNumber.Should().Be("ACC-001");
         account.AccountName.Should().Be("Main Cheque");
         account.AccountType.Should().Be(AccountType.Checking);
-        account.Balance.Should().Be(0m);
         account.Currency.Should().Be("ZAR");
         account.IsActive.Should().BeTrue();
     }
@@ -123,110 +122,6 @@ public class AccountEntityTests
     }
 
     [Fact]
-    public void Credit_PositiveAmount_IncreasesBalance()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Credit(500m);
-
-        account.Balance.Should().Be(500m);
-    }
-
-    [Fact]
-    public void Credit_MultipleCredits_AccumulatesBalance()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Credit(200m);
-        account.Credit(300m);
-
-        account.Balance.Should().Be(500m);
-    }
-
-    [Fact]
-    public void Credit_ZeroAmount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Invoking(a => a.Credit(0m))
-               .Should().Throw<DomainException>()
-               .WithMessage("*positive*");
-    }
-
-    [Fact]
-    public void Credit_NegativeAmount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Invoking(a => a.Credit(-100m))
-               .Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Credit_OnInactiveAccount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-        account.Deactivate();
-
-        account.Invoking(a => a.Credit(100m))
-               .Should().Throw<DomainException>()
-               .WithMessage("*inactive*");
-    }
-
-    [Fact]
-    public void Debit_PositiveAmount_DecreasesBalance()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-        account.Credit(500m);
-
-        account.Debit(200m);
-
-        account.Balance.Should().Be(300m);
-    }
-
-    [Fact]
-    public void Debit_ZeroAmount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Invoking(a => a.Debit(0m))
-               .Should().Throw<DomainException>()
-               .WithMessage("*positive*");
-    }
-
-    [Fact]
-    public void Debit_NegativeAmount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-
-        account.Invoking(a => a.Debit(-100m))
-               .Should().Throw<DomainException>();
-    }
-
-    [Fact]
-    public void Debit_OnInactiveAccount_ThrowsDomainException()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-        account.Credit(500m);
-        account.Deactivate();
-
-        account.Invoking(a => a.Debit(100m))
-               .Should().Throw<DomainException>()
-               .WithMessage("*inactive*");
-    }
-
-    [Fact]
-    public void Debit_AllowsNegativeBalance_WhenSufficientCreditNotEnforced()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.CreditCard);
-        account.Credit(100m);
-
-        account.Debit(200m);
-
-        account.Balance.Should().Be(-100m);
-    }
-
-    [Fact]
     public void Deactivate_SetsIsActiveFalse()
     {
         var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
@@ -237,25 +132,4 @@ public class AccountEntityTests
         account.UpdatedAt.Should().NotBeNull();
     }
 
-    [Fact]
-    public void Reactivate_SetsIsActiveTrue()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-        account.Deactivate();
-
-        account.Reactivate();
-
-        account.IsActive.Should().BeTrue();
-        account.UpdatedAt.Should().NotBeNull();
-    }
-
-    [Fact]
-    public void Deactivate_ThenReactivate_AllowsCredits()
-    {
-        var account = Account.Create(NewCustomerId(), "ACC-001", "My Account", AccountType.Checking);
-        account.Deactivate();
-        account.Reactivate();
-
-        account.Invoking(a => a.Credit(100m)).Should().NotThrow();
-    }
 }

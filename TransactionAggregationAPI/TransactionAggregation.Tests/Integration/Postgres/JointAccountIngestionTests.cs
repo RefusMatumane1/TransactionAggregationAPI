@@ -13,9 +13,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
     /// <summary>
-    /// Against the real schema: two holders of one joint account each get their own row for
-    /// the same bank transaction. The transactions unique index is per customer
-    /// (CustomerId + external id), which is what lets both copies coexist.
+    /// Against the real schema: two holders of one joint account each get their own row for the same
+    /// bank transaction, because the unique index is per customer (CustomerId, SourceName, external id).
     /// </summary>
     [Collection(PostgresCollection.Name)]
     public class JointAccountIngestionTests

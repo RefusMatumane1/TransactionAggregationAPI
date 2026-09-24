@@ -1,6 +1,5 @@
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Enums;
-using Modules.Transactions.Domain.Events;
 using Modules.Transactions.Domain.Events.Transaction;
 using SharedKernel.Common;
 using SharedKernel.Common.ValueObjects;
@@ -41,20 +40,25 @@ namespace Modules.Transactions.Domain.Entities
         public string Description { get; private set; } = null!;
         public TransactionCategory Category { get; private set; }
         public TransactionSource Source { get; private set; } = null!;
-        public DateTime? ApprovedAt { get; private set; }
-        public string? ApprovedBy { get; private set; }
         public DateTime Date { get; private set; }
         public TransactionStatus Status { get; private set; }
         public Dictionary<string, string> Metadata { get; private set; } = new();
 
+        /// <summary>
+        /// Optimistic-concurrency token (mapped to Postgres' xmin system column). Ingestion
+        /// settling a row and the expiry job expiring it can race; without this the later
+        /// write silently wins, and an expiry could overwrite a real posting.
+        /// </summary>
+        public uint Version { get; private set; }
+
         public static Transaction Create(
-                    CustomerId customerId,
-                    Money amount,
-                    string description,
-                    TransactionCategory category,
-                    TransactionSource source,
-                    AccountId? accountId = null,
-                    DateTime? date = null)
+            CustomerId customerId,
+            Money amount,
+            string description,
+            TransactionCategory category,
+            TransactionSource source,
+            AccountId? accountId = null,
+            DateTime? date = null)
         {
             return new Transaction(
                 TransactionId.Create(),
@@ -79,40 +83,14 @@ namespace Modules.Transactions.Domain.Entities
             AddDomainEvent(new TransactionCategorizedDomainEvent(this, oldCategory, newCategory, isAutoCategorized: isAuto));
         }
 
-        public void Approve(string approvedBy = "System", string? notes = null)
-        {
-            if (Status == TransactionStatus.Approved)
-                return;
-
-            if (Status == TransactionStatus.Rejected)
-                throw new DomainException("Cannot approve a rejected transaction");
-
-            var oldStatus = Status;
-            Status = TransactionStatus.Approved;
-            ApprovedAt = DateTime.UtcNow;
-            ApprovedBy = approvedBy;
-            UpdatedAt = DateTime.UtcNow;
-
-            AddDomainEvent(new TransactionApprovedDomainEvent(this, oldStatus, approvedBy));
-        }
-
-        public void UpdateStatus(TransactionStatus newStatus, string reason)
+        public void UpdateStatus(TransactionStatus newStatus)
         {
             if (Status == newStatus)
                 return;
 
-            var oldStatus = Status;
             Status = newStatus;
             UpdatedAt = DateTime.UtcNow;
-
         }
-
-        /// <summary>
-        /// Optimistic-concurrency token (mapped to Postgres' xmin system column, so no schema
-        /// change). Ingestion settling a row and the expiry job expiring it can race; without
-        /// this the later write silently wins, and an expiry could overwrite a real posting.
-        /// </summary>
-        public uint Version { get; private set; }
 
         /// <summary>
         /// The bank has posted (booked) this transaction. A posting can differ from the pending
@@ -158,70 +136,13 @@ namespace Modules.Transactions.Domain.Entities
         /// </summary>
         public DateTime PendingSince => Date > CreatedAt ? Date : CreatedAt;
 
-        public void Reject(string reason, string rejectedBy = "System")
-        {
-            if (Status == TransactionStatus.Rejected)
-                return;
-
-            if (Status == TransactionStatus.Approved)
-                throw new DomainException("Cannot reject an already approved transaction");
-
-            var oldStatus = Status;
-            Status = TransactionStatus.Rejected;
-            UpdatedAt = DateTime.UtcNow;
-
-            AddDomainEvent(new TransactionRejectedDomainEvent(this, reason, rejectedBy, oldStatus));
-        }
-
-        public void Flag(string reason)
-        {
-            if (Status == TransactionStatus.Flagged)
-                return;
-
-            var oldStatus = Status;
-            Status = TransactionStatus.Flagged;
-            UpdatedAt = DateTime.UtcNow;
-
-            AddDomainEvent(new TransactionFlaggedDomainEvent(this, reason, oldStatus));
-        }
-
-        public void Refund(string reason)
-        {
-            if (Status == TransactionStatus.Refunded)
-                return;
-
-            if (Status != TransactionStatus.Settled && Status != TransactionStatus.Approved)
-                throw new DomainException($"Cannot refund a transaction with status {Status}");
-
-            var oldStatus = Status;
-            Status = TransactionStatus.Refunded;
-            UpdatedAt = DateTime.UtcNow;
-
-            AddDomainEvent(new TransactionRefundedDomainEvent(this, reason, oldStatus));
-        }
         public void AddMetadata(string key, string value)
         {
-            if (Metadata.ContainsKey(key))
-                Metadata[key] = value;
-            else
-                Metadata.Add(key, value);
-
+            Metadata[key] = value;
             UpdatedAt = DateTime.UtcNow;
-            AddDomainEvent(new TransactionMetadataAddedDomainEvent(this, key, value));
-        }
-
-        public void RemoveMetadata(string key)
-        {
-            if (Metadata.Remove(key))
-            {
-                UpdatedAt = DateTime.UtcNow;
-                AddDomainEvent(new TransactionMetadataRemovedDomainEvent(this, key));
-            }
         }
 
         public bool IsPending => Status == TransactionStatus.Pending;
-        public bool IsApproved => Status == TransactionStatus.Approved;
-        public bool IsSettled => Status == TransactionStatus.Settled;
         public bool IsExpense => Amount.IsExpense;
         public bool IsIncome => Amount.IsIncome;
         public decimal AbsoluteAmount => Amount.AbsoluteAmount;

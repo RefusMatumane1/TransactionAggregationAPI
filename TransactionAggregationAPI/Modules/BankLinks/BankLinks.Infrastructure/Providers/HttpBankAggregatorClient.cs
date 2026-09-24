@@ -64,19 +64,6 @@ namespace Modules.BankLinks.Infrastructure.Providers
             return await PostTokenRequestAsync(form, cancellationToken);
         }
 
-        public async Task<AggregatorTokenResult> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
-        {
-            var form = new Dictionary<string, string>
-            {
-                ["grant_type"] = "refresh_token",
-                ["refresh_token"] = refreshToken,
-                ["client_id"] = _options.ClientId,
-                ["client_secret"] = _options.ClientSecret
-            };
-
-            return await PostTokenRequestAsync(form, cancellationToken);
-        }
-
         private async Task<AggregatorTokenResult> PostTokenRequestAsync(
             Dictionary<string, string> form, CancellationToken cancellationToken)
         {
@@ -86,7 +73,7 @@ namespace Modules.BankLinks.Infrastructure.Providers
             };
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
-            await ThrowIfUnauthorizedAsync(response, cancellationToken);
+            ThrowIfUnauthorized(response);
             response.EnsureSuccessStatusCode();
 
             var payload = await response.Content.ReadFromJsonAsync<OAuthTokenResponse>(cancellationToken)
@@ -104,7 +91,7 @@ namespace Modules.BankLinks.Infrastructure.Providers
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
             using var response = await _httpClient.SendAsync(request, cancellationToken);
-            await ThrowIfUnauthorizedAsync(response, cancellationToken);
+            ThrowIfUnauthorized(response);
             response.EnsureSuccessStatusCode();
 
             var account = await response.Content.ReadFromJsonAsync<AggregatorAccountResponse>(cancellationToken)
@@ -118,7 +105,7 @@ namespace Modules.BankLinks.Infrastructure.Providers
                 account.Currency);
         }
 
-        private async Task ThrowIfUnauthorizedAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        private void ThrowIfUnauthorized(HttpResponseMessage response)
         {
             if (response.StatusCode != HttpStatusCode.Unauthorized)
                 return;

@@ -4,14 +4,7 @@ using SharedKernel.Common;
 
 namespace SharedKernel.Persistence
 {
-    /// <summary>
-    /// Every per-module DbContext inherits this instead of duplicating the same
-    /// CreatedAt/UpdatedAt stamping + domain-event dispatch that
-    /// Modules/Transactions/Transactions.Persistence/TransactionsDbContext.cs already implemented
-    /// generically over ChangeTracker.Entries&lt;BaseEntity&gt;() — the logic itself
-    /// never referenced any specific entity type, so it belongs here, not repeated
-    /// per module.
-    /// </summary>
+    /// <summary>CreatedAt/UpdatedAt stamping and domain-event dispatch shared by every module DbContext.</summary>
     public abstract class AppDbContextBase : DbContext
     {
         private readonly IMediator _mediator;

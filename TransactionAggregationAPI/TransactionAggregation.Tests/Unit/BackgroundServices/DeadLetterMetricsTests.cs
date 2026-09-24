@@ -7,10 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Modules.Audit.Contracts;
-using Modules.Transactions.Application.Common.Inbox;
 using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Infrastructure.BackgroundServices;
 using NSubstitute;
 using SharedKernel.Common.Interfaces;
@@ -21,13 +18,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Unit.BackgroundServices
 {
     /// <summary>
-    /// failure-scenarios.md scenario 17 flagged that a growing pile of dead-lettered
-    /// (poison) messages was previously invisible outside a log line — no metric an
-    /// alert could ever fire on. These tests pin the counters that close that gap by
-    /// driving the dispatchers' internal message-processing methods directly (made
-    /// internal + InternalsVisibleTo for exactly this purpose): once a message
-    /// actually transitions to DeadLettered, the matching Prometheus counter for its
-    /// type/source must have incremented — not just the database status.
+    /// Dead-lettering a message must increment the matching Prometheus counter, not just change its
+    /// status. Drives the dispatchers' internal per-message methods directly.
     /// </summary>
     public class DeadLetterMetricsTests
     {

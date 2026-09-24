@@ -315,7 +315,7 @@ new(40000, 55000, false, 10000, 14000, 28, 1,
                                   string src, DateTime date)
         {
             var tx = MakeTx(acct, money, desc, cat, src, date);
-            tx.UpdateStatus(TransactionStatus.Settled, "Monthly recurring");
+            tx.UpdateStatus(TransactionStatus.Settled);
             return tx;
         }
 
@@ -325,7 +325,7 @@ new(40000, 55000, false, 10000, 14000, 28, 1,
             var tx = MakeTx(acct, money, desc, cat, src, date);
             var status = StatusPool[rng.Next(StatusPool.Length)];
             if (status != TransactionStatus.Pending)
-                tx.UpdateStatus(status, "Seed data");
+                tx.UpdateStatus(status);
             return tx;
         }
 

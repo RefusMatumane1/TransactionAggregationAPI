@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.JsonWebTokens;
 using StackExchange.Redis;
 using System.Security.Claims;

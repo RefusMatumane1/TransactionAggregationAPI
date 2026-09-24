@@ -2,12 +2,7 @@ using Prometheus;
 
 namespace BuildingBlocks.Messaging.Observability
 {
-    /// <summary>
-    /// Instructions.md section 24 requires failures to be observable; failure-scenarios.md
-    /// scenario 17 (poison messages) flagged that dead-lettering a message was previously
-    /// only visible as a log line — an accumulating pile of poison messages had no metric
-    /// an alert could fire on. These counters close that gap.
-    /// </summary>
+    /// <summary>Counters an alert can fire on when inbox/outbox messages are dead-lettered.</summary>
     public static class DeadLetterMetrics
     {
         public static readonly Counter InboxMessagesDeadLettered = Prometheus.Metrics.CreateCounter(

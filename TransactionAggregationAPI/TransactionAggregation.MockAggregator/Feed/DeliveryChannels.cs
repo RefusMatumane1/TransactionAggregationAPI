@@ -1,6 +1,5 @@
 using Confluent.Kafka;
 using Microsoft.Extensions.Options;
-using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 

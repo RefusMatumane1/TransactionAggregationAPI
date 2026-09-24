@@ -6,7 +6,6 @@
 
 <h4 class="mb-4">Transaction Summary</h4>
 
-<!-- Date range picker -->
 <div class="card mb-4">
     <div class="card-body">
         <div class="row g-2 align-items-end">
@@ -35,7 +34,6 @@
 }
 else if (_summary is not null)
 {
-    <!-- Stat cards -->
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3">
             <StatCard Label="Total Income" Value="@_summary.TotalIncome.ToString("C",  new System.Globalization.CultureInfo("en-ZA"))"
@@ -58,7 +56,6 @@ else if (_summary is not null)
     </div>
 
     <div class="row g-3">
-        <!-- Category breakdown -->
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header fw-semibold">Spending by Category</div>
@@ -97,7 +94,6 @@ else if (_summary is not null)
             </div>
         </div>
 
-        <!-- Monthly spending -->
         <div class="col-lg-6">
             <div class="card h-100">
                 <div class="card-header fw-semibold">Monthly Spending</div>
@@ -131,7 +127,6 @@ else if (_summary is not null)
         </div>
     </div>
 
-    <!-- Transaction status summary -->
     <div class="row g-3 mt-1">
         <div class="col-sm-4">
             <StatCard Label="Total Transactions" Value="@_summary.TotalTransactions.ToString()"

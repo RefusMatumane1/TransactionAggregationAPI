@@ -2,10 +2,7 @@ using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
 using System.Globalization;
@@ -100,7 +97,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportT
         {
             var csv = new StringBuilder();
 
-            csv.AppendLine("Date,Time,Description,Amount,Currency,Flow,Category,Status,Source,External ID,Approved By");
+            csv.AppendLine("Date,Time,Description,Amount,Currency,Flow,Category,Status,Source,External ID");
 
             foreach (var t in transactions)
             {
@@ -108,15 +105,14 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportT
                     t.Date.ToString("yyyy-MM-dd"),
                     t.Date.ToString("HH:mm:ss"),
                     Quote(t.Description),
-                    // At least 2 decimals, up to the 4 stored — "F2" rounded 3-decimal currencies.
+                    // At least 2 decimals, up to the 4 stored.
                     t.Amount.Amount.ToString("0.00##", CultureInfo.InvariantCulture),
                     t.Amount.Currency,
                     t.IsIncome ? "Income" : "Expense",
                     t.Category.ToString(),
                     t.Status.ToString(),
                     Quote(t.Source.Name),
-                    Quote(t.Source.ExternalId),
-                    Quote(t.ApprovedBy ?? string.Empty)
+                    Quote(t.Source.ExternalId)
                 ));
             }
 

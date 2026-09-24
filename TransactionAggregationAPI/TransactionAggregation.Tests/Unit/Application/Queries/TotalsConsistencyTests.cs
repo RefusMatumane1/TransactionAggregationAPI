@@ -16,10 +16,8 @@ using Xunit;
 namespace TransactionAggregation.Tests.Unit.Application.Queries;
 
 /// <summary>
-/// The customer's money figures used to come from three different rules: the
-/// customer+transactions endpoint counted Settled only (and only on the current page),
-/// while the summary and account balances counted every status, Rejected and Cancelled
-/// included. All three now share TransactionTotals — these tests pin that they agree.
+/// The customer+transactions endpoint, the summary and account balances all use TransactionTotals;
+/// these pin that their figures agree.
 /// </summary>
 public class TotalsConsistencyTests
 {
@@ -52,7 +50,7 @@ public class TotalsConsistencyTests
             if (status == TransactionStatus.Settled)
                 tx.Settle();
             else if (status != TransactionStatus.Pending)
-                tx.UpdateStatus(status, "test");
+                tx.UpdateStatus(status);
             return tx;
         }
 

@@ -60,17 +60,6 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                                 .HasMaxLength(100)
                                 .IsRequired();
 
-                            source.Property(s => s.Provider)
-                                .HasColumnName("SourceProvider")
-                                .HasMaxLength(100);
-
-                            source.Property(s => s.Version)
-                                .HasColumnName("SourceVersion")
-                                .HasMaxLength(20);
-
-                            source.Property(s => s.LastSyncDate)
-                                .HasColumnName("SourceLastSyncDate");
-
                             source.HasIndex(s => s.ExternalId)
                                 .HasDatabaseName("IX_Transactions_SourceExternalId");
 
@@ -107,21 +96,12 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
 
             builder.Ignore(t => t.PendingSince);
 
-            builder.Property(t => t.ApprovedAt);
-
-            builder.Property(t => t.ApprovedBy)
-                .HasMaxLength(100);
-
             builder.Property(t => t.Metadata)
                             .HasConversion(
                                 v => JsonSerializer.Serialize(v, new JsonSerializerOptions()),
                                 v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, new JsonSerializerOptions()) ?? new(),
-                                // EF Core invokes this comparer on every SaveChangesAsync change-tracking
-                                // pass. Metadata is never null through the domain's own object-initializer
-                                // path or this converter's own "?? new()" — but the comparer's signature
-                                // doesn't know that, and a raw SQL write of a literal jsonb `null` would
-                                // reach here directly. Null-tolerant so a single stray null can't throw
-                                // out of SaveChangesAsync and abort an unrelated transaction save.
+                                // Null-tolerant: a raw jsonb `null` can reach the comparer, and a throw here would abort
+                                // an unrelated SaveChanges.
                                 new ValueComparer<Dictionary<string, string>>(
                                     (c1, c2) => (c1 ?? new()).SequenceEqual(c2 ?? new()),
                                     c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),

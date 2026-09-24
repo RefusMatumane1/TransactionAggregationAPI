@@ -1,5 +1,4 @@
 using FluentValidation;
-using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.Customers.Application.Contracts;
 using Modules.Customers.Contracts;
@@ -13,27 +12,17 @@ namespace Modules.Customers
         {
             services.AddValidatorsFromAssembly(typeof(AssemblyReference).Assembly);
 
-            // Handler registration only — pipeline behaviors (Validation/Logging/
-            // Performance/Caching) are registered exactly once, centrally, in
-            // AddTransactionsApplication(). Adding them again
-            // here would execute every behavior twice for this module's requests.
+            // Handlers only: pipeline behaviors are registered once in AddTransactionsApplication();
+            // registering them here too would run each behavior twice.
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
 
-            // CustomersReadApi needs ICustomersDbContext, which is why the read-contract
-            // implementation lives here (Application) rather than in Contracts itself —
-            // Contracts stays a leaf project with no EF/persistence dependency.
             services.AddScoped<ICustomersReadApi, CustomersReadApi>();
 
             return services;
         }
     }
 
-    /// <summary>
-    /// Anchor type for locating this assembly (MediatR/FluentValidation
-    /// scanning, architecture tests) without relying on
-    /// <see cref="Assembly.GetExecutingAssembly"/>, which would resolve to the wrong
-    /// assembly once this method is called from Infrastructure's DependencyInjection.
-    /// </summary>
+    /// <summary>Anchor type for locating this assembly (MediatR/FluentValidation scanning, architecture tests).</summary>
     internal sealed class AssemblyReference;
 }

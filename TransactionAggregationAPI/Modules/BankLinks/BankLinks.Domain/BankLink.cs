@@ -52,18 +52,6 @@ namespace Modules.BankLinks.Domain
             UpdatedAt = DateTime.UtcNow;
         }
 
-        public void UpdateTokens(string encryptedAccessToken, string encryptedRefreshToken, DateTime tokenExpiresAt)
-        {
-            if (Status is BankLinkStatus.Revoked)
-                throw new DomainException("Cannot update tokens on a revoked bank link");
-
-            EncryptedAccessToken = encryptedAccessToken;
-            EncryptedRefreshToken = encryptedRefreshToken;
-            TokenExpiresAt = tokenExpiresAt;
-            Status = BankLinkStatus.Active;
-            UpdatedAt = DateTime.UtcNow;
-        }
-
         public void MarkNeedsReauthorization()
         {
             if (Status == BankLinkStatus.Revoked)

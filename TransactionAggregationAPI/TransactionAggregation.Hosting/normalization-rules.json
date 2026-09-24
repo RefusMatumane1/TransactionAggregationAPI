@@ -1,0 +1,30 @@
+// How each bank's raw transactions are normalized (see TransactionNormalizer).
+// "Default" applies to every institution, including ones with no profile ("Other").
+// Add a bank under "Institutions", keyed by its BankLinks name (FNB, StandardBank, Absa,
+// Capitec): its TimeZone replaces the default's, and its DescriptionPrefixes and
+// CategoryMap are added to the default's. Only add rules observed in that bank's real
+// feeds — a wrong prefix silently strips merchant names.
+{
+  "Normalization": {
+    "Default": {
+      "TimeZone": "Africa/Johannesburg",
+      "DescriptionPrefixes": [
+        "POS PURCHASE",
+        "CARD PURCHASE",
+        "DEBIT ORDER"
+      ],
+      "CategoryMap": {
+        "Grocery": "Groceries",
+        "Food & Drink": "Dining",
+        "Restaurants": "Dining",
+        "Transport": "Transportation",
+        "Fuel": "Transportation",
+        "Salary": "Income",
+        "Rent": "Housing",
+        "Medical": "Healthcare",
+        "Streaming": "Subscriptions"
+      }
+    },
+    "Institutions": {}
+  }
+}

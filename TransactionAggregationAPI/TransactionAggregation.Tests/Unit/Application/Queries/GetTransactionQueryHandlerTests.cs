@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using SharedKernel.Common.Enums;
-using Modules.Transactions.Application.Queries.Transaction.GetTransaction;
+using Modules.Transactions.Application.Features.Transactions.Queries.GetTransaction;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -35,7 +35,7 @@ public class GetTransactionQueryHandlerTests
             context, NullLogger<GetTransactionQueryHandler>.Instance);
 
         var result = await handler.Handle(
-            new GetTransactionQuery(tx.Id.Value), CancellationToken.None);
+            new GetTransactionQuery(tx.Id.Value, tx.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(tx.Id.Value);
@@ -52,9 +52,27 @@ public class GetTransactionQueryHandlerTests
             context, NullLogger<GetTransactionQueryHandler>.Instance);
 
         var result = await handler.Handle(
-            new GetTransactionQuery(Guid.NewGuid()), CancellationToken.None);
+            new GetTransactionQuery(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
+    }
+
+    [Fact]
+    public async Task Handle_AnotherCustomersTransaction_ReturnsTheSameNotFoundAsAMissingOne()
+    {
+        var context = InMemoryDbContextFactory.Create();
+        var tx = MakeTransaction();
+        context.Transactions.Add(tx);
+        await context.SaveChangesAsync();
+
+        var handler = new GetTransactionQueryHandler(
+            context, NullLogger<GetTransactionQueryHandler>.Instance);
+
+        var result = await handler.Handle(
+            new GetTransactionQuery(tx.Id.Value, Guid.NewGuid()), CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(Modules.Transactions.Application.Common.Errors.TransactionErrors.NotFound(tx.Id.Value));
     }
 }

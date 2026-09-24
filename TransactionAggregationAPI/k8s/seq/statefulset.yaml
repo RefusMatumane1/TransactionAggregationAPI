@@ -28,7 +28,7 @@ spec:
 
       containers:
         - name: seq
-          image: datalust/seq:latest
+          image: datalust/seq:2025.2
           imagePullPolicy: IfNotPresent
 
           env:

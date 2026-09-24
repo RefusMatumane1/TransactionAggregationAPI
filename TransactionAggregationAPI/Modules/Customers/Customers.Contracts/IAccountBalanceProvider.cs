@@ -1,22 +1,38 @@
 namespace Modules.Customers.Contracts
 {
     /// <summary>
-    /// Owned by Customers: Account.Balance is never stored (see GetAccountByIdQueryHandler's
-    /// original comment) — it's always the sum of the account's linked Transactions. But
-    /// Transactions hasn't been extracted into its own module yet, so Customers can't
-    /// reach it directly without violating module isolation. The implementation
-    /// (TransactionBalanceProvider, in the legacy Modules.Transactions.Application,
-    /// wired in Program.cs) is what actually sums the transactions — Customers itself has
-    /// no dependency on the Transaction entity or its persistence. Mirrors
-    /// IAccountProvisioningPort's shape (BankLinks -> Customers), just in the opposite
-    /// direction (Customers -> legacy Transactions).
+    /// Owned by Customers: Account.Balance is never stored (see GetAccountByIdQueryHandler)
+    /// — it's always the sum of the account's linked transactions, which belong to the
+    /// Transactions module. The implementation (TransactionBalanceProvider in
+    /// Transactions.Application, registered by Transactions.Infrastructure's
+    /// AddTransactionsModule) sums them — Customers itself has no dependency on the
+    /// Transaction entity or its persistence. Mirrors IAccountProvisioningPort's shape
+    /// (BankLinks -> Customers), in the opposite direction (Customers -> Transactions).
     /// </summary>
     public interface IAccountBalanceProvider
     {
-        Task<decimal> GetBalanceAsync(Guid accountId, CancellationToken cancellationToken = default);
+        Task<AccountBalance> GetBalanceAsync(Guid accountId, CancellationToken cancellationToken = default);
 
-        Task<IReadOnlyDictionary<Guid, decimal>> GetBalancesByCustomerAsync(
+        Task<IReadOnlyDictionary<Guid, AccountBalance>> GetBalancesByCustomerAsync(
             Guid customerId,
             CancellationToken cancellationToken = default);
+    }
+
+    /// <summary>
+    /// Booked = what the bank has posted (the balance proper). Pending authorisations are
+    /// kept apart, split by direction, because they affect what's spendable differently:
+    /// money on its way out is already unavailable, money on its way in isn't available yet.
+    /// </summary>
+    /// <param name="PendingDebits">Sum of pending outflows (zero or negative).</param>
+    /// <param name="PendingCredits">Sum of pending inflows (zero or positive).</param>
+    public sealed record AccountBalance(decimal Booked, decimal PendingDebits, decimal PendingCredits)
+    {
+        public static AccountBalance Zero { get; } = new(0m, 0m, 0m);
+
+        /// <summary>Net of everything pending, both directions.</summary>
+        public decimal Pending => PendingDebits + PendingCredits;
+
+        /// <summary>Booked balance less pending outflows — the usual "available balance".</summary>
+        public decimal Available => Booked + PendingDebits;
     }
 }

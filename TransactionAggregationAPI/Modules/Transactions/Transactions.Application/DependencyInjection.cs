@@ -4,14 +4,14 @@ using MapsterMapper;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System.Reflection;
-using SharedKernel.Common.Behaviors;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
 using Modules.Transactions.Application.Mappings;
 using Modules.Transactions.Application.Services;
+using SharedKernel.Common.Behaviors;
+using SharedKernel.Common.Interfaces;
+using System.Reflection;
 
 namespace Modules.Transactions
 {
@@ -22,6 +22,10 @@ namespace Modules.Transactions
             services.Configure<CategorizationOptions>(
                 configuration.GetSection(CategorizationOptions.SectionName));
             services.AddScoped<ITransactionCategorizationService, TransactionCategorizationService>();
+
+            services.Configure<NormalizationOptions>(
+                configuration.GetSection(NormalizationOptions.SectionName));
+            services.AddSingleton<ITransactionNormalizer, TransactionNormalizer>();
             services.AddScoped<IAnalyticsService, AnalyticsService>();
 
             services.AddValidatorsFromAssembly(Assembly.GetExecutingAssembly());

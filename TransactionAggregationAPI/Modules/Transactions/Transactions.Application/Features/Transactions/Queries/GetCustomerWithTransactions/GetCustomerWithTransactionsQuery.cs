@@ -1,6 +1,6 @@
-using SharedKernel.Abstractions;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Abstractions;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions
 {

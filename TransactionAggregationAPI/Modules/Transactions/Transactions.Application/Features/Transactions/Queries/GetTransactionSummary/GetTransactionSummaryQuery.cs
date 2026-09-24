@@ -1,6 +1,6 @@
+using Modules.Transactions.Application.Common.DTOs;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Behaviors;
-using Modules.Transactions.Application.Common.DTOs;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
 {

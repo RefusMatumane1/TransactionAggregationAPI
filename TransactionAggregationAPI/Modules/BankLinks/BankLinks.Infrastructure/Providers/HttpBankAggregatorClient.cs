@@ -1,12 +1,11 @@
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Modules.BankLinks.Application.Ports;
+using Modules.BankLinks.Domain.ValueObjects;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Modules.BankLinks.Application.DTOs;
-using Modules.BankLinks.Application.Ports;
-using Modules.BankLinks.Domain.ValueObjects;
 
 namespace Modules.BankLinks.Infrastructure.Providers
 {

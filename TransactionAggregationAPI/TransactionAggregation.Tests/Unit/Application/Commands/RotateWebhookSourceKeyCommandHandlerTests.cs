@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Modules.WebhookSources.Application.Features.RotateWebhookSourceKey;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
-using Modules.WebhookSources.Domain;
-using Modules.WebhookSources.Application.Features.RotateWebhookSourceKey;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -22,7 +22,7 @@ public class RotateWebhookSourceKeyCommandHandlerTests
 
     private static async Task<(WebhookSource Source, string OriginalKey)> SeedSourceAsync(WebhookSourcesDbContext ctx, string name = "stitch")
     {
-        var (source, key) = WebhookSource.Create(name);
+        var (source, key) = WebhookSource.Create(name, TestInstitutions.All);
         ctx.WebhookSources.Add(source);
         await ctx.SaveChangesAsync();
         return (source, key);

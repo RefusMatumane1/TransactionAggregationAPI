@@ -1,8 +1,8 @@
 using FluentAssertions;
-using SharedKernel.Common.ValueObjects;
-using SharedKernel.Exceptions;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
+using SharedKernel.Common.ValueObjects;
+using SharedKernel.Exceptions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;

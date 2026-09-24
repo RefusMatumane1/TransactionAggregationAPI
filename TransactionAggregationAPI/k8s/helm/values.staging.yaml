@@ -25,3 +25,5 @@ devTools:
     enabled: true   # Allowed in staging for debugging
   redisCommander:
     enabled: true
+  kafkaUi:
+    enabled: true

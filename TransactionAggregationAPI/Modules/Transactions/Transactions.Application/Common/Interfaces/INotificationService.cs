@@ -1,3 +1,4 @@
+using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 
@@ -10,6 +11,7 @@ namespace Modules.Transactions.Application.Common.Interfaces
         Task SendFraudAlertAsync(Transaction transaction, string reason, CancellationToken cancellationToken = default);
         Task SendTransactionSummaryAsync(Guid customerId, DailySummary summary, CancellationToken cancellationToken = default);
         Task SendWebhookAsync(string webhookUrl, object payload, CancellationToken cancellationToken = default);
+        Task SendDuplicateInboundAlertAsync(DuplicateInboundDetectedOutboxPayload duplicate, CancellationToken cancellationToken = default);
     }
 
     public enum NotificationType

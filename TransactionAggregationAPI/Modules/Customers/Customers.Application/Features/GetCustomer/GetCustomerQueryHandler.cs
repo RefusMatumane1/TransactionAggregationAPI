@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.DTOs;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.DTOs;
-using Modules.Customers.Application.Persistence;
 
 namespace Modules.Customers.Application.Features.GetCustomer
 {
@@ -22,7 +23,7 @@ namespace Modules.Customers.Application.Features.GetCustomer
                 .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
             if (customer is null)
-                return Result.Failure<CustomerDto>(Error.NotFound("Customer", request.CustomerId));
+                return Result.Failure<CustomerDto>(CustomerErrors.NotFound(request.CustomerId));
 
             var dto = new CustomerDto(
                 customer.Id.Value,

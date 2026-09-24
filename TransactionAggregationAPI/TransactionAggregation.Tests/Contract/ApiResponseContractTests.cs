@@ -1,7 +1,7 @@
 using FluentAssertions;
+using Modules.Customers.Domain.ValueObjects;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Modules.Customers.Domain.ValueObjects;
 using TransactionAggregation.Tests.Integration;
 using Xunit;
 
@@ -51,14 +51,9 @@ namespace TransactionAggregation.Tests.Contract
         {
             using var anonymous = _factory.CreateClient();
 
-            // Missing required Email/Name/password triggers FluentValidation.
-            // NOTE: ValidationBehavior (Common/Behaviors/ValidationBehavior.cs) currently
-            // joins all failures into a single Error.Validation string rather than the
-            // structured ValidationError type (which exposes a per-field "errors" array,
-            // see CustomResults.GetExtensions) — that structured type exists but isn't
-            // wired into this pipeline. This test pins today's actual contract; if that
-            // pipeline is later changed to return structured per-field errors, this
-            // assertion should be updated to check for the "errors" property instead.
+            // Missing required Email/Name/password triggers FluentValidation. The response is
+            // RFC 9457 ProblemDetails with per-field messages under "errors", keyed by the
+            // JSON property name the client sent; "detail" keeps a joined summary.
             var response = await anonymous.PostAsJsonAsync("/api/v1/customers", new { });
 
             response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
@@ -67,6 +62,10 @@ namespace TransactionAggregation.Tests.Contract
             json.TryGetProperty("detail", out var detail).Should().BeTrue();
             detail.GetString().Should().NotBeNullOrEmpty();
             json.TryGetProperty("traceId", out _).Should().BeTrue();
+
+            json.TryGetProperty("errors", out var errors).Should().BeTrue("validation failures are reported per field");
+            errors.TryGetProperty("email", out var emailErrors).Should().BeTrue();
+            emailErrors.GetArrayLength().Should().BeGreaterThan(0);
         }
 
         [Fact]

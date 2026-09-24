@@ -1,12 +1,12 @@
 namespace Modules.Customers.Contracts
 {
     /// <summary>
-    /// Published read contract for other modules/legacy layers — deliberately narrower
+    /// Published read contract for other modules — deliberately narrower
     /// than exposing ICustomersDbContext's DbSet (which stays internal to this module).
     /// Returns primitives/DTOs, never the Customer entity, so consumers can't reach
     /// through into this module's internals the way the old shared ITransactionsDbContext
-    /// let handlers reach into other modules' DbSets. Used by the legacy Transactions
-    /// feature area (GetCustomerWithTransactionsQueryHandler) to resolve Customer facts
+    /// let handlers reach into other modules' DbSets. Used by the Transactions module
+    /// (GetCustomerWithTransactionsQueryHandler) to resolve Customer facts
     /// without a cross-schema join.
     /// </summary>
     public interface ICustomersReadApi

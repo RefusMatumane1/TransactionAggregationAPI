@@ -1,35 +1,33 @@
+using BuildingBlocks.Messaging.Persistence;
+using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using Scalar.AspNetCore;
-using Serilog;
-using System.Security.Claims;
-using System.Threading.RateLimiting;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using StackExchange.Redis;
-using BuildingBlocks.Messaging;
-using BuildingBlocks.Messaging.Persistence;
+using Modules.Audit;
+using Modules.Audit.Infrastructure.Persistence;
 using Modules.BankLinks;
 using Modules.BankLinks.Infrastructure.Persistence;
 using Modules.Customers;
 using Modules.Customers.Infrastructure.Persistence;
-using Modules.WebhookSources;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using Modules.Transactions;
 using Modules.Transactions.Infrastructure.Persistence;
+using Modules.WebhookSources;
+using Modules.WebhookSources.Infrastructure.Persistence;
+using Prometheus;
+using Scalar.AspNetCore;
+using Serilog;
 using SharedKernel.Abstractions.Authentication;
-using SharedKernel.Common.Interfaces;
+using StackExchange.Redis;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
+using TransactionAggregation.Hosting;
 using TransactionAggregationAPI;
 using TransactionAggregationAPI.Authentication;
-using TransactionAggregationAPI.Caching;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
 using TransactionAggregationAPI.RateLimiting;
-using Prometheus;
 
 try
 {
@@ -38,84 +36,12 @@ try
     builder.Logging.ClearProviders();
 
     builder.AddServiceDefaults();
+    builder.AddSerilogLogging();
 
-    Log.Logger = new LoggerConfiguration()
-        .ReadFrom.Configuration(builder.Configuration)
-        .Destructure.With<TransactionAggregationAPI.Logging.SensitiveDataDestructuringPolicy>()
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
-        .CreateLogger();
+    // Background processing (Kafka consumer, inbox/outbox/pending-expiry dispatchers) runs
+    // in TransactionAggregation.Worker, not here — this host only serves HTTP.
+    builder.AddApplicationModules();
 
-    builder.Logging.AddSerilog(Log.Logger, dispose: true);
-
-    builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
-    builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
-    builder.Services.AddSingleton<Serilog.IDiagnosticContext>(
-        sp => sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
-
-    var connectionString = builder.Configuration.GetConnectionString("transactiondb");
-
-    // TransactionsDbContext and MessagingDbContext share one scoped NpgsqlConnection
-    // (rather than each opening its own) so TransactionsDbContext.SaveChangesAsync can
-    // share one real transaction across both — required for an Outbox write to commit
-    // atomically with the business-entity change that triggered it. See
-    // docs/adr/0009-schema-per-module-database-strategy.md. WebhookSourcesDbContext
-    // has no such requirement (every write there is a standalone unit of work) and
-    // keeps its own independent connection, registered inside AddWebhookSourcesModule.
-    builder.Services.AddScoped(_ => new NpgsqlConnection(connectionString));
-
-    builder.Services.AddMessagingBuildingBlock(builder.Configuration);
-    builder.Services.AddWebhookSourcesModule(builder.Configuration);
-    builder.Services.AddBankLinksModule(builder.Configuration);
-    builder.Services.AddCustomersModule(builder.Configuration);
-    builder.Services.AddTransactionsModule(builder.Configuration, builder.Environment.IsDevelopment());
-
-    builder.EnrichNpgsqlDbContext<TransactionsDbContext>();
-
-    builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
-
-    var redisConnectionString = builder.Configuration.GetConnectionString("redis");
-    if (!string.IsNullOrEmpty(redisConnectionString))
-    {
-        try
-        {
-
-            var dpRedisOptions = ConfigurationOptions.Parse(redisConnectionString);
-            dpRedisOptions.AbortOnConnectFail = false;
-
-            builder.Services.AddDataProtection()
-                .SetApplicationName("TransactionAggregationAPI")
-                .PersistKeysToStackExchangeRedis(
-                    ConnectionMultiplexer.Connect(dpRedisOptions),
-                    "DataProtection-Keys");
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "Could not set up Redis-backed Data Protection key storage — falling back to ephemeral keys for this instance. Bank-link tokens encrypted before this is fixed may become unrecoverable across restarts/replicas.");
-
-            // The log message above used to be a lie: nothing actually configured a
-            // fallback, so Data Protection silently fell through to ASP.NET Core's
-            // implicit default — which, in a container without a stable user profile,
-            // is ambiguous and may try (and fail) to write to a local file path.
-            // UseEphemeralDataProtectionProvider() makes the fallback explicit and
-            // matches what was already being claimed in the log.
-            builder.Services.AddDataProtection()
-                .SetApplicationName("TransactionAggregationAPI")
-                .UseEphemeralDataProtectionProvider();
-        }
-    }
-    else
-    {
-        Log.Warning("No Redis connection string configured — Data Protection keys will not survive a restart or be shared across replicas. Bank-link tokens encrypted before this is fixed will become unrecoverable.");
-
-        builder.Services.AddDataProtection()
-            .SetApplicationName("TransactionAggregationAPI")
-            .UseEphemeralDataProtectionProvider();
-    }
-
-    // Host-level services shared by every module (not owned by any one of them).
-    builder.Services.AddDistributedMemoryCache();
-    builder.Services.AddScoped<ICacheService, RedisCacheService>();
     builder.Services.AddScoped<IUserContext, UserContext>();
 
     var keycloakAuthority = builder.Configuration["Keycloak:Authority"];
@@ -165,7 +91,7 @@ try
 
     builder.Services.AddAuthorization(options =>
     {
-        options.AddPolicy("Admin", policy => policy.RequireRole("admin"));
+        options.AddPolicy(AuthorizationPolicies.Admin, policy => policy.RequireRole("admin"));
     });
 
     builder.Services.AddResponseCaching();
@@ -222,16 +148,21 @@ try
     builder.Services.AddSingleton<RedisFixedWindowPolicy>();
     builder.Services.AddRateLimiter(options =>
     {
-        options.AddPolicy<string, RedisFixedWindowPolicy>("FixedWindow");
+        options.AddPolicy<string, RedisFixedWindowPolicy>(RateLimitPolicies.FixedWindow);
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     });
 
+    // X-Forwarded-For is only honoured from the reverse proxies listed in
+    // ForwardedHeaders:KnownNetworks (the ingress controller's pod CIDR in k8s). Trusting
+    // it from anyone let a client pick its own "remote IP" — and so a fresh anonymous
+    // rate-limit partition — per request. With nothing configured only loopback is trusted.
+    var knownProxyNetworks = builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [];
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
         {
             options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
 
-            options.KnownIPNetworks.Clear();
-            options.KnownProxies.Clear();
+            foreach (var network in knownProxyNetworks)
+                options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
         });
 
     builder.Services.AddOptions<RateLimiterOptions>()
@@ -305,6 +236,7 @@ try
     app.MapTransactionsEndpoints();
     app.MapBankLinksEndpoints();
     app.MapWebhookSourcesEndpoints();
+    app.MapAuditEndpoints();
 
     app.MapFallbackToFile("index.html");
 
@@ -318,6 +250,7 @@ try
         await app.ApplyMigrationsAsync<WebhookSourcesDbContext>();
         await app.ApplyMigrationsAsync<BankLinksDbContext>();
         await app.ApplyMigrationsAsync<CustomersDbContext>();
+        await app.ApplyMigrationsAsync<AuditDbContext>();
     }
 
     if (args.Contains("--migrate-only"))
@@ -337,6 +270,7 @@ try
     {
         await ApplyAllMigrationsAsync(app);
         await SeedData.SeedDatabaseAsync(app.Services);
+        await MockAggregatorSource.EnsureRegisteredAsync(app.Services, app.Configuration);
     }
 
     await app.RunAsync();

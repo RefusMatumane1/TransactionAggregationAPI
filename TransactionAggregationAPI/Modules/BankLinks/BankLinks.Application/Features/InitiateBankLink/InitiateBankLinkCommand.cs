@@ -1,5 +1,5 @@
-using SharedKernel.Abstractions;
 using Modules.BankLinks.Domain.ValueObjects;
+using SharedKernel.Abstractions;
 
 namespace Modules.BankLinks.Application.Features.InitiateBankLink
 {

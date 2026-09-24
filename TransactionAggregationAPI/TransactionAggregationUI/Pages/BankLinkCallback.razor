@@ -1,0 +1,93 @@
+@page "/bank-links/callback"
+@inject BankLinkService BankLinkService
+@inject NavigationManager Nav
+
+@* No [Authorize]: the bank sends the browser here after consent, and completing the link
+   needs only the code and state it brings. The link is tied to the customer who started it. *@
+
+<PageTitle>Linking your bank</PageTitle>
+
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+        <div class="card mt-4">
+            <div class="card-body text-center py-5">
+                @switch (_outcome)
+                {
+                    case Outcome.Working:
+                        <div class="spinner-border text-primary mb-3"></div>
+                        <p class="mb-0">Finishing linking your bank…</p>
+                        break;
+
+                    case Outcome.Linked:
+                        <i class="bi bi-check-circle text-success fs-1"></i>
+                        <h5 class="mt-3">Bank linked</h5>
+                        <p class="text-muted">Your transactions will start arriving within a minute or two.</p>
+                        <div class="d-flex gap-2 justify-content-center">
+                            <a href="/accounts/@_accountId/transactions" class="btn btn-primary">View transactions</a>
+                            <a href="/bank-links" class="btn btn-outline-secondary">Linked banks</a>
+                        </div>
+                        break;
+
+                    case Outcome.Declined:
+                        <i class="bi bi-x-circle text-secondary fs-1"></i>
+                        <h5 class="mt-3">Linking cancelled</h5>
+                        <p class="text-muted">You didn't allow access, so nothing was linked. You can try again at any time.</p>
+                        <a href="/bank-links" class="btn btn-outline-secondary">Back to linked banks</a>
+                        break;
+
+                    default:
+                        <i class="bi bi-exclamation-triangle text-danger fs-1"></i>
+                        <h5 class="mt-3">Couldn't link your bank</h5>
+                        <p class="text-muted">@_error</p>
+                        <a href="/bank-links" class="btn btn-outline-secondary">Back to linked banks</a>
+                        break;
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private enum Outcome { Working, Linked, Declined, Failed }
+
+    [SupplyParameterFromQuery(Name = "code")] public string? Code { get; set; }
+    [SupplyParameterFromQuery(Name = "state")] public string? State { get; set; }
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+
+    private Outcome _outcome = Outcome.Working;
+    private Guid? _accountId;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Error is not null)
+        {
+            _outcome = Error == "access_denied" ? Outcome.Declined : Outcome.Failed;
+            _error = $"Your bank reported: {Error}.";
+            return;
+        }
+
+        if (string.IsNullOrEmpty(Code) || string.IsNullOrEmpty(State))
+        {
+            _outcome = Outcome.Failed;
+            _error = "This page expects to be opened by your bank after you approve access.";
+            return;
+        }
+
+        var (accountId, error) = await BankLinkService.CompleteAsync(Code, State);
+
+        // The code is single-use: drop it from the address bar and history, so a refresh or
+        // Back doesn't replay it and show a confusing failure after a success.
+        Nav.NavigateTo("/bank-links/callback?done=1", replace: true);
+
+        if (accountId is null)
+        {
+            _outcome = Outcome.Failed;
+            _error = error ?? "Something went wrong. Please try linking again.";
+            return;
+        }
+
+        _accountId = accountId;
+        _outcome = Outcome.Linked;
+    }
+}

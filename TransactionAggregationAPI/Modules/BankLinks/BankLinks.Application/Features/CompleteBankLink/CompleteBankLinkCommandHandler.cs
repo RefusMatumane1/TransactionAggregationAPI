@@ -1,15 +1,15 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Abstractions;
-using SharedKernel.Common.Models;
-using SharedKernel.Common.ValueObjects;
 using Modules.BankLinks.Application.Features.InitiateBankLink;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Application.Ports;
 using Modules.BankLinks.Contracts;
 using Modules.BankLinks.Domain.ValueObjects;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 
 namespace Modules.BankLinks.Application.Features.CompleteBankLink
 {

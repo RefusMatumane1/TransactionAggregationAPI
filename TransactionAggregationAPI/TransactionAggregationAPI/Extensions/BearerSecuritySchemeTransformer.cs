@@ -1,8 +1,8 @@
-using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
+using System.Text.RegularExpressions;
 
 namespace TransactionAggregationAPI.Extensions;
 

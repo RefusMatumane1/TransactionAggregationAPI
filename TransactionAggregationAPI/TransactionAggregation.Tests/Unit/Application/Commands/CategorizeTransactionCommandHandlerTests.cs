@@ -1,10 +1,10 @@
 using FluentAssertions;
-using Modules.Transactions.Application.Commands.CategorizeTransaction;
-using SharedKernel.Common.Enums;
+using Modules.Transactions.Application.Features.Transactions.Commands.CategorizeTransaction;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -31,7 +31,7 @@ public class CategorizeTransactionCommandHandlerTests
         await context.SaveChangesAsync();
 
         var handler = new CategorizeTransactionCommandHandler(context);
-        var command = new CategorizeTransactionCommand(tx.Id.Value, TransactionCategory.Groceries);
+        var command = new CategorizeTransactionCommand(tx.Id.Value, tx.CustomerId.Value, TransactionCategory.Groceries);
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -44,7 +44,7 @@ public class CategorizeTransactionCommandHandlerTests
     {
         var context = InMemoryDbContextFactory.Create();
         var handler = new CategorizeTransactionCommandHandler(context);
-        var command = new CategorizeTransactionCommand(Guid.NewGuid(), TransactionCategory.Dining);
+        var command = new CategorizeTransactionCommand(Guid.NewGuid(), Guid.NewGuid(), TransactionCategory.Dining);
 
         var result = await handler.Handle(command, CancellationToken.None);
 
@@ -70,10 +70,28 @@ public class CategorizeTransactionCommandHandlerTests
 
         var handler = new CategorizeTransactionCommandHandler(context);
         var result = await handler.Handle(
-            new CategorizeTransactionCommand(tx.Id.Value, category),
+            new CategorizeTransactionCommand(tx.Id.Value, tx.CustomerId.Value, category),
             CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         context.Transactions.Single().Category.Should().Be(category);
+    }
+
+    [Fact]
+    public async Task Handle_AnotherCustomersTransaction_ReturnsNotFoundAndLeavesItUnchanged()
+    {
+        var context = InMemoryDbContextFactory.Create();
+        var tx = MakeTransaction(CustomerId.Create());
+        context.Transactions.Add(tx);
+        await context.SaveChangesAsync();
+
+        var handler = new CategorizeTransactionCommandHandler(context);
+        var result = await handler.Handle(
+            new CategorizeTransactionCommand(tx.Id.Value, Guid.NewGuid(), TransactionCategory.Groceries),
+            CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(Modules.Transactions.Application.Common.Errors.TransactionErrors.NotFound(tx.Id.Value));
+        context.Transactions.Single().Category.Should().Be(TransactionCategory.Uncategorized);
     }
 }

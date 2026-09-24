@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+	The module's HTTP surface: endpoints plus the request/response contracts that cross the
+	wire. Depends inward on Application only — never on Infrastructure — and Application
+	DTOs are always mapped to a response type here rather than serialized directly.
+	The webhook endpoint also reaches two other modules, through their published
+	contracts only: WebhookSources (API-key authentication) and Audit (refused deliveries).
+	-->
+	<PropertyGroup>
+		<RootNamespace>Modules.Transactions.Presentation</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Transactions.Application\Transactions.Application.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
+		<ProjectReference Include="..\..\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+	</ItemGroup>
+</Project>

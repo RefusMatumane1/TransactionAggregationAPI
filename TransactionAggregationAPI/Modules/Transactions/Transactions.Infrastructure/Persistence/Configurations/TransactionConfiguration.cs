@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using System.Text.Json;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
+using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 
 namespace Modules.Transactions.Infrastructure.Persistence.Configurations
 {
@@ -39,7 +39,7 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
             {
                 money.Property(m => m.Amount)
                     .HasColumnName("Amount")
-                    .HasPrecision(18, 2)
+                    .HasPrecision(19, 4)
                     .IsRequired();
 
                 money.Property(m => m.Currency)
@@ -73,6 +73,11 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
 
                             source.HasIndex(s => s.ExternalId)
                                 .HasDatabaseName("IX_Transactions_SourceExternalId");
+
+                            // The ingestion idempotency key — UNIQUE (CustomerId, SourceName,
+                            // SourceExternalId) — can't be expressed here (it spans the owner and
+                            // this owned type), so it lives in raw SQL in the
+                            // ScopeTransactionDedupToInstitutionAndWidenAmount migration.
                         });
 
             builder.Property(t => t.Description)
@@ -94,6 +99,13 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                             .IsRequired();
 
             builder.Property(t => t.UpdatedAt);
+
+            // uint + IsRowVersion maps to Postgres' xmin system column (Npgsql convention) —
+            // a concurrency token with no column to add. See Transaction.Version.
+            builder.Property(t => t.Version)
+                .IsRowVersion();
+
+            builder.Ignore(t => t.PendingSince);
 
             builder.Property(t => t.ApprovedAt);
 

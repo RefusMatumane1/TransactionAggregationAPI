@@ -12,5 +12,7 @@ namespace Modules.Customers.Application.DTOs
         string Currency,
         bool IsActive,
         DateTime CreatedAt,
-        DateTime? UpdatedAt = null);
+        DateTime? UpdatedAt = null,
+        decimal PendingBalance = 0,
+        decimal AvailableBalance = 0);
 }

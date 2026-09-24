@@ -21,6 +21,10 @@ k8s/
 │   ├── statefulset.yaml         # Single-replica StatefulSet + PVC
 │   └── service.yaml             # ClusterIP Service (no Ingress; access via port-forward)
 │
+├── kafka/
+│   ├── statefulset.yaml         # Single-node KRaft broker (confluent-local) + PVC
+│   └── service.yaml             # ClusterIP: 9093 in-cluster, 9092 for port-forward
+│
 ├── api/
 │   ├── deployment.yaml          # 2-replica Deployment, probes, rolling update
 │   ├── service.yaml             # ClusterIP Service
@@ -39,9 +43,12 @@ k8s/
 │   ├── pgadmin/
 │   │   ├── deployment.yaml
 │   │   └── service.yaml         # ClusterIP + Ingress (IP-whitelisted)
-│   └── redis-commander/
-│       ├── deployment.yaml
-│       └── service.yaml         # ClusterIP + Ingress (IP-whitelisted)
+│   ├── redis-commander/
+│   │   ├── deployment.yaml
+│   │   └── service.yaml         # ClusterIP + Ingress (IP-whitelisted)
+│   └── kafka-ui/
+│       ├── deployment.yaml      # kafbat/kafka-ui → kafka:9093
+│       └── service.yaml         # ClusterIP + Ingress → kafka-ui.transaction.local
 │
 ├── monitoring/
 │   ├── prometheus/
@@ -64,7 +71,6 @@ k8s/
     ├── Chart.yaml
     ├── values.yaml              # Production-safe defaults
     ├── values.dev.yaml          # Local/dev overrides
-    ├── values.development.yaml  # Development overrides
     ├── values.staging.yaml      # Staging overrides
     └── values.production.yaml   # Production overrides
 ```
@@ -98,12 +104,14 @@ kubectl apply -f k8s/namespace.yaml
 kubectl apply -f k8s/secrets.yaml
 kubectl apply -f k8s/configmap.yaml
 
-# 3. Data stores — wait for both before applying the API
+# 3. Data stores — wait for them before applying the API
 kubectl apply -f k8s/postgres/
 kubectl apply -f k8s/redis/
 kubectl apply -f k8s/seq/
+kubectl apply -f k8s/kafka/
 kubectl rollout status statefulset/postgres -n transaction-aggregation
 kubectl rollout status statefulset/redis    -n transaction-aggregation
+kubectl rollout status statefulset/kafka    -n transaction-aggregation
 
 # 4. API (migrations run automatically on startup)
 kubectl apply -f k8s/api/service.yaml

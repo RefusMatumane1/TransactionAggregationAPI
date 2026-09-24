@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.Persistence;
+using Modules.Customers.Application.Ports;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.Persistence;
-using Modules.Customers.Contracts;
 
 namespace Modules.Customers.Application.Features.CreateCustomer
 {

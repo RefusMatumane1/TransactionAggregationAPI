@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Common.Models;
-using SharedKernel.Common.ValueObjects;
 using Modules.BankLinks.Contracts;
+using Modules.Customers.Application.Errors;
 using Modules.Customers.Application.Persistence;
 using Modules.Customers.Domain.ValueObjects;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Customers.Application.Adapters
 {
@@ -13,8 +14,8 @@ namespace Modules.Customers.Application.Adapters
     /// BankLinks should depend on. Calls Account.Create(...) directly instead of
     /// Customer.AddAccount(...): the latter is Customer's aggregate reaching into
     /// Account's own "create an account" use case, which is exactly the cross-module
-    /// coupling this restructuring is fixing (see ADR-0001/ADR-0009). Wired to
-    /// IAccountProvisioningPort in Program.cs.
+    /// coupling this restructuring is fixing (see ADR-0001/ADR-0009). Registered as
+    /// IAccountProvisioningPort by Customers.Infrastructure's AddCustomersModule.
     /// </summary>
     public sealed class AccountProvisioningAdapter(ICustomersDbContext _context) : IAccountProvisioningPort
     {
@@ -32,7 +33,7 @@ namespace Modules.Customers.Application.Adapters
                 .AnyAsync(c => c.Id == customerIdVo, cancellationToken);
 
             if (!customerExists)
-                return Result.Failure<Guid>(Error.NotFound("Customer", customerId));
+                return Result.Failure<Guid>(CustomerErrors.NotFound(customerId));
 
             var existingAccount = await _context.Accounts
                 .FirstOrDefaultAsync(

@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Domain;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Customers.Infrastructure.Persistence
 {

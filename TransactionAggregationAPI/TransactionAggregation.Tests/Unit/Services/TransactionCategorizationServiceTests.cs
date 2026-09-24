@@ -4,9 +4,9 @@ using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Services;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.ValueObjects;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Services;
@@ -64,7 +64,7 @@ public class TransactionCategorizationServiceTests
     {
         var tx = MakeTransaction(-100m, description);
 
-        var result = await _sut.CategorizeTransactionAsync(tx, CancellationToken.None);
+        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
 
         result.Should().Be(expected);
     }
@@ -74,7 +74,7 @@ public class TransactionCategorizationServiceTests
     {
         var tx = MakeTransaction(1500m, "unknown source");
 
-        var result = await _sut.CategorizeTransactionAsync(tx, CancellationToken.None);
+        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
 
         result.Should().Be(TransactionCategory.Income);
     }
@@ -84,8 +84,39 @@ public class TransactionCategorizationServiceTests
     {
         var tx = MakeTransaction(-50m, "payment xyz");
 
-        var result = await _sut.CategorizeTransactionAsync(tx, CancellationToken.None);
+        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
 
         result.Should().Be(TransactionCategory.Uncategorized);
+    }
+
+    [Fact]
+    public async Task CategorizeTransactionAsync_NoKeywordMatch_UsesTheBanksCategory()
+    {
+        var tx = MakeTransaction(-80m, "Some unknown merchant");
+
+        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Healthcare, CancellationToken.None);
+
+        result.Should().Be(TransactionCategory.Healthcare);
+    }
+
+    [Fact]
+    public async Task CategorizeTransactionAsync_KeywordMatch_WinsOverTheBanksCategory()
+    {
+        // Our rules are applied the same way to every bank, so one merchant gets one category.
+        var tx = MakeTransaction(-80m, "uber ride home");
+
+        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Shopping, CancellationToken.None);
+
+        result.Should().Be(TransactionCategory.Transportation);
+    }
+
+    [Fact]
+    public async Task CategorizeTransactionAsync_MoneyInWithABankCategory_UsesItRatherThanDefaultingToIncome()
+    {
+        var tx = MakeTransaction(500m, "Transfer from savings");
+
+        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Transfer, CancellationToken.None);
+
+        result.Should().Be(TransactionCategory.Transfer);
     }
 }

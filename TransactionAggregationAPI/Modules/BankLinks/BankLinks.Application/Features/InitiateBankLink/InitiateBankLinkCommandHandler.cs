@@ -1,15 +1,15 @@
-using System.Security.Cryptography;
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Abstractions;
-using SharedKernel.Common.Models;
-using SharedKernel.Common.ValueObjects;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Application.Ports;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace Modules.BankLinks.Application.Features.InitiateBankLink
 {
@@ -31,19 +31,22 @@ namespace Modules.BankLinks.Application.Features.InitiateBankLink
                     b => b.CustomerId == customerId && b.Institution == request.Institution,
                     cancellationToken);
 
-            if (existingLink is { Status: BankLinkStatus.Active or BankLinkStatus.PendingAuthorization })
-                return Result.Failure<string>(Error.Conflict(
-                    $"{request.Institution} is already linked (or a link is already in progress)."));
+            if (existingLink is { Status: BankLinkStatus.Active })
+                return Result.Failure<string>(Error.Conflict($"{request.Institution} is already linked."));
 
             if (existingLink is null)
             {
                 existingLink = BankLink.Create(customerId, request.Institution);
                 _context.BankLinks.Add(existingLink);
             }
-            else
+            else if (existingLink.Status != BankLinkStatus.PendingAuthorization)
             {
                 existingLink.ResetForReauthorization();
             }
+            // Still PendingAuthorization: an earlier attempt was abandoned — consent denied, or
+            // the tab closed. It must be restartable, or that bank could never be linked again.
+            // Starting over just issues a fresh state; if the old consent is somehow still
+            // completed, the first completion activates the link and the other finds nothing pending.
 
             var state = GenerateState();
             var statePayload = JsonSerializer.Serialize(new StatePayload(request.CustomerId, request.Institution));

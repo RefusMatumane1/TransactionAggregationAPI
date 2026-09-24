@@ -1,31 +1,44 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Globalization;
-using System.Text;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
-using SharedKernel.Common.Models;
 using Modules.Transactions.Application.Common.Models;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
+using System.Globalization;
+using System.Text;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportTransactions
 {
     public sealed class ExportTransactionsQueryHandler : IRequestHandler<ExportTransactionsQuery, Result<ExportTransactionsResult>>
     {
+        public const int MaxExportRows = 50_000;
+
         private static readonly Encoding Utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
 
         private readonly ITransactionsDbContext _context;
         private readonly ILogger<ExportTransactionsQueryHandler> _logger;
+        private readonly int _maxExportRows;
 
         public ExportTransactionsQueryHandler(
             ITransactionsDbContext context,
             ILogger<ExportTransactionsQueryHandler> logger)
+            : this(context, logger, MaxExportRows)
+        {
+        }
+
+        /// <summary>Lets tests exercise the cap without materialising 50,000 rows.</summary>
+        internal ExportTransactionsQueryHandler(
+            ITransactionsDbContext context,
+            ILogger<ExportTransactionsQueryHandler> logger,
+            int maxExportRows)
         {
             _context = context;
             _logger = logger;
+            _maxExportRows = maxExportRows;
         }
 
         public async Task<Result<ExportTransactionsResult>> Handle(
@@ -50,6 +63,17 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportT
 
             if (request.Category.HasValue)
                 query = query.Where(t => t.Category == request.Category.Value);
+
+            // The export is built in memory, so its size is bounded up front: an unfiltered
+            // export of a long-lived account would otherwise load its whole history into one
+            // request. Above the cap the caller narrows the date range (or pages /filter).
+            var matching = await query.CountAsync(cancellationToken);
+            if (matching > _maxExportRows)
+                return Result.Failure<ExportTransactionsResult>(new FieldValidationError(
+                    new Dictionary<string, string[]>
+                    {
+                        ["fromDate"] = [$"{matching} transactions match; an export is limited to {_maxExportRows}. Narrow the date range."]
+                    }));
 
             var transactions = await query
                 .OrderByDescending(t => t.Date)
@@ -84,7 +108,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportT
                     t.Date.ToString("yyyy-MM-dd"),
                     t.Date.ToString("HH:mm:ss"),
                     Quote(t.Description),
-                    t.Amount.Amount.ToString("F2", CultureInfo.InvariantCulture),
+                    // At least 2 decimals, up to the 4 stored — "F2" rounded 3-decimal currencies.
+                    t.Amount.Amount.ToString("0.00##", CultureInfo.InvariantCulture),
                     t.Amount.Currency,
                     t.IsIncome ? "Income" : "Expense",
                     t.Category.ToString(),
@@ -98,7 +123,20 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportT
             return csv.ToString();
         }
 
-        private static string Quote(string value) =>
-                    $"\"{value.Replace("\"", "\"\"")}\"";
+        /// <summary>
+        /// Quotes a field and neutralises spreadsheet formulas: descriptions and ids come from
+        /// external providers, and a cell starting with = + - @ (or a tab/CR) is executed by
+        /// Excel/Sheets when the export is opened (OWASP "CSV injection"). A leading apostrophe
+        /// makes the cell literal text.
+        /// </summary>
+        internal static string Quote(string value)
+        {
+            if (value.Length > 0 && FormulaTriggers.Contains(value[0]))
+                value = "'" + value;
+
+            return $"\"{value.Replace("\"", "\"\"")}\"";
+        }
+
+        private static readonly char[] FormulaTriggers = ['=', '+', '-', '@', '\t', '\r'];
     }
 }

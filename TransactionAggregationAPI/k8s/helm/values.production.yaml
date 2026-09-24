@@ -30,6 +30,12 @@ postgres:
 redis:
   storageSize: 10Gi
 
+kafka:
+  storageSize: 50Gi
+  # Single-node broker is dev-grade — use Strimzi (3 brokers) or a managed Kafka in production.
+  topics:
+    replicationFactor: 3
+
 seq:
   enabled: true   # Consider replacing with Grafana Loki in production
   storageSize: 20Gi
@@ -40,4 +46,6 @@ devTools:
   pgadmin:
     enabled: false
   redisCommander:
+    enabled: false
+  kafkaUi:
     enabled: false

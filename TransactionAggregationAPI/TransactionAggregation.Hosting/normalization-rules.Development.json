@@ -1,0 +1,24 @@
+// Normalization for the MOCK banks of TransactionAggregation.MockAggregator — loaded only
+// when ASPNETCORE_ENVIRONMENT=Development, on top of normalization-rules.json. The mock's
+// statement formats are invented (see its BankStatementStyles), so these rules describe no
+// real bank and must never be copied into the shipped rules file.
+//   FNB      — its own category labels
+//   Absa     — its own "ABSA CARD" description prefix
+//   Capitec  — needs nothing beyond the defaults
+//   StandardBank — deliberately no profile: the "Other" case, where only defaults apply
+{
+  "Normalization": {
+    "Institutions": {
+      "FNB": {
+        "CategoryMap": {
+          "Takeaways": "Dining",
+          "Petrol": "Transportation",
+          "Municipal": "Utilities"
+        }
+      },
+      "Absa": {
+        "DescriptionPrefixes": [ "ABSA CARD" ]
+      }
+    }
+  }
+}

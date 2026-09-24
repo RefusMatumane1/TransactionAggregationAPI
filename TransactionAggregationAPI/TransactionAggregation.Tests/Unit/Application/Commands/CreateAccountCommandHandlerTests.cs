@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Modules.Customers.Application.Features.CreateAccount;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
 using Modules.Customers.Infrastructure.Persistence;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

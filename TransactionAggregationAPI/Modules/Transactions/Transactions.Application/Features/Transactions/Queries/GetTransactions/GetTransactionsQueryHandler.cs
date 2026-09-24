@@ -2,18 +2,18 @@ using MapsterMapper;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Common.Interfaces;
+using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
-using SharedKernel.Common.Models;
 using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Application.Features.Transactions.DTOs;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions
 {
-    public sealed class GetTransactionsQueryHandler : IRequestHandler<GetTransactionsQuery, Result<PaginatedResponse<TransactionDto>>>
+    public sealed class GetTransactionsQueryHandler : IRequestHandler<GetTransactionsQuery, Result<PaginatedResponse<TransactionListItemDto>>>
     {
         private readonly ITransactionsDbContext _context;
         private readonly IMapper _mapper;
@@ -29,7 +29,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
             _logger = logger;
         }
 
-        public async Task<Result<PaginatedResponse<TransactionDto>>> Handle(
+        public async Task<Result<PaginatedResponse<TransactionListItemDto>>> Handle(
             GetTransactionsQuery request,
             CancellationToken cancellationToken)
         {
@@ -48,15 +48,15 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                                 .Take(request.PageSize)
                                 .ToListAsync(cancellationToken);
 
-            var dtos = _mapper.Map<List<TransactionDto>>(items);
+            var dtos = _mapper.Map<List<TransactionListItemDto>>(items);
 
-            var response = PaginatedResponse<TransactionDto>.Create(
+            var response = PaginatedResponse<TransactionListItemDto>.Create(
                 dtos,
                 totalCount,
                 request.PageNumber,
                 request.PageSize);
 
-            return Result<PaginatedResponse<TransactionDto>>.Success(response);
+            return Result<PaginatedResponse<TransactionListItemDto>>.Success(response);
         }
 
         private static IQueryable<Transaction> ApplyFilters(

@@ -1,8 +1,8 @@
-﻿using System;
+﻿using SharedKernel.Common.ValueObjects;
+using SharedKernel.Exceptions;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using SharedKernel.Exceptions;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Domain.Common.ValueObjects
 {

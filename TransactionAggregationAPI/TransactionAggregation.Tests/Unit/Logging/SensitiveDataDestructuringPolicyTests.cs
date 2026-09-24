@@ -1,10 +1,10 @@
 using FluentAssertions;
+using Modules.Customers.Application.Features.CreateCustomer;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using System.Linq;
-using Modules.Customers.Application.Features.CreateCustomer;
-using TransactionAggregationAPI.Logging;
+using TransactionAggregation.Hosting.Logging;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Logging;

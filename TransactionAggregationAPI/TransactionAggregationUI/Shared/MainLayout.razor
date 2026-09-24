@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Nav
 
 <AuthorizeView>
@@ -37,8 +38,11 @@
 @code {
     private void Logout()
     {
-        // RemoteAuthenticatorView (Pages/Authentication.razor) handles the actual redirect
-        // through Keycloak's end-session endpoint.
-        Nav.NavigateTo("authentication/logout", forceLoad: true);
+        // NavigateToLogout, not a plain navigation: RemoteAuthenticatorView only performs a
+        // logout the app started this way. A direct (or force-reloaded) visit to
+        // authentication/logout is refused as "not initiated from within the page" — the
+        // tokens stay in session storage and the Keycloak session survives, so the user is
+        // still signed in. This clears both, via Keycloak's end-session endpoint.
+        Nav.NavigateToLogout("authentication/logout");
     }
 }

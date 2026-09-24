@@ -1,11 +1,11 @@
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
+using Modules.Transactions.Application.Common.Models;
 using NSubstitute;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Behaviors;
 using SharedKernel.Common.Models;
-using Modules.Transactions.Application.Common.Models;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Behaviors;

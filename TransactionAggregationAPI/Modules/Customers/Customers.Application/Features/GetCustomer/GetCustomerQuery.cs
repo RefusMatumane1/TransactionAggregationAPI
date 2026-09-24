@@ -1,6 +1,6 @@
+using Modules.Customers.Application.DTOs;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Behaviors;
-using Modules.Customers.Application.DTOs;
 
 namespace Modules.Customers.Application.Features.GetCustomer
 {

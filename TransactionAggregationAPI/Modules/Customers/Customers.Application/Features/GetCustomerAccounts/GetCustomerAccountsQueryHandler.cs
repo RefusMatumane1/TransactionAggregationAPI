@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.DTOs;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
+using Modules.Customers.Contracts;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.DTOs;
-using Modules.Customers.Application.Persistence;
-using Modules.Customers.Contracts;
 
 namespace Modules.Customers.Application.Features.GetCustomerAccounts
 {
@@ -30,7 +31,7 @@ namespace Modules.Customers.Application.Features.GetCustomerAccounts
             {
                 logger.LogWarning("Customer {CustomerId} not found", request.CustomerId);
                 return Result.Failure<IEnumerable<AccountDto>>(
-                    Error.NotFound("Customer", request.CustomerId));
+                    CustomerErrors.NotFound(request.CustomerId));
             }
 
             var accounts = await _context.Accounts
@@ -44,17 +45,23 @@ namespace Modules.Customers.Application.Features.GetCustomerAccounts
             // IAccountBalanceProvider since Transactions lives in a different module/schema.
             var balancesByAccountId = await _balanceProvider.GetBalancesByCustomerAsync(customerId.Value, cancellationToken);
 
-            var dtos = accounts.Select(a => new AccountDto(
-                a.Id.Value,
-                a.CustomerId.Value,
-                a.AccountNumber,
-                a.AccountName,
-                a.AccountType,
-                balancesByAccountId.GetValueOrDefault(a.Id.Value, 0m),
-                a.Currency,
-                a.IsActive,
-                a.CreatedAt,
-                a.UpdatedAt));
+            var dtos = accounts.Select(a =>
+            {
+                var balance = balancesByAccountId.GetValueOrDefault(a.Id.Value, AccountBalance.Zero);
+                return new AccountDto(
+                    a.Id.Value,
+                    a.CustomerId.Value,
+                    a.AccountNumber,
+                    a.AccountName,
+                    a.AccountType,
+                    balance.Booked,
+                    a.Currency,
+                    a.IsActive,
+                    a.CreatedAt,
+                    a.UpdatedAt,
+                    balance.Pending,
+                    balance.Available);
+            });
 
             return Result.Success(dtos.AsEnumerable());
         }

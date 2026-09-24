@@ -1,5 +1,5 @@
+using Modules.Customers.Application.Ports;
 using System.Collections.Concurrent;
-using Modules.Customers.Contracts;
 
 namespace TransactionAggregation.Tests.Helpers;
 

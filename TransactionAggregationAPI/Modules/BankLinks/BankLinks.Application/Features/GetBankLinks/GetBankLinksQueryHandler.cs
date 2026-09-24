@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Modules.BankLinks.Application.DTOs;
+using Modules.BankLinks.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.BankLinks.Application.DTOs;
-using Modules.BankLinks.Application.Persistence;
 
 namespace Modules.BankLinks.Application.Features.GetBankLinks
 {

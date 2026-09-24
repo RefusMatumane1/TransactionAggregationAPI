@@ -1,26 +1,26 @@
+using BuildingBlocks.Messaging.Persistence;
 using FluentAssertions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
-using System.Text.Json;
-using BuildingBlocks.Messaging.Persistence;
 using Modules.BankLinks.Application.Contracts;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
 using Modules.Transactions.Application.Common.DTOs;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Domain.Events.Transaction;
 using Modules.Transactions.Infrastructure.Persistence;
+using NSubstitute;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -37,13 +37,15 @@ public class ProcessInboundTransactionsCommandHandlerTests
             ctx,
             messaging,
             new BankLinksReadApi(bankLinksCtx),
+            TestInstitutions.AllowAllDirectory(),
+            TestNormalizers.Neutral,
             categorizationService ?? BuildCategorizationService(),
             NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
 
     private static ITransactionCategorizationService BuildCategorizationService(TransactionCategory category = TransactionCategory.Uncategorized)
     {
         var service = Substitute.For<ITransactionCategorizationService>();
-        service.CategorizeTransactionAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>())
+        service.CategorizeTransactionAsync(Arg.Any<Transaction>(), Arg.Any<TransactionCategory?>(), Arg.Any<CancellationToken>())
             .Returns(category);
         return service;
     }
@@ -253,5 +255,120 @@ public class ProcessInboundTransactionsCommandHandlerTests
 
         result.Value.Should().Be(1);
         context.Transactions.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task Handle_SameExternalIdTwiceInOneBatch_PersistsOnceAndStillPersistsTheRest()
+    {
+        var messaging = InMemoryMessagingDbContextFactory.Create();
+        var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, CustomerId.Create());
+        var handler = BuildHandler(context, messaging, bankLinksContext);
+
+        var result = await handler.Handle(
+            new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!,
+                [MakeDto("txn-1"), MakeDto("txn-1"), MakeDto("txn-2")]),
+            CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().Be(2);
+        context.Transactions.Select(t => t.Source.ExternalId).Should().BeEquivalentTo(["txn-1", "txn-2"]);
+    }
+
+    [Fact]
+    public async Task Handle_BatchWithDuplicates_EnqueuesTransactionLevelDuplicateNotification()
+    {
+        var messaging = InMemoryMessagingDbContextFactory.Create();
+        var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var customerId = CustomerId.Create();
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, customerId);
+        var handler = BuildHandler(context, messaging, bankLinksContext);
+        var inboxMessageId = Guid.NewGuid();
+
+        await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto("txn-1")]), CancellationToken.None);
+        await handler.Handle(
+            new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!,
+                [MakeDto("txn-1"), MakeDto("txn-2"), MakeDto("txn-2")], inboxMessageId),
+            CancellationToken.None);
+
+        var message = messaging.OutboxMessages.Should()
+            .ContainSingle(m => m.Type == OutboxMessageTypes.DuplicateInboundDetected).Subject;
+        var payload = JsonSerializer.Deserialize<DuplicateInboundDetectedOutboxPayload>(message.Payload)!;
+        payload.Level.Should().Be("transaction");
+        payload.DuplicateExternalIds.Should().BeEquivalentTo(["txn-1", "txn-2"]);
+        payload.CustomerId.Should().Be(customerId.Value);
+        payload.InboxMessageId.Should().Be(inboxMessageId);
+        payload.ExternalAccountId.Should().Be(link.ExternalAccountId);
+    }
+
+    [Fact]
+    public async Task Handle_EntireBatchAlreadyStored_ReturnsZeroAndStillNotifies()
+    {
+        var messaging = InMemoryMessagingDbContextFactory.Create();
+        var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, CustomerId.Create());
+        var handler = BuildHandler(context, messaging, bankLinksContext);
+        var command = new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto("txn-1")]);
+
+        await handler.Handle(command, CancellationToken.None);
+        var redelivered = await handler.Handle(command, CancellationToken.None);
+
+        redelivered.IsSuccess.Should().BeTrue();
+        redelivered.Value.Should().Be(0);
+        messaging.OutboxMessages.Should().ContainSingle(m => m.Type == OutboxMessageTypes.DuplicateInboundDetected);
+    }
+
+    [Fact]
+    public async Task Handle_NoDuplicates_EnqueuesNoDuplicateNotification()
+    {
+        var messaging = InMemoryMessagingDbContextFactory.Create();
+        var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, CustomerId.Create());
+        var handler = BuildHandler(context, messaging, bankLinksContext);
+
+        await handler.Handle(
+            new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [MakeDto("txn-1"), MakeDto("txn-2")]),
+            CancellationToken.None);
+
+        messaging.OutboxMessages.Should().NotContain(m => m.Type == OutboxMessageTypes.DuplicateInboundDetected);
+    }
+
+    [Fact]
+    public async Task Handle_NormalizesEachTransactionAndKeepsWhatTheBankSent()
+    {
+        var messaging = InMemoryMessagingDbContextFactory.Create();
+        var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
+        var bankLinksContext = InMemoryBankLinksDbContextFactory.Create();
+        var link = await SeedActiveBankLinkAsync(bankLinksContext, CustomerId.Create());
+        var categorization = BuildCategorizationService(TransactionCategory.Groceries);
+        var normalizer = new Modules.Transactions.Application.Services.TransactionNormalizer(
+            Microsoft.Extensions.Options.Options.Create(new Modules.Transactions.Application.Common.Options.NormalizationOptions
+            {
+                Default = new() { TimeZone = "Africa/Johannesburg", DescriptionPrefixes = ["POS PURCHASE"], CategoryMap = new() { ["Grocery"] = "Groceries" } }
+            }));
+        var handler = new ProcessInboundTransactionsCommandHandler(
+            context, messaging, new BankLinksReadApi(bankLinksContext), TestInstitutions.AllowAllDirectory(), normalizer, categorization,
+            NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+
+        var raw = MakeDto() with
+        {
+            Description = "POS PURCHASE  Checkers   Sandton",
+            Category = "Grocery",
+            Date = new DateTime(2026, 9, 10, 12, 0, 0, DateTimeKind.Unspecified)
+        };
+
+        await handler.Handle(new ProcessInboundTransactionsCommand("test-source", link.ExternalAccountId!, [raw]), CancellationToken.None);
+
+        var stored = context.Transactions.Single();
+        stored.Description.Should().Be("Checkers Sandton");
+        stored.Date.Should().Be(new DateTime(2026, 9, 10, 10, 0, 0, DateTimeKind.Utc));
+        stored.Metadata.Should().Contain("bankDescription", "POS PURCHASE  Checkers   Sandton");
+        stored.Metadata.Should().Contain("bankCategory", "Grocery");
+        await categorization.Received(1).CategorizeTransactionAsync(
+            Arg.Any<Transaction>(), TransactionCategory.Groceries, Arg.Any<CancellationToken>());
     }
 }

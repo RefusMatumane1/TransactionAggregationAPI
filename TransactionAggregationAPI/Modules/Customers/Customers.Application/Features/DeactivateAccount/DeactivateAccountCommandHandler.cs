@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.Persistence;
 
 namespace Modules.Customers.Application.Features.DeactivateAccount
 {
@@ -15,12 +16,13 @@ namespace Modules.Customers.Application.Features.DeactivateAccount
         public async Task<Result> Handle(DeactivateAccountCommand request, CancellationToken cancellationToken)
         {
             var accountId = AccountId.CreateFrom(request.AccountId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
 
             var account = await _context.Accounts
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+                .FirstOrDefaultAsync(a => a.Id == accountId && a.CustomerId == customerId, cancellationToken);
 
             if (account is null)
-                return Result.Failure(Error.NotFound("Account", request.AccountId));
+                return Result.Failure(AccountErrors.NotFound(request.AccountId));
 
             account.Deactivate();
             await _context.SaveChangesAsync(cancellationToken);

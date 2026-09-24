@@ -1,13 +1,14 @@
+using BuildingBlocks.Messaging.Persistence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Modules.Audit.Infrastructure.Persistence;
+using Modules.BankLinks.Infrastructure.Persistence;
+using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Infrastructure.Persistence;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using Npgsql;
 using NSubstitute;
 using Testcontainers.PostgreSql;
-using BuildingBlocks.Messaging.Persistence;
-using Modules.Customers.Infrastructure.Persistence;
-using Modules.BankLinks.Infrastructure.Persistence;
-using Modules.WebhookSources.Infrastructure.Persistence;
-using Modules.Transactions.Infrastructure.Persistence;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
@@ -54,6 +55,36 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             using var context = CreateContext();
             await context.Database.MigrateAsync();
+
+            using var audit = CreateAuditContext();
+            await audit.Database.MigrateAsync();
+        }
+
+        /// <summary>
+        /// A fresh, fully migrated database in the same container, for tests that move the
+        /// schema itself (e.g. migrating down and back up) and so must not share data or
+        /// migration state with the rest of the collection.
+        /// </summary>
+        public async Task<string> CreateIsolatedDatabaseAsync()
+        {
+            var name = $"isolated_{Guid.NewGuid():N}";
+            await using (var admin = new NpgsqlConnection(ConnectionString))
+            {
+                await admin.OpenAsync();
+                await using var create = new NpgsqlCommand($"CREATE DATABASE \"{name}\"", admin);
+                await create.ExecuteNonQueryAsync();
+            }
+
+            var connectionString = new NpgsqlConnectionStringBuilder(ConnectionString) { Database = name }.ConnectionString;
+
+            using var messaging = CreateMessagingContext(connectionString);
+            await messaging.Database.MigrateAsync();
+            using var customers = CreateCustomersContext(connectionString);
+            await customers.Database.MigrateAsync();
+            using var context = CreateContext(connectionString: connectionString);
+            await context.Database.MigrateAsync();
+
+            return connectionString;
         }
 
         public async Task DisposeAsync()
@@ -77,9 +108,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         /// associated with the current connection" if the two contexts hold separate
         /// physical connections, even to the same database.
         /// </summary>
-        public TransactionsDbContext CreateContext(MessagingDbContext? messagingDbContext = null)
+        public TransactionsDbContext CreateContext(MessagingDbContext? messagingDbContext = null, string? connectionString = null)
         {
-            var messaging = messagingDbContext ?? CreateMessagingContext();
+            var messaging = messagingDbContext ?? CreateMessagingContext(connectionString);
 
             var options = new DbContextOptionsBuilder<TransactionsDbContext>()
                 .UseNpgsql((NpgsqlConnection)messaging.Database.GetDbConnection())
@@ -92,10 +123,10 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return new TransactionsDbContext(options, mediator, messaging);
         }
 
-        public MessagingDbContext CreateMessagingContext()
+        public MessagingDbContext CreateMessagingContext(string? connectionString = null)
         {
             var options = new DbContextOptionsBuilder<MessagingDbContext>()
-                .UseNpgsql(ConnectionString)
+                .UseNpgsql(connectionString ?? ConnectionString)
                 .Options;
 
             var mediator = Substitute.For<IMediator>();
@@ -118,10 +149,10 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return new WebhookSourcesDbContext(options, mediator);
         }
 
-        public CustomersDbContext CreateCustomersContext()
+        public CustomersDbContext CreateCustomersContext(string? connectionString = null)
         {
             var options = new DbContextOptionsBuilder<CustomersDbContext>()
-                .UseNpgsql(ConnectionString)
+                .UseNpgsql(connectionString ?? ConnectionString)
                 .Options;
 
             var mediator = Substitute.For<IMediator>();
@@ -142,6 +173,19 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .Returns(Task.CompletedTask);
 
             return new BankLinksDbContext(options, mediator);
+        }
+
+        public AuditDbContext CreateAuditContext()
+        {
+            var options = new DbContextOptionsBuilder<AuditDbContext>()
+                .UseNpgsql(ConnectionString)
+                .Options;
+
+            var mediator = Substitute.For<IMediator>();
+            mediator.Publish(Arg.Any<object>(), Arg.Any<CancellationToken>())
+                .Returns(Task.CompletedTask);
+
+            return new AuditDbContext(options, mediator);
         }
     }
 

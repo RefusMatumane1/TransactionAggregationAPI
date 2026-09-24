@@ -9,7 +9,12 @@ namespace Modules.BankLinks.Contracts
     /// </summary>
     public interface IBankLinksReadApi
     {
-        Task<ActiveBankLinkInfo?> FindActiveLinkByExternalAccountIdAsync(
+        /// <summary>
+        /// Every active link to this bank account, oldest first. More than one is normal: each
+        /// holder of a joint account links it separately, and each is entitled to its
+        /// transactions. Empty when nobody has linked the account.
+        /// </summary>
+        Task<IReadOnlyList<ActiveBankLinkInfo>> FindActiveLinksByExternalAccountIdAsync(
             string externalAccountId,
             CancellationToken cancellationToken = default);
     }

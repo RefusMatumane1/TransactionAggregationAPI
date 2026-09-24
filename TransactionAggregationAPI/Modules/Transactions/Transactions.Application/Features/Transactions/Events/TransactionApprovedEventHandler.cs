@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Domain.Events.Transaction;
+using SharedKernel.Common.Interfaces;
 
 namespace Modules.Transactions.Application.Features.Transactions.Events
 {

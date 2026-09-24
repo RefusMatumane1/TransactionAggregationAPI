@@ -1,13 +1,13 @@
 using MediatR;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.Models;
+using Modules.Transactions.Domain.Enums;
 using SharedKernel.Common.Behaviors;
 using SharedKernel.Common.Models;
-using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Application.Features.Transactions.DTOs;
-using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions
 {
-    public sealed record GetTransactionsQuery : IRequest<Result<PaginatedResponse<TransactionDto>>>, ICacheableQuery, ICacheKeyPrefix
+    public sealed record GetTransactionsQuery : IRequest<Result<PaginatedResponse<TransactionListItemDto>>>, ICacheableQuery, ICacheKeyPrefix
     {
 
         public required Guid CustomerId { get; init; }

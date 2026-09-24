@@ -1,5 +1,5 @@
-using System.Text.Json;
 using FluentAssertions;
+using System.Text.Json;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration

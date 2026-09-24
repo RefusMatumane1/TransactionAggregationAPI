@@ -1,20 +1,21 @@
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Messaging.Outbox;
 using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NSubstitute;
+using Modules.Audit.Contracts;
 using Modules.Transactions.Application.Common.Inbox;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
-using SharedKernel.Common.Models;
 using Modules.Transactions.Application.Common.Models;
-using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Common.Outbox;
-using BuildingBlocks.Messaging.Inbox;
-using BuildingBlocks.Messaging.Outbox;
-using BuildingBlocks.Messaging.Observability;
 using Modules.Transactions.Infrastructure.BackgroundServices;
+using NSubstitute;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.Models;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices
@@ -47,6 +48,7 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
                 Substitute.For<ICacheService>(),
                 Substitute.For<IAnalyticsService>(),
                 Substitute.For<INotificationService>(),
+                Substitute.For<IAuditTrail>(),
                 CancellationToken.None);
 
             message.Status.Should().Be(OutboxMessageStatus.DeadLettered);
@@ -68,7 +70,7 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
                 NullLogger<InboxDispatcherBackgroundService>.Instance,
                 Options.Create(new InboxOptions { MaxAttempts = 1 }));
 
-            await sut.ProcessMessageAsync(message, sender, CancellationToken.None);
+            await sut.ProcessMessageAsync(message, sender, InMemoryMessagingDbContextFactory.Create(), CancellationToken.None);
 
             message.Status.Should().Be(InboxMessageStatus.DeadLettered);
             DeadLetterMetrics.InboxMessagesDeadLettered.WithLabels(sourceName).Value.Should().Be(1);

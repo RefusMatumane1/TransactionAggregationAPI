@@ -5,5 +5,6 @@ namespace Modules.WebhookSources.Application.DTOs
     string Name,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? LastUsedAt);
+    DateTime? LastUsedAt,
+    IReadOnlyList<string> AuthorizedInstitutions);
 }

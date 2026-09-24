@@ -1,5 +1,5 @@
-using SharedKernel.Abstractions;
 using Modules.Customers.Domain.ValueObjects;
+using SharedKernel.Abstractions;
 
 namespace Modules.Customers.Application.Features.CreateAccount
 {

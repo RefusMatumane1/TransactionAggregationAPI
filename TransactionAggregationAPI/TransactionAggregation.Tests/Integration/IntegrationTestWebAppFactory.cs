@@ -1,3 +1,4 @@
+using BuildingBlocks.Messaging.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -9,12 +10,12 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using BuildingBlocks.Messaging.Persistence;
+using Modules.Audit.Infrastructure.Persistence;
 using Modules.BankLinks.Infrastructure.Persistence;
-using Modules.Customers.Contracts;
+using Modules.Customers.Application.Ports;
 using Modules.Customers.Infrastructure.Persistence;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 
 namespace TransactionAggregation.Tests.Integration
@@ -40,6 +41,7 @@ namespace TransactionAggregation.Tests.Integration
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
                 ReplaceWithInMemory<BankLinksDbContext>(services);
                 ReplaceWithInMemory<CustomersDbContext>(services);
+                ReplaceWithInMemory<AuditDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 

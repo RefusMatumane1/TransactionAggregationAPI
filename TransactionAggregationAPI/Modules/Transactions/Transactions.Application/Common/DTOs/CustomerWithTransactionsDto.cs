@@ -10,5 +10,7 @@ namespace Modules.Transactions.Application.Common.DTOs
         int TotalTransactions,
         decimal TotalIncome,
         decimal TotalExpenses,
-        decimal NetBalance);
+        decimal NetBalance,
+        decimal PendingIncome = 0,
+        decimal PendingExpenses = 0);
 }

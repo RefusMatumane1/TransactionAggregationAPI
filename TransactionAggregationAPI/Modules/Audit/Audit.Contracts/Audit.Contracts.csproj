@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Audit.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Published cross-module contracts (IAuditTrail, AuditEventRecord, channel/event-type names).
+	     Deliberately dependency-free so any module can reference it. -->
+</Project>

@@ -1,5 +1,5 @@
 using Mapster;
-using Modules.Transactions.Application.Features.Transactions.DTOs;
+using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Domain.Entities;
 
 namespace Modules.Transactions.Application.Mappings
@@ -8,7 +8,7 @@ namespace Modules.Transactions.Application.Mappings
     {
         public void Register(TypeAdapterConfig config)
         {
-            config.NewConfig<Transaction, TransactionDto>()
+            config.NewConfig<Transaction, TransactionListItemDto>()
                 .Map(dest => dest.Id, src => src.Id.Value)
                 .Map(dest => dest.CustomerId, src => src.CustomerId.Value)
                 .Map(dest => dest.AccountId, src => src.AccountId != null ? (Guid?)src.AccountId.Value : null)
@@ -20,11 +20,7 @@ namespace Modules.Transactions.Application.Mappings
                 .Map(dest => dest.Source, src => src.Source.Name)
                 .Map(dest => dest.Date, src => src.Date)
                 .Map(dest => dest.CreatedAt, src => src.CreatedAt)
-                .Map(dest => dest.Metadata, src => src.Metadata)
-                .AfterMapping((src, dest) =>
-                {
-
-                });
+                .Map(dest => dest.Metadata, src => src.Metadata);
         }
     }
 }

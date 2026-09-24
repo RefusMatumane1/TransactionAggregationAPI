@@ -20,10 +20,5 @@
 		<ProjectReference Include="..\Customers.Application\Customers.Application.csproj" />
 		<ProjectReference Include="..\Customers.Domain\Customers.Domain.csproj" />
 		<ProjectReference Include="..\Customers.Contracts\Customers.Contracts.csproj" />
-		<ProjectReference Include="..\..\..\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
 	</ItemGroup>
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
-
 </Project>

@@ -1,9 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.DTOs;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
-using Modules.Customers.Application.DTOs;
-using Modules.Customers.Application.Persistence;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Customers.Application.Features.GetCustomerByEmail
 {
@@ -15,14 +17,16 @@ namespace Modules.Customers.Application.Features.GetCustomerByEmail
             GetCustomerByEmailQuery request,
             CancellationToken cancellationToken)
         {
-            logger.LogInformation("Handling {RequestName} for email: {Email}", nameof(GetCustomerByEmailQuery), request.Email);
+            logger.LogInformation("Looking up customer {CustomerId} by email", request.CustomerId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
+
             var customer = await _context.Customers
                 .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Email == request.Email, cancellationToken);
+                .FirstOrDefaultAsync(c => c.Email == request.Email && c.Id == customerId, cancellationToken);
 
             if (customer is null)
                 return Result.Failure<CustomerDto>(
-                    Error.NotFound("Customer", request.Email));
+                    CustomerErrors.NotFoundByEmail());
 
             var dto = new CustomerDto(
                 customer.Id.Value,
@@ -31,7 +35,7 @@ namespace Modules.Customers.Application.Features.GetCustomerByEmail
                 customer.CreatedAt,
                 customer.UpdatedAt);
 
-            logger.LogInformation("Successfully retrieved customer with email: {Email}", request.Email);
+            logger.LogInformation("Retrieved customer {CustomerId} by email", customer.Id.Value);
             return Result.Success(dto);
         }
     }

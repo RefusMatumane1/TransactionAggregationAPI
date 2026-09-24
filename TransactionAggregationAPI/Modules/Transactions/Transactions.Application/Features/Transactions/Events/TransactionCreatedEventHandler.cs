@@ -1,12 +1,12 @@
-using MediatR;
-using Microsoft.Extensions.Logging;
-using System.Text.Json;
 using BuildingBlocks.Messaging.Outbox;
 using BuildingBlocks.Messaging.Persistence;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Domain.Events.Transaction;
+using System.Text.Json;
 
 namespace Modules.Transactions.Application.Features.Transactions.Events
 {
@@ -28,7 +28,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Events
 
             if (transaction.Category == TransactionCategory.Uncategorized)
             {
-                var category = await _categorizationService.CategorizeTransactionAsync(transaction, cancellationToken);
+                var category = await _categorizationService.CategorizeTransactionAsync(transaction, bankCategory: null, cancellationToken);
                 transaction.Categorize(category, isAuto: true);
             }
 

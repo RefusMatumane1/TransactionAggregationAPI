@@ -7,34 +7,50 @@
   <Project Path="docker-compose.dcproj">
     <Build />
   </Project>
-  <Project Path="SharedKernel/SharedKernel.csproj" />
-  <Project Path="BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj" />
-  <Project Path="BuildingBlocks.Web/BuildingBlocks.Web.csproj" />
+  <Folder Name="/BuildingBlocks/">
+    <Project Path="BuildingBlocks/BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj" />
+    <Project Path="BuildingBlocks/BuildingBlocks.Web/BuildingBlocks.Web.csproj" />
+    <Project Path="BuildingBlocks/SharedKernel/SharedKernel.csproj" />
+  </Folder>
   <Folder Name="/Modules/" />
+  <Folder Name="/Modules/Audit/">
+    <Project Path="Modules/Audit/Audit.Application/Audit.Application.csproj" />
+    <Project Path="Modules/Audit/Audit.Contracts/Audit.Contracts.csproj" />
+    <Project Path="Modules/Audit/Audit.Domain/Audit.Domain.csproj" />
+    <Project Path="Modules/Audit/Audit.Infrastructure/Audit.Infrastructure.csproj" />
+    <Project Path="Modules/Audit/Audit.Presentation/Audit.Presentation.csproj" />
+  </Folder>
   <Folder Name="/Modules/BankLinks/">
     <Project Path="Modules/BankLinks/BankLinks.Application/BankLinks.Application.csproj" />
     <Project Path="Modules/BankLinks/BankLinks.Contracts/BankLinks.Contracts.csproj" />
     <Project Path="Modules/BankLinks/BankLinks.Domain/BankLinks.Domain.csproj" />
     <Project Path="Modules/BankLinks/BankLinks.Infrastructure/BankLinks.Infrastructure.csproj" />
+    <Project Path="Modules/BankLinks/BankLinks.Presentation/BankLinks.Presentation.csproj" />
   </Folder>
   <Folder Name="/Modules/Customers/">
     <Project Path="Modules/Customers/Customers.Application/Customers.Application.csproj" />
     <Project Path="Modules/Customers/Customers.Contracts/Customers.Contracts.csproj" />
     <Project Path="Modules/Customers/Customers.Domain/Customers.Domain.csproj" />
     <Project Path="Modules/Customers/Customers.Infrastructure/Customers.Infrastructure.csproj" />
+    <Project Path="Modules/Customers/Customers.Presentation/Customers.Presentation.csproj" />
   </Folder>
   <Folder Name="/Modules/Transactions/">
     <Project Path="Modules/Transactions/Transactions.Application/Transactions.Application.csproj" Id="ffdc5dc1-72ce-4ff2-8f05-f8ad6f205bfe" />
     <Project Path="Modules/Transactions/Transactions.Domain/Transactions.Domain.csproj" Id="69d4d908-2140-4efc-b376-cd669f1b39dd" />
     <Project Path="Modules/Transactions/Transactions.Infrastructure/Transactions.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />
+    <Project Path="Modules/Transactions/Transactions.Presentation/Transactions.Presentation.csproj" />
   </Folder>
   <Folder Name="/Modules/WebhookSources/">
     <Project Path="Modules/WebhookSources/WebhookSources.Application/WebhookSources.Application.csproj" />
     <Project Path="Modules/WebhookSources/WebhookSources.Contracts/WebhookSources.Contracts.csproj" />
     <Project Path="Modules/WebhookSources/WebhookSources.Domain/WebhookSources.Domain.csproj" />
     <Project Path="Modules/WebhookSources/WebhookSources.Infrastructure/WebhookSources.Infrastructure.csproj" />
+    <Project Path="Modules/WebhookSources/WebhookSources.Presentation/WebhookSources.Presentation.csproj" />
   </Folder>
+  <Project Path="TransactionAggregation.Hosting/TransactionAggregation.Hosting.csproj" />
   <Project Path="TransactionAggregation.Tests/TransactionAggregation.Tests.csproj" Id="a1b2c3d4-e5f6-7890-abcd-ef1234567890" />
+  <Project Path="TransactionAggregation.MockAggregator/TransactionAggregation.MockAggregator.csproj" />
+  <Project Path="TransactionAggregation.Worker/TransactionAggregation.Worker.csproj" />
   <Project Path="TransactionAggregationAPI.AppHost/TransactionAggregationAPI.AppHost.csproj" />
   <Project Path="TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.ServiceDefaults.csproj" />
   <Project Path="TransactionAggregationAPI/TransactionAggregationAPI.csproj" />

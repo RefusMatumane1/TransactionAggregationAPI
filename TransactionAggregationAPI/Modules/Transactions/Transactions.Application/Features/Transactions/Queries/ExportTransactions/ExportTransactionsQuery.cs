@@ -1,7 +1,7 @@
 ﻿using MediatR;
-using SharedKernel.Common.Models;
 using Modules.Transactions.Application.Common.Models;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.ExportTransactions
 {

@@ -32,10 +32,14 @@ spec:
         app.kubernetes.io/version: "1.0.0"
 
     spec:
-      # nginx master process must start as root to bind port 80;
-      # worker processes drop to user 101 (nginx) automatically.
+      # nginx-unprivileged: every process runs as uid 101 and listens on 8080.
       securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
         fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
 
       terminationGracePeriodSeconds: 30
 
@@ -50,12 +54,12 @@ spec:
       containers:
         - name: transaction-ui
 
-          image: transactionaggregationui:latest
+          image: transactionaggregationui:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
           imagePullPolicy: IfNotPresent
 
           ports:
             - name: http
-              containerPort: 80
+              containerPort: 8080
               protocol: TCP
 
           envFrom:
@@ -73,7 +77,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 5
@@ -82,7 +86,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5

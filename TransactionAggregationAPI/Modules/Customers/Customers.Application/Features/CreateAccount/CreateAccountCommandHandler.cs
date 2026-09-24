@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
-using Modules.Customers.Application.Persistence;
 
 namespace Modules.Customers.Application.Features.CreateAccount
 {
@@ -21,7 +22,7 @@ namespace Modules.Customers.Application.Features.CreateAccount
                 .AnyAsync(c => c.Id == customerId, cancellationToken);
 
             if (!customerExists)
-                return Result.Failure<Guid>(Error.NotFound("Customer", request.CustomerId));
+                return Result.Failure<Guid>(CustomerErrors.NotFound(request.CustomerId));
 
             var duplicateExists = await _context.Accounts
                 .AnyAsync(a => a.CustomerId == customerId && a.AccountNumber == request.AccountNumber, cancellationToken);

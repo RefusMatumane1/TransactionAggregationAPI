@@ -1,20 +1,21 @@
-using FluentAssertions;
-using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
-using Microsoft.Extensions.DependencyInjection;
 using BuildingBlocks.Messaging.Persistence;
+using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
-using Modules.WebhookSources.Domain;
-using Modules.WebhookSources.Application.Persistence;
-using Modules.Transactions.Application.Common.Inbox;
-using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
-using Modules.Transactions.Domain.Entities;
 using Modules.Customers.Application.Persistence;
 using Modules.Customers.Domain;
+using Modules.Transactions.Application.Common.Inbox;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using Modules.WebhookSources.Application.Persistence;
+using Modules.WebhookSources.Domain;
+using SharedKernel.Common.ValueObjects;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
@@ -55,7 +56,7 @@ namespace TransactionAggregation.Tests.Integration
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<IWebhookSourcesDbContext>();
 
-            var (source, apiKey) = WebhookSource.Create(name);
+            var (source, apiKey) = WebhookSource.Create(name, TestInstitutions.All);
             context.WebhookSources.Add(source);
             await context.SaveChangesAsync();
 
@@ -113,7 +114,7 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<IWebhookSourcesDbContext>();
-            var (source, apiKey) = WebhookSource.Create("soon-deactivated");
+            var (source, apiKey) = WebhookSource.Create("soon-deactivated", TestInstitutions.All);
             source.Deactivate();
             context.WebhookSources.Add(source);
             await context.SaveChangesAsync();
@@ -150,7 +151,7 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         [Fact]
-        public async Task ReceiveTransactions_RedeliveredPayload_QueuesASeparateInboxMessageEachTime()
+        public async Task ReceiveTransactions_RedeliveredPayload_Returns202AsDuplicateAndQueuesOnce()
         {
 
             var link = await SeedActiveBankLinkAsync("ext-webhook-2");
@@ -158,14 +159,50 @@ namespace TransactionAggregation.Tests.Integration
             var payload = new { ExternalAccountId = link.ExternalAccountId, Transactions = new[] { SampleTransaction("txn-webhook-2") } };
 
             using (var first = BuildRequest(payload, apiKey))
-                (await _client.SendAsync(first)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+            {
+                var response = await _client.SendAsync(first);
+                response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+                (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isDuplicate").GetBoolean().Should().BeFalse();
+            }
 
             using (var redelivered = BuildRequest(payload, apiKey))
-                (await _client.SendAsync(redelivered)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+            {
+                var response = await _client.SendAsync(redelivered);
+                response.StatusCode.Should().Be(HttpStatusCode.Accepted);
+                (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isDuplicate").GetBoolean().Should().BeTrue();
+            }
 
             using var scope = _factory.Services.CreateScope();
             var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
-            messaging.InboxMessages.Count(m => m.SourceName == "source-2").Should().Be(2);
+            messaging.InboxMessages.Count(m => m.SourceName == "source-2").Should().Be(1);
+        }
+
+        [Fact]
+        public async Task ReceiveTransactions_IdempotencyKeyReusedForDifferentPayload_Returns422AndQueuesNothingNew()
+        {
+            var link = await SeedActiveBankLinkAsync("ext-webhook-5");
+            var apiKey = await SeedActiveWebhookSourceAsync("source-5");
+
+            using (var first = BuildRequest(
+                new { ExternalAccountId = link.ExternalAccountId, Transactions = new[] { SampleTransaction("txn-webhook-5a") } }, apiKey))
+            {
+                first.Headers.Add("Idempotency-Key", "delivery-5");
+                (await _client.SendAsync(first)).StatusCode.Should().Be(HttpStatusCode.Accepted);
+            }
+
+            using (var retried = BuildRequest(
+                new { ExternalAccountId = link.ExternalAccountId, Transactions = new[] { SampleTransaction("txn-webhook-5b") } }, apiKey))
+            {
+                retried.Headers.Add("Idempotency-Key", "delivery-5");
+                var response = await _client.SendAsync(retried);
+                response.StatusCode.Should().Be(HttpStatusCode.UnprocessableEntity,
+                    "a key reused for new content is a sender error, not a redelivery to acknowledge");
+            }
+
+            using var scope = _factory.Services.CreateScope();
+            var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
+            messaging.InboxMessages.Should().ContainSingle(m => m.SourceName == "source-5")
+                .Which.IdempotencyKey.Should().Be("delivery-5");
         }
 
         [Fact]

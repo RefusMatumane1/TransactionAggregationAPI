@@ -1,7 +1,9 @@
 # ADR-0003: Polling-based Inbox/Outbox instead of a message broker
 
 ## Status
-Accepted
+Accepted for internal messaging (outbox dispatch, inbox processing).
+**Partially superseded by [ADR-0012](0012-kafka-as-an-additional-inbound-channel.md)**: the
+revisit trigger below fired on the inbound side, where a provider delivers over Kafka.
 
 ## Context
 The brief asks us to evaluate whether Kafka, RabbitMQ, or Azure Service Bus is

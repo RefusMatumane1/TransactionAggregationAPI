@@ -1,7 +1,5 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Application.Features.GetCustomerAccounts;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
@@ -11,6 +9,8 @@ using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -78,13 +78,13 @@ public class GetCustomerAccountsQueryHandlerTests
         var transactionsCtx = InMemoryDbContextFactory.Create();
         transactionsCtx.Transactions.Add(Transaction.Create(
             customer.Id, Money.Create(1000m, "ZAR"), "Salary",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), checking.Id));
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), checking.Id).Settled());
         transactionsCtx.Transactions.Add(Transaction.Create(
             customer.Id, Money.Create(-200m, "ZAR"), "Rent",
-            TransactionCategory.Housing, TransactionSource.Create("Bank A", "ext-2"), checking.Id));
+            TransactionCategory.Housing, TransactionSource.Create("Bank A", "ext-2"), checking.Id).Settled());
         transactionsCtx.Transactions.Add(Transaction.Create(
             customer.Id, Money.Create(5000m, "ZAR"), "Deposit",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-3"), savings.Id));
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-3"), savings.Id).Settled());
         await transactionsCtx.SaveChangesAsync();
 
         var handler = BuildHandler(context, transactionsCtx);
@@ -132,7 +132,7 @@ public class GetCustomerAccountsQueryHandlerTests
         var transactionsCtx = InMemoryDbContextFactory.Create();
         transactionsCtx.Transactions.Add(Transaction.Create(
             customer.Id, Money.Create(300m, "ZAR"), "Unlinked",
-            TransactionCategory.Uncategorized, TransactionSource.Create("Bank A", "ext-1"), accountId: null));
+            TransactionCategory.Uncategorized, TransactionSource.Create("Bank A", "ext-1"), accountId: null).Settled());
         await transactionsCtx.SaveChangesAsync();
 
         var handler = BuildHandler(context, transactionsCtx);

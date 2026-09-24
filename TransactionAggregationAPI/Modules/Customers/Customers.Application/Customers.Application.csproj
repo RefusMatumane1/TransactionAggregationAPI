@@ -6,7 +6,6 @@
 	<ItemGroup>
 		<PackageReference Include="MediatR" />
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-		<PackageReference Include="Mapster" />
 		<!-- ICustomersDbContext (the Application-layer persistence port) exposes
 		     DbSet<T> in its signature — EF Core is referenced for that type only, not
 		     for any concrete provider/DbContext, which stays in Infrastructure. -->

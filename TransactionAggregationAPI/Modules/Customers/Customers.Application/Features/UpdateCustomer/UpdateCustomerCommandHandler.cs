@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.Persistence;
 
 namespace Modules.Customers.Application.Features.UpdateCustomer
 {
@@ -22,7 +23,7 @@ namespace Modules.Customers.Application.Features.UpdateCustomer
                 .FirstOrDefaultAsync(c => c.Id == customerId, cancellationToken);
 
             if (customer is null)
-                return Result.Failure(Error.NotFound("Customer", request.CustomerId));
+                return Result.Failure(CustomerErrors.NotFound(request.CustomerId));
 
             var emailExists = await _context.Customers
                 .AnyAsync(c => c.Email == request.Email && c.Id != customerId, cancellationToken);

@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Abstractions;
-using SharedKernel.Common.Models;
 using Modules.WebhookSources.Application.DTOs;
 using Modules.WebhookSources.Application.Persistence;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Models;
 
 namespace Modules.WebhookSources.Application.Features.GetWebhookSources
 {
@@ -17,7 +17,7 @@ namespace Modules.WebhookSources.Application.Features.GetWebhookSources
                 .ToListAsync(cancellationToken);
 
             var dtos = sources
-                            .Select(s => new WebhookSourceDto(s.Id.Value, s.Name, s.IsActive, s.CreatedAt, s.LastUsedAt))
+                            .Select(s => new WebhookSourceDto(s.Id.Value, s.Name, s.IsActive, s.CreatedAt, s.LastUsedAt, s.AuthorizedInstitutions))
                             .ToList();
 
             return Result.Success<IReadOnlyList<WebhookSourceDto>>(dtos);

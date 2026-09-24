@@ -1,9 +1,10 @@
 using SharedKernel.Abstractions;
+using SharedKernel.Common.Attributes;
 
 namespace Modules.Customers.Application.Features.UpdateCustomer
 {
     public sealed record UpdateCustomerCommand(
         Guid CustomerId,
-        string Email,
-        string Name) : ICommand;
+        [property: Sensitive] string Email,
+        [property: Sensitive] string Name) : ICommand;
 }

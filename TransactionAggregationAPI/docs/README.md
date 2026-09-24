@@ -1,6 +1,7 @@
 # Documentation
 
 - [Architecture](architecture.md) — system context, container/module diagram, event flow, ERD, key sequence diagrams, deployment diagram
+- [Bank linking and transaction flow](bank-feed-flow.md) — linking a bank, how its transactions reach the customer (ingestion → customer resolution → normalization → categorization), joint accounts, and a verified end-to-end run
 - [Architecture Decision Records](adr/README.md) — why the modular monolith has no broker, no Saga, no partitioning, offset pagination, etc.
 - [Threat model](threat-model.md) — STRIDE-based analysis of ingestion, the API, provider integrations, the database, Redis, and secrets
 - [Failure scenarios](failure-scenarios.md) — detection/response/recovery/consistency/observability/user-impact for the 19 named failure modes

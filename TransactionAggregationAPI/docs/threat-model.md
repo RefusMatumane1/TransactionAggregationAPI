@@ -12,7 +12,7 @@ considered and mitigated, and what residual risk is knowingly accepted.
 | **Threat** | Spoofed webhook source pushes fabricated transactions into a customer's history. |
 | **Impact** | Financial data integrity — fake income/expenses corrupt reporting and could mislead a customer. |
 | **Likelihood** | Medium if webhook API keys leak; low otherwise. |
-| **Mitigation** | Each `WebhookSource` has its own rotatable API key (`RotateWebhookSourceKeyCommandHandler`); sources can be deactivated instantly (`DeactivateWebhookSourceCommandHandler`). Ingested transactions are scoped to the `BankLink`/source that authenticated the request, not a client-supplied customer ID. |
+| **Mitigation** | Each `WebhookSource` has its own rotatable API key (`RotateWebhookSourceKeyCommandHandler`); sources can be deactivated instantly (`DeactivateWebhookSourceCommandHandler`). Each source is scoped to the institutions it serves (`WebhookSource.AuthorizedInstitutions`, [ADR-0013](adr/0013-webhook-source-institution-scoping.md)): a delivery is applied only to bank links at those institutions, never resolved from a client-supplied customer id, and a delivery naming an account at any other institution is dead-lettered and audited. Verified against Postgres by `IngestionIntegrityTests`. |
 | **Detection** | Structured logs on ingestion (`ProcessInboundTransactionsCommandHandler` logs source name + count); anomalous volume from a single source is visible in metrics/logs. |
 | **Residual risk** | If a webhook API key leaks, the holder can push transactions until the key is rotated/the source is deactivated. Key rotation is manual today, not automatic on suspected compromise. |
 
@@ -96,8 +96,8 @@ considered and mitigated, and what residual risk is knowingly accepted.
 | **Threat** | Redis compromise or outage. |
 | **Impact** | Cache data (low sensitivity) and OAuth state disclosure/loss; **not** financial data (see ADR-0005 — Redis is never the source of truth). |
 | **Likelihood** | Low-medium. |
-| **Mitigation** | Application degrades gracefully on Redis failure (cache miss, rate-limit fail-open); readiness health check reports Degraded rather than Unhealthy on Redis failure (ADR-0005) so an outage doesn't cascade into API unavailability. Data Protection (which encrypts bank-link OAuth tokens at rest) now explicitly falls back to `UseEphemeralDataProtectionProvider()` when Redis-backed key persistence can't be set up (`Program.cs`) — previously the code only *logged* that it would fall back to ephemeral keys without actually configuring anything, silently leaving the framework's implicit default in place, which in a container without a stable user profile could try to write key material to a local path that may not exist or be writable. Verified live against a real Postgres/Redis setup: both the "no Redis connection string" and "malformed Redis connection string" paths now start cleanly with no unhandled exception. |
-| **Residual risk** | Bank-link initiation depends on Redis for OAuth state; a Redis outage during that narrow window legitimately fails that one operation — accepted and scoped, not a gap. Ephemeral keys mean any bank-link tokens encrypted before a Redis outage become unrecoverable once the process restarts (by design — this is the explicit trade-off logged at the point of fallback, not a silent data-loss surprise). |
+| **Mitigation** | Application degrades gracefully on a Redis *outage* (cache miss, rate-limit fail-open); readiness reports Degraded rather than Unhealthy (ADR-0005), so an outage doesn't cascade into API unavailability. A *missing* Redis configuration outside Development is a startup failure (`HostingExtensions.AddSharedState`): the Data Protection key ring (which encrypts bank-link tokens at rest) and the OAuth state shared between API replicas both live in Redis, via the shared multiplexer. The earlier fallback to ephemeral keys let a misconfigured production pod start "healthy" and lose every stored token on its next restart; it is now Development-only. Verified by starting the built image as Production without `ConnectionStrings:redis`. |
+| **Residual risk** | Bank-link initiation depends on Redis for OAuth state; a Redis outage during that narrow window legitimately fails that one operation (accepted and scoped). The key ring in Redis is not encrypted at rest by the application; protect Redis with AUTH/TLS and network policy (k8s NetworkPolicy restricts it to the API/worker pods). |
 
 ## 6. Secrets and configuration
 
@@ -119,3 +119,15 @@ part of section 21's "dynamic API security testing" gap, but a passive baseline 
 is not an active scan and is not a substitute for a real penetration test. This
 threat model should be revisited whenever a new external integration, authentication
 method, or data flow is added.
+
+## Additions from the solution evaluation (2026-09-25)
+
+| Threat | Control | Evidence |
+|---|---|---|
+| **Cross-institution write** (a valid source key names another provider's `externalAccountId`) | Source → institution scoping; out-of-scope deliveries dead-lettered and audited | [ADR-0013](adr/0013-webhook-source-institution-scoping.md), `IngestionIntegrityTests` |
+| **Spreadsheet formula injection** via provider-supplied descriptions in the CSV export | Cells starting with `= + - @ 	 ` are prefixed with `'` | `TransactionListAndExportTests.Export_Quote_NeutralisesSpreadsheetFormulas` |
+| **Client-chosen rate-limit partition** by spoofing `X-Forwarded-For` | Forwarded headers are honoured only from `ForwardedHeaders:KnownNetworks` (the ingress CIDR) | `Program.cs`, `k8s/configmap.yaml` |
+| **PII in log sinks** (email in templates; whole requests pushed into the log context) | Removed; guarded by `Architecture/LoggingHygieneTests` | CI |
+| **Log forging via correlation id** | `X-Correlation-Id` accepted only as a 1–64 char `[A-Za-z0-9._-]` token, else replaced | `CorrelationIdTests` |
+| **Silent data loss via idempotency-key reuse** | Different payload under a used key is refused (422), not acknowledged | `ReceiveBankTransactionsCommandHandlerTests`, `WebhookApiIntegrationTests` |
+

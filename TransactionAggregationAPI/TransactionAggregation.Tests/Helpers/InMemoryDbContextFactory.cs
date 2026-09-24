@@ -1,8 +1,8 @@
+using BuildingBlocks.Messaging.Persistence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using NSubstitute;
-using BuildingBlocks.Messaging.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
+using NSubstitute;
 
 namespace TransactionAggregation.Tests.Helpers;
 

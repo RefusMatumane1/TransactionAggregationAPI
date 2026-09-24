@@ -1,6 +1,7 @@
 using FluentAssertions;
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
@@ -19,7 +20,9 @@ namespace TransactionAggregation.Tests.Integration
             _client = factory.CreateClient();
         }
 
-        private record CreateResponse(Guid Id, string Name, string ApiKey);
+        private static readonly string[] Institutions = ["FNB", "Absa"];
+
+        private record CreateResponse(Guid Id, string Name, string ApiKey, string[] AuthorizedInstitutions);
         private record RotateResponse(string ApiKey);
 
         private HttpClient AsAdmin()
@@ -55,7 +58,7 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var admin = AsAdmin();
 
-            var createResponse = await admin.PostAsJsonAsync(BasePath, new { Name = $"lifecycle-{Guid.NewGuid()}" });
+            var createResponse = await admin.PostAsJsonAsync(BasePath, new { Name = $"lifecycle-{Guid.NewGuid()}", AuthorizedInstitutions = Institutions });
             createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
             var created = await createResponse.Content.ReadFromJsonAsync<CreateResponse>();
             created.Should().NotBeNull();
@@ -89,8 +92,8 @@ namespace TransactionAggregation.Tests.Integration
             using var admin = AsAdmin();
             var name = $"dup-{Guid.NewGuid()}";
 
-            await admin.PostAsJsonAsync(BasePath, new { Name = name });
-            var response = await admin.PostAsJsonAsync(BasePath, new { Name = name });
+            await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
+            var response = await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
 
             response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         }
@@ -110,7 +113,7 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var admin = AsAdmin();
             var name = $"listed-{Guid.NewGuid()}";
-            await admin.PostAsJsonAsync(BasePath, new { Name = name });
+            await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
 
             var response = await admin.GetAsync(BasePath);
             var body = await response.Content.ReadAsStringAsync();
@@ -118,6 +121,51 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             body.Should().Contain(name);
             body.Should().NotContain("KeyHash", "the list response must never surface key material");
+        }
+
+        [Fact]
+        public async Task CreateSource_WithoutAuthorizedInstitutions_Returns400WithFieldLevelErrors()
+        {
+            using var admin = AsAdmin();
+
+            var response = await admin.PostAsJsonAsync(BasePath, new { Name = $"unscoped-{Guid.NewGuid()}" });
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+            problem.GetProperty("errors").TryGetProperty("authorizedInstitutions", out var messages)
+                .Should().BeTrue("validation errors are reported per field, keyed by the JSON property name");
+            messages.GetArrayLength().Should().BeGreaterThan(0);
+        }
+
+        [Fact]
+        public async Task UpdateInstitutions_ReplacesTheScope_AndIsListed()
+        {
+            using var admin = AsAdmin();
+            var created = await (await admin.PostAsJsonAsync(BasePath,
+                    new { Name = $"rescoped-{Guid.NewGuid()}", AuthorizedInstitutions = Institutions }))
+                .Content.ReadFromJsonAsync<CreateResponse>();
+            created!.AuthorizedInstitutions.Should().BeEquivalentTo(Institutions);
+
+            var update = await admin.PutAsJsonAsync($"{BasePath}/{created.Id}/institutions",
+                new { AuthorizedInstitutions = new[] { "Capitec", "capitec", " StandardBank " } });
+            update.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+            var listed = await admin.GetFromJsonAsync<JsonElement>(BasePath);
+            var source = listed.EnumerateArray().Single(s => s.GetProperty("id").GetGuid() == created.Id);
+            source.GetProperty("authorizedInstitutions").EnumerateArray().Select(i => i.GetString())
+                .Should().BeEquivalentTo(["Capitec", "StandardBank"], "names are trimmed and de-duplicated case-insensitively");
+        }
+
+        [Fact]
+        public async Task UpdateInstitutions_EmptyList_Returns400_NotA500()
+        {
+            using var admin = AsAdmin();
+
+            var response = await admin.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}/institutions",
+                new { AuthorizedInstitutions = Array.Empty<string>() });
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+                "a non-generic Result command failing validation must map to 400, not throw into the 500 handler");
         }
 
         private Task<HttpResponseMessage> PostWebhookAsync(string apiKey)

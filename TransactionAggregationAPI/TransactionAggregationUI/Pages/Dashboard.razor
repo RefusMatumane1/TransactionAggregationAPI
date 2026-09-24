@@ -22,10 +22,12 @@ else if (_customer is not null)
     <div class="row g-3 mb-4">
         <div class="col-sm-6 col-xl-3">
             <StatCard Label="Total Income" Value="@($"{_summary?.TotalIncome.ToString("C", new System.Globalization.CultureInfo("en-ZA"))}")"
+                      Note="@PendingNote(_summary?.PendingIncome)"
                       IconClass="bi-arrow-down-circle-fill" IconBg="bg-success" />
         </div>
         <div class="col-sm-6 col-xl-3">
             <StatCard Label="Total Expenses" Value="@($"{_summary?.TotalExpenses.ToString("C", new System.Globalization.CultureInfo("en-ZA"))}")"
+                      Note="@PendingNote(_summary?.PendingExpenses)"
                       IconClass="bi-arrow-up-circle-fill" IconBg="bg-danger" />
         </div>
         <div class="col-sm-6 col-xl-3">
@@ -34,6 +36,7 @@ else if (_customer is not null)
         </div>
         <div class="col-sm-6 col-xl-3">
             <StatCard Label="Transactions" Value="@($"{_summary?.TotalTransactions}")"
+                      Note="@(_summary is { PendingTransactions: > 0 } s ? $"{s.PendingTransactions} pending" : null)"
                       IconClass="bi-receipt" IconBg="bg-info" />
         </div>
     </div>
@@ -90,6 +93,7 @@ else if (_customer is not null)
                                     <th>Name</th>
                                     <th>Type</th>
                                     <th class="text-end">Balance</th>
+                                    <th class="text-end">Available</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -101,6 +105,7 @@ else if (_customer is not null)
                                         </td>
                                         <td><span class="badge bg-secondary">@acc.AccountType</span></td>
                                         <td class="text-end">@acc.Balance.ToString("C",  new System.Globalization.CultureInfo("en-ZA"))</td>
+                                        <td class="text-end text-muted">@acc.AvailableBalance.ToString("C",  new System.Globalization.CultureInfo("en-ZA"))</td>
                                     </tr>
                                 }
                             </tbody>
@@ -143,4 +148,9 @@ else
         }
         _loading = false;
     }
+
+    private static string? PendingNote(decimal? pendingAmount) =>
+        pendingAmount is > 0
+            ? $"+ {pendingAmount.Value.ToString("C", new System.Globalization.CultureInfo("en-ZA"))} pending"
+            : null;
 }

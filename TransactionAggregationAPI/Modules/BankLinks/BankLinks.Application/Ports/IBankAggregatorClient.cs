@@ -1,4 +1,3 @@
-using Modules.BankLinks.Application.DTOs;
 using Modules.BankLinks.Domain.ValueObjects;
 
 namespace Modules.BankLinks.Application.Ports

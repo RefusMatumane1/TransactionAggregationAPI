@@ -1,14 +1,14 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Modules.Customers.Application.Features.CreateCustomer;
+using Modules.Customers.Application.Ports;
+using Modules.Customers.Domain;
+using Modules.Customers.Domain.ValueObjects;
+using Modules.Customers.Infrastructure.Persistence;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.Features.CreateCustomer;
-using Modules.Customers.Domain;
-using Modules.Customers.Domain.ValueObjects;
-using Modules.Customers.Infrastructure.Persistence;
-using Modules.Customers.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

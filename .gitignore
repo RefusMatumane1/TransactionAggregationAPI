@@ -55,3 +55,11 @@ nunit-*.xml
 *.vs
 # AI tooling scratch state
 .claude-flow/
+**/.claude/settings.local.json
+
+# Per-user IDE and OS files
+*.user
+.DS_Store
+
+# Mock aggregator consents (development state)
+**/TransactionAggregation.MockAggregator/App_Data/

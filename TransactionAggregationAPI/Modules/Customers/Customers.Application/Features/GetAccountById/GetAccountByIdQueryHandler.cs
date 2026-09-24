@@ -1,11 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Customers.Application.DTOs;
+using Modules.Customers.Application.Errors;
+using Modules.Customers.Application.Persistence;
+using Modules.Customers.Contracts;
 using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Application.DTOs;
-using Modules.Customers.Application.Persistence;
-using Modules.Customers.Contracts;
 
 namespace Modules.Customers.Application.Features.GetAccountById
 {
@@ -22,16 +23,17 @@ namespace Modules.Customers.Application.Features.GetAccountById
             logger.LogInformation("Handling GetAccountByIdQuery for AccountId: {AccountId}", request.AccountId);
 
             var accountId = AccountId.CreateFrom(request.AccountId);
+            var customerId = CustomerId.CreateFrom(request.CustomerId);
 
             var account = await _context.Accounts
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == accountId, cancellationToken);
+                .FirstOrDefaultAsync(a => a.Id == accountId && a.CustomerId == customerId, cancellationToken);
 
             if (account is null)
             {
                 logger.LogWarning("Account {AccountId} not found", request.AccountId);
                 return Result.Failure<AccountDto>(
-                    Error.NotFound("Account", request.AccountId));
+                    AccountErrors.NotFound(request.AccountId));
             }
 
             // Account.Balance is never maintained by any handler (Credit()/Debit() are
@@ -46,11 +48,13 @@ namespace Modules.Customers.Application.Features.GetAccountById
                 account.AccountNumber,
                 account.AccountName,
                 account.AccountType,
-                balance,
+                balance.Booked,
                 account.Currency,
                 account.IsActive,
                 account.CreatedAt,
-                account.UpdatedAt);
+                account.UpdatedAt,
+                balance.Pending,
+                balance.Available);
 
             return Result.Success(dto);
         }

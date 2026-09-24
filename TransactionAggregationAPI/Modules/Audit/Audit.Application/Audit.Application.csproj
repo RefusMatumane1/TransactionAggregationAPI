@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Audit.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<!-- IAuditDbContext exposes DbSet<T> — EF Core is referenced for that type only;
+		     the concrete provider/DbContext stays in Infrastructure. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Audit.Domain\Audit.Domain.csproj" />
+		<ProjectReference Include="..\Audit.Contracts\Audit.Contracts.csproj" />
+	</ItemGroup>
+</Project>

@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
-using SharedKernel.Common.ValueObjects;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.BankLinks.Infrastructure.Persistence
 {

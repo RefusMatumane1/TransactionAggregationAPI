@@ -17,8 +17,8 @@ Keyset/cursor pagination avoids both problems but gives up "jump to page N"
 and requires the client to carry an opaque cursor instead of a page number.
 
 ## Decision
-Use offset pagination (`PaginatedResponse<T>`, `PagedResult<T>`) for the
-customer-facing transaction/customer list endpoints, backed by the composite
+Use offset pagination (`PaginatedResponse<T>`) for the customer-facing
+transaction list endpoints, backed by the composite
 indexes already in place (`CustomerId+Date+Category`, `CustomerId+Status`),
 which make `ORDER BY Date ... OFFSET ... LIMIT ...` for a single customer's
 transactions efficient at realistic per-customer row counts (thousands, not

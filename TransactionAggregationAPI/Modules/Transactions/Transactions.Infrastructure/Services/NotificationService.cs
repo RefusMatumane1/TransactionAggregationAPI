@@ -1,12 +1,13 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Application.Common.Outbox;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.ValueObjects;
 using System.Text;
 using System.Text.Json;
-using SharedKernel.Common.Interfaces;
-using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
-using Modules.Transactions.Domain.Entities;
 
 namespace Modules.Transactions.Infrastructure.Services
 {
@@ -148,6 +149,39 @@ namespace Modules.Transactions.Infrastructure.Services
             }
         }
 
+        /// <summary>
+        /// Duplicates are already dropped by the time this runs, and SendWebhookAsync never
+        /// throws — a failed or unconfigured alert channel can't affect ingestion.
+        /// </summary>
+        public async Task SendDuplicateInboundAlertAsync(
+            DuplicateInboundDetectedOutboxPayload duplicate,
+            CancellationToken cancellationToken = default)
+        {
+            _logger.LogWarning(
+                "Duplicate inbound {Level} from {SourceName} for account {ExternalAccountId}: {DuplicateCount} transaction(s) dropped {DuplicateExternalIds} (inbox message {InboxMessageId})",
+                duplicate.Level,
+                duplicate.SourceName,
+                duplicate.ExternalAccountId,
+                duplicate.DuplicateExternalIds.Count,
+                duplicate.DuplicateExternalIds,
+                duplicate.InboxMessageId);
+
+            if (!string.IsNullOrWhiteSpace(_options.DuplicateAlertWebhookUrl))
+            {
+                await SendWebhookAsync(_options.DuplicateAlertWebhookUrl, new
+                {
+                    alert_type = "duplicate_inbound",
+                    level = duplicate.Level,
+                    source_name = duplicate.SourceName,
+                    external_account_id = duplicate.ExternalAccountId,
+                    customer_id = duplicate.CustomerId,
+                    inbox_message_id = duplicate.InboxMessageId,
+                    duplicate_external_ids = duplicate.DuplicateExternalIds,
+                    detected_at = duplicate.DetectedAt
+                }, cancellationToken);
+            }
+        }
+
         private async Task SendEmailAsync(string to, string subject, string body, CancellationToken ct, bool isHtml = false)
         {
             await Task.CompletedTask;
@@ -174,5 +208,8 @@ namespace Modules.Transactions.Infrastructure.Services
         public string FraudWebhookUrl { get; set; } = "https://webhook.site/fraud-alerts";
         public bool EnablePushNotifications { get; set; } = true;
         public string SmsEnabled { get; set; } = "true";
+
+        /// <summary>Empty disables the webhook; duplicates are still logged and counted.</summary>
+        public string DuplicateAlertWebhookUrl { get; set; } = string.Empty;
     }
 }

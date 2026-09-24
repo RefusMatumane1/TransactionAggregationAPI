@@ -1,7 +1,7 @@
+using Modules.BankLinks.Domain.ValueObjects;
 using SharedKernel.Common;
 using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
-using Modules.BankLinks.Domain.ValueObjects;
 
 namespace Modules.BankLinks.Domain
 {

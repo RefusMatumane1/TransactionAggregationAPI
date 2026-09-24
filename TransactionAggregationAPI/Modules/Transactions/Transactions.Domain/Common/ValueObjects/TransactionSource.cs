@@ -1,5 +1,5 @@
-﻿using SharedKernel.Exceptions;
-using SharedKernel.Common.ValueObjects;
+﻿using SharedKernel.Common.ValueObjects;
+using SharedKernel.Exceptions;
 
 namespace Modules.Transactions.Domain.Common.ValueObjects
 {

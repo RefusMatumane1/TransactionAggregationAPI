@@ -1,9 +1,9 @@
-using SharedKernel.Common;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Domain.Events;
 using Modules.Transactions.Domain.Events.Transaction;
+using SharedKernel.Common;
+using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
 
 namespace Modules.Transactions.Domain.Entities
@@ -106,6 +106,57 @@ namespace Modules.Transactions.Domain.Entities
             UpdatedAt = DateTime.UtcNow;
 
         }
+
+        /// <summary>
+        /// Optimistic-concurrency token (mapped to Postgres' xmin system column, so no schema
+        /// change). Ingestion settling a row and the expiry job expiring it can race; without
+        /// this the later write silently wins, and an expiry could overwrite a real posting.
+        /// </summary>
+        public uint Version { get; private set; }
+
+        /// <summary>
+        /// The bank has posted (booked) this transaction. A posting can differ from the pending
+        /// authorisation it replaces — tips, currency conversion, a later value date — so the
+        /// bank's posted amount/date overwrite ours when supplied. Idempotent for an already
+        /// settled transaction; a voided one (rejected/cancelled/refunded) can't be settled.
+        /// An Expired one can: expiry was only our guess that the posting would never come.
+        /// </summary>
+        public void Settle(Money? postedAmount = null, DateTime? postedDate = null)
+        {
+            if (Status == TransactionStatus.Settled)
+                return;
+
+            if (Status is TransactionStatus.Rejected or TransactionStatus.Cancelled or TransactionStatus.Refunded)
+                throw new DomainException($"Cannot settle a transaction with status {Status}");
+
+            if (postedAmount is not null)
+                Amount = postedAmount;
+            if (postedDate is { } date)
+                Date = date;
+
+            Status = TransactionStatus.Settled;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Gives up on a pending authorisation the bank never posted. Only a Pending
+        /// transaction can expire — anything else already has a final answer.
+        /// </summary>
+        public void Expire()
+        {
+            if (Status != TransactionStatus.Pending)
+                throw new DomainException($"Only a pending transaction can expire (status is {Status})");
+
+            Status = TransactionStatus.Expired;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// How long this has been pending as far as we know: counted from whichever is later,
+        /// the bank's transaction date or when we received it — so an old authorisation that
+        /// only just arrived still gets the full window to be posted.
+        /// </summary>
+        public DateTime PendingSince => Date > CreatedAt ? Date : CreatedAt;
 
         public void Reject(string reason, string rejectedBy = "System")
         {

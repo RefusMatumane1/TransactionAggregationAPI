@@ -1,44 +1,70 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Contracts;
 using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Domain.Services;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Adapters
 {
     /// <summary>
     /// Implements the port Customers owns. Lives here (not in Customers) because it needs
     /// direct access to the Transaction entity and ITransactionsDbContext — neither of
-    /// which Customers should depend on. Sums the same way
-    /// GetAccountByIdQueryHandler/GetCustomerAccountsQueryHandler used to before the
-    /// Customers extraction. Wired to IAccountBalanceProvider in Program.cs.
+    /// which Customers should depend on. Registered by Transactions.Infrastructure's AddTransactionsModule.
+    ///
+    /// Uses the shared TransactionTotals rule: the balance is booked (Settled) transactions
+    /// only; pending ones are reported separately; every other status counts toward neither.
     /// </summary>
     public sealed class TransactionBalanceProvider(ITransactionsDbContext _context) : IAccountBalanceProvider
     {
-        public async Task<decimal> GetBalanceAsync(Guid accountId, CancellationToken cancellationToken = default)
+        public async Task<AccountBalance> GetBalanceAsync(Guid accountId, CancellationToken cancellationToken = default)
         {
             var accountIdVo = AccountId.CreateFrom(accountId);
 
-            return await _context.Transactions
+            var rows = await _context.Transactions
                 .AsNoTracking()
                 .Where(t => t.AccountId == accountIdVo)
-                .SumAsync(t => t.Amount.Amount, cancellationToken);
+                .Select(t => new { t.Status, t.Amount.Amount })
+                .ToListAsync(cancellationToken);
+
+            return Summarise(rows.Select(r => (r.Status, r.Amount)));
         }
 
-        public async Task<IReadOnlyDictionary<Guid, decimal>> GetBalancesByCustomerAsync(
+        public async Task<IReadOnlyDictionary<Guid, AccountBalance>> GetBalancesByCustomerAsync(
             Guid customerId,
             CancellationToken cancellationToken = default)
         {
             var customerIdVo = CustomerId.CreateFrom(customerId);
 
-            var balances = (await _context.Transactions
+            var rows = await _context.Transactions
                 .AsNoTracking()
                 .Where(t => t.CustomerId == customerIdVo && t.AccountId != null)
-                .Select(t => new { AccountId = t.AccountId!.Value, t.Amount.Amount })
-                .ToListAsync(cancellationToken))
-                .GroupBy(t => t.AccountId)
-                .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
+                .Select(t => new { AccountId = t.AccountId!.Value, t.Status, t.Amount.Amount })
+                .ToListAsync(cancellationToken);
 
-            return balances;
+            return rows
+                .GroupBy(r => r.AccountId)
+                .ToDictionary(g => g.Key, g => Summarise(g.Select(r => (r.Status, r.Amount))));
+        }
+
+        private static AccountBalance Summarise(IEnumerable<(TransactionStatus Status, decimal Amount)> rows)
+        {
+            decimal booked = 0, pendingDebits = 0, pendingCredits = 0;
+
+            foreach (var (status, amount) in rows)
+            {
+                if (TransactionTotals.CountsAsBooked(status))
+                    booked += amount;
+                else if (TransactionTotals.CountsAsPending(status))
+                {
+                    if (amount < 0)
+                        pendingDebits += amount;
+                    else
+                        pendingCredits += amount;
+                }
+            }
+
+            return new AccountBalance(booked, pendingDebits, pendingCredits);
         }
     }
 }

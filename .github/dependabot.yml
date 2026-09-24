@@ -16,3 +16,13 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # Base images are pinned by digest; this keeps those digests current.
+  - package-ecosystem: docker
+    directories:
+      - /TransactionAggregationAPI/TransactionAggregationAPI
+      - /TransactionAggregationAPI/TransactionAggregation.Worker
+      - /TransactionAggregationAPI/TransactionAggregation.MockAggregator
+      - /TransactionAggregationAPI/TransactionAggregationUI
+    schedule:
+      interval: weekly

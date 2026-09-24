@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/component: message-broker
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: kafka
+  ports:
+    # In-cluster clients (API, Kafka UI) — must match the kafka:9093 advertised listener.
+    - name: internal
+      port: 9093
+      targetPort: internal
+      protocol: TCP
+    # Only for `kubectl port-forward svc/kafka 9092:9092` (advertised as localhost:9092).
+    - name: host
+      port: 9092
+      targetPort: host
+      protocol: TCP

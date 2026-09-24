@@ -109,6 +109,7 @@ html, body {
 .badge-Refunded  { background-color: #06b6d4; color: #fff; }
 .badge-Disputed  { background-color: #8b5cf6; color: #fff; }
 .badge-Cancelled { background-color: #94a3b8; color: #fff; }
+.badge-Expired   { background-color: #cbd5e1; color: #334155; }
 
 /* ── Tables ────────────────────────────────── */
 .table-hover tbody tr:hover {
@@ -124,4 +125,25 @@ html, body {
 /* ── Blazor error UI ───────────────────────── */
 #blazor-error-ui {
     display: none;
+}
+
+/* ── Audit trail (admin) ───────────────────────────────────────────── */
+.audit-badge   { font-weight: 500; }
+.audit-good    { background-color: #16a34a; color: #fff; }
+.audit-info    { background-color: #2563eb; color: #fff; }
+.audit-warn    { background-color: #d97706; color: #fff; }
+.audit-bad     { background-color: #dc2626; color: #fff; }
+.audit-neutral { background-color: #64748b; color: #fff; }
+
+.audit-row { cursor: pointer; }
+.audit-detail { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.audit-expanded > td { background-color: #f8fafc; border-top: 0; }
+.audit-metadata { padding: .25rem 0 .5rem; }
+
+.audit-timeline { border-left: 2px solid #e2e8f0; margin-left: .5rem; padding-left: 1.25rem; }
+.audit-timeline-item { position: relative; padding-bottom: 1rem; }
+.audit-timeline-item::before {
+    content: ""; position: absolute; left: -1.62rem; top: .35rem;
+    width: .75rem; height: .75rem; border-radius: 50%;
+    background: #fff; border: 2px solid #94a3b8;
 }

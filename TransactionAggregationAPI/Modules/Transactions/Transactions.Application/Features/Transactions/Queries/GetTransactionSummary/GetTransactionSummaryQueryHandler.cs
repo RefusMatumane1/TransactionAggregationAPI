@@ -1,12 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Abstractions;
 using Modules.Transactions.Application.Common.DTOs;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
-using SharedKernel.Common.Models;
 using Modules.Transactions.Application.Common.Models;
 using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Services;
+using SharedKernel.Abstractions;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.Models;
 using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
@@ -32,33 +33,26 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
 
-            if (!transactions.Any())
-            {
-                return Result.Success(new TransactionSummaryDto(
-                    TotalIncome: 0,
-                    TotalExpenses: 0,
-                    NetBalance: 0,
-                    SpendingByCategory: new Dictionary<Domain.Enums.TransactionCategory, decimal>(),
-                    TotalTransactions: 0,
-                    MonthlySummaries: Array.Empty<MonthlySummaryDto>()));
-            }
+            // Money figures come from booked transactions only; pending is reported alongside.
+            var booked = transactions.Where(t => TransactionTotals.CountsAsBooked(t.Status)).ToList();
+            var pending = transactions.Where(t => TransactionTotals.CountsAsPending(t.Status)).ToList();
 
-            var totalIncome = transactions
+            var totalIncome = booked
                 .Where(t => t.Amount.Amount > 0)
                 .Sum(t => t.Amount.Amount);
 
-            var totalExpenses = transactions
+            var totalExpenses = booked
                 .Where(t => t.Amount.Amount < 0)
                 .Sum(t => Math.Abs(t.Amount.Amount));
 
-            var spendingByCategory = transactions
+            var spendingByCategory = booked
                 .Where(t => t.Amount.Amount < 0)
                 .GroupBy(t => t.Category)
                 .ToDictionary(
                     g => g.Key,
                     g => g.Sum(t => Math.Abs(t.Amount.Amount)));
 
-            var monthlySummaries = transactions
+            var monthlySummaries = booked
                 .GroupBy(t => new { t.Date.Year, t.Date.Month })
                 .OrderBy(g => g.Key.Year)
                 .ThenBy(g => g.Key.Month)
@@ -77,9 +71,12 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 })
                 .ToList();
 
+            var pendingIncome = pending.Where(t => t.Amount.Amount > 0).Sum(t => t.Amount.Amount);
+            var pendingExpenses = pending.Where(t => t.Amount.Amount < 0).Sum(t => Math.Abs(t.Amount.Amount));
+
             _logger.LogInformation(
-                "Summary for customer {CustomerId}: {TransactionCount} transactions, income {Income}, expenses {Expenses}",
-                request.CustomerId, transactions.Count, totalIncome, totalExpenses);
+                "Summary for customer {CustomerId}: {TransactionCount} transactions ({BookedCount} booked, {PendingCount} pending), income {Income}, expenses {Expenses}",
+                request.CustomerId, transactions.Count, booked.Count, pending.Count, totalIncome, totalExpenses);
 
             return Result.Success(new TransactionSummaryDto(
                 TotalIncome: totalIncome,
@@ -87,7 +84,11 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 NetBalance: totalIncome - totalExpenses,
                 SpendingByCategory: spendingByCategory,
                 TotalTransactions: transactions.Count,
-                MonthlySummaries: monthlySummaries));
+                MonthlySummaries: monthlySummaries,
+                CompletedTransactions: booked.Count,
+                PendingTransactions: pending.Count,
+                PendingIncome: pendingIncome,
+                PendingExpenses: pendingExpenses));
         }
     }
 }

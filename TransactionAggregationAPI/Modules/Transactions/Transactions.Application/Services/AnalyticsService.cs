@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.Interfaces;
 
 namespace Modules.Transactions.Application.Services
 {

@@ -33,6 +33,9 @@ data:
   # Set to the real deployed SPA origin(s); an empty/unset value here means production
   # gets no CORS-allowed origins at all, not a silent wildcard.
   Cors__AllowedOrigins__0: "https://transaction.local"
+  # Only the ingress controller may set X-Forwarded-For (k3s default pod CIDR); anything
+  # else arriving with the header is ignored. Adjust to the cluster's pod network.
+  ForwardedHeaders__KnownNetworks__0: "10.42.0.0/16"
 
   # ── PostgreSQL (non-secret parts) ─────────────────────────────────────
   POSTGRES_HOST: "postgres"
@@ -44,6 +47,29 @@ data:
   # Full Aspire/StackExchange.Redis connection string.
   # abortConnect=false prevents startup failures when Redis is briefly unavailable.
   REDIS_CONNECTION_STRING: "redis:6379,abortConnect=false"
+
+  # ── Kafka (second inbound channel for bank transactions) ──────────────
+  # Bootstrap servers for ConnectionStrings__kafka (mapped in worker/deployment.yaml). The
+  # consumer stores each record in the inbox exactly like the REST webhook does — see
+  # BankTransactionsKafkaConsumer. Remove the ConnectionStrings__kafka mapping (or set
+  # Kafka__Enabled to "false") to run REST-only without a broker. The group id keeps its
+  # historical "-api" name so offsets committed before the worker split still apply.
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9093"
+  Kafka__Enabled: "true"
+  Kafka__BankTransactionsTopic: "bank-transactions"
+  Kafka__DeadLetterTopic: "bank-transactions.dlq"
+  # One consumer group across all worker replicas: partitions are split between pods, so
+  # TopicPartitions caps how many replicas actually consume in parallel.
+  Kafka__GroupId: "transaction-aggregation-api"
+  # SourceName applies only to records without a "source" header; a header must name an
+  # active WebhookSource (admin UI) or the record is dead-lettered. Set RequireSourceHeader
+  # to "true" once every producer sends the header.
+  Kafka__SourceName: "kafka-bank-aggregator"
+  Kafka__RequireSourceHeader: "false"
+  Kafka__CreateTopics: "true"
+  Kafka__TopicPartitions: "6"
+  Kafka__TopicReplicationFactor: "1"
+  Kafka__MaxRetryBackoffSeconds: "60"
 
   # ── Seq structured logging ────────────────────────────────────────────
   SEQ_URL: "http://seq:80"
@@ -80,6 +106,8 @@ data:
   NotificationOptions__FraudWebhookUrl: "https://your-webhook.com/fraud-alerts"
   NotificationOptions__EnablePushNotifications: "true"
   NotificationOptions__SmsEnabled: "true"
+  # Where DuplicateInboundDetected alerts are POSTed; empty = log + metric only.
+  NotificationOptions__DuplicateAlertWebhookUrl: ""
 
   # ── Transactional outbox dispatcher ────────────────────────────────────
   # Polls OutboxMessages for cache-invalidation/analytics/notification side effects queued by
@@ -95,6 +123,15 @@ data:
   Inbox__PollIntervalSeconds: "5"
   Inbox__BatchSize: "50"
   Inbox__MaxAttempts: "5"
+
+  # ── Pending-transaction expiry ─────────────────────────────────────────
+  # Pending authorisations the bank never posts are expired after this many days so they
+  # stop counting toward pending/available figures (a late posting still settles them).
+  # Safe with multiple replicas — see PendingExpiryBackgroundService.
+  PendingExpiry__Enabled: "true"
+  PendingExpiry__ExpireAfterDays: "7"
+  PendingExpiry__CheckIntervalMinutes: "60"
+  PendingExpiry__BatchSize: "200"
 
   # ── Serilog (minimal; code wires Seq from ConnectionStrings:seq) ───────
   Serilog__MinimumLevel__Default: "Information"

@@ -1,7 +1,7 @@
-﻿using System;
+﻿using SharedKernel.Common.ValueObjects;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Domain.Common.ValueObjects
 {

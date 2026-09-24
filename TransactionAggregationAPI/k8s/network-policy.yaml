@@ -5,7 +5,7 @@
 # need enforcement.
 # ────────────────────────────────────────────────────────────────────────────
 
-# Allow API → Postgres
+# Allow API + worker → Postgres
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -20,6 +20,9 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: transaction-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-worker
       ports:
         - protocol: TCP
           port: 5432
@@ -33,7 +36,7 @@ spec:
           port: 5432
 
 ---
-# Allow API → Redis
+# Allow API + worker → Redis
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -48,12 +51,15 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: transaction-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-worker
       ports:
         - protocol: TCP
           port: 6379
 
 ---
-# Allow API → Seq (log ingestion)
+# Allow API + worker → Seq (log ingestion)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -68,11 +74,39 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: transaction-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-worker
       ports:
         - protocol: TCP
           port: 80
         - protocol: TCP
           port: 5341
+
+---
+# Allow worker → Kafka (consumer + DLQ producer) and Kafka UI → Kafka (dev-tools)
+# Only the in-cluster listener; 9092 is for kubectl port-forward, which bypasses
+# NetworkPolicy anyway.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-clients-to-kafka
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kafka
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-worker
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kafka-ui
+      ports:
+        - protocol: TCP
+          port: 9093
 
 ---
 # Allow UI nginx proxy → API
@@ -170,6 +204,26 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: transaction-api
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080
+
+---
+# Allow Prometheus → worker (scraping /metrics on port 8080)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-to-worker
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-worker
   ingress:
     - from:
         - podSelector:

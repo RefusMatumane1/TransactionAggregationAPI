@@ -68,7 +68,7 @@ spec:
         - name: transaction-api
           # Replace with your actual image from a registry.
           # Build with: docker build -t <registry>/transactionaggregationapi:1.0.0 .
-          image: transactionaggregationapi:latest
+          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
           imagePullPolicy: IfNotPresent
 
           # ── Container-level hardening ───────────────────────────────────
@@ -121,6 +121,9 @@ spec:
                 configMapKeyRef:
                   name: transaction-api-config
                   key: SEQ_URL
+
+            # No ConnectionStrings__kafka: the Kafka consumer runs in the worker
+            # (k8s/worker/deployment.yaml), not in the API.
 
             # Keycloak__Authority/PublicIssuer/Realm/Audience (non-secret) come from
             # transaction-api-config via envFrom above.

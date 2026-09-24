@@ -1,6 +1,6 @@
 using FluentAssertions;
-using Modules.WebhookSources.Domain;
 using Modules.WebhookSources.Application.Features.GetWebhookSources;
+using Modules.WebhookSources.Domain;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -24,8 +24,8 @@ public class GetWebhookSourcesQueryHandlerTests
     public async Task Handle_MultipleSources_ReturnsThemOrderedByName_WithoutKeyMaterial()
     {
         var context = InMemoryWebhookSourcesDbContextFactory.Create();
-        var (sourceB, _) = WebhookSource.Create("b-source");
-        var (sourceA, _) = WebhookSource.Create("a-source");
+        var (sourceB, _) = WebhookSource.Create("b-source", TestInstitutions.All);
+        var (sourceA, _) = WebhookSource.Create("a-source", TestInstitutions.All);
         context.WebhookSources.AddRange(sourceB, sourceA);
         await context.SaveChangesAsync();
         var handler = new GetWebhookSourcesQueryHandler(context);
@@ -39,7 +39,7 @@ public class GetWebhookSourcesQueryHandlerTests
     public async Task Handle_Source_MapsIsActiveAndTimestamps()
     {
         var context = InMemoryWebhookSourcesDbContextFactory.Create();
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
         source.Deactivate();
         context.WebhookSources.Add(source);
         await context.SaveChangesAsync();

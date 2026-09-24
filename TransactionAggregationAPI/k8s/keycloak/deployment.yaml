@@ -46,10 +46,14 @@ spec:
             # Fixed so the `iss` claim on every issued token matches Keycloak__PublicIssuer
             # (transaction-api-config) regardless of whether a request came in through the
             # ingress hostname or the in-cluster service DNS — see Program.cs.
+            # Full URL (Keycloak 25+ hostname v2): pins the issuer's scheme too, instead of
+            # deriving it from proxy headers. BACKCHANNEL_DYNAMIC keeps the API's in-cluster
+            # metadata/JWKS calls on the service DNS name. KC_HOSTNAME_STRICT_HTTPS was a v1
+            # option and is ignored by v2.
             - name: KC_HOSTNAME
-              value: keycloak.transaction.local
-            - name: KC_HOSTNAME_STRICT_HTTPS
-              value: "false"
+              value: http://keycloak.transaction.local
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
             - name: KC_HTTP_ENABLED
               value: "true"
 

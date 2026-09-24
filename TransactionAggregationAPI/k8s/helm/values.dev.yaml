@@ -37,3 +37,7 @@ devTools:
     enabled: true
     ingress:
       host: redis-commander.transaction.local
+  kafkaUi:
+    enabled: true
+    ingress:
+      host: kafka-ui.transaction.local

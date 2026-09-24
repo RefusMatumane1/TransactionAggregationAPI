@@ -1,10 +1,10 @@
-using MediatR;
-using Microsoft.Extensions.Logging;
-using System.Text.Json;
 using BuildingBlocks.Messaging.Outbox;
 using BuildingBlocks.Messaging.Persistence;
+using MediatR;
+using Microsoft.Extensions.Logging;
 using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Domain.Events.Transaction;
+using System.Text.Json;
 
 namespace Modules.Transactions.Application.Features.Transactions.Events
 {

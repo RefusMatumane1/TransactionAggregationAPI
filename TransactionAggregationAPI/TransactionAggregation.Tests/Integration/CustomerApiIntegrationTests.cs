@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using System.Net;
-using System.Net.Http.Json;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Common.ValueObjects;
+using System.Net;
+using System.Net.Http.Json;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration

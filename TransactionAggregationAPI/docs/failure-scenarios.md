@@ -37,14 +37,17 @@ during this review (not inferred from the architecture alone).
   operations. **Exception**: bank-link initiation depends on Redis for OAuth
   state and will legitimately fail until Redis recovers — a narrow, accepted
   scope, not an oversight.
-- **Startup-time fix, this review**: if Redis-backed Data Protection key
-  persistence can't be set up at all (no connection string, or a malformed
-  one), the app now explicitly falls back to `UseEphemeralDataProtectionProvider()`.
-  Previously the code logged that it would do exactly this and then didn't —
-  leaving Data Protection on ASP.NET Core's implicit default, which in a
-  container is ambiguous and could attempt a local file write that fails.
-  Verified live: both the missing-connection-string and malformed-connection-
-  string paths now start cleanly with no unhandled exception.
+- **Startup policy (changed, this review)**: outside Development a missing Redis
+  connection string is a **startup failure**, not a fallback. The previous fallback to
+  ephemeral Data Protection keys let a misconfigured production pod start "healthy" and
+  then make every stored bank-link token undecryptable on its next restart. The OAuth
+  state also used to live in an in-process cache, which broke bank linking whenever the
+  API ran more than one replica (callback on a different pod). Both now use Redis through
+  the shared multiplexer (`HostingExtensions.AddSharedState`). A Redis *outage* at runtime
+  still degrades as described above rather than failing requests. Development keeps the
+  ephemeral/in-process fallbacks so the app runs without Redis.
+  Verified by starting the built API image as Production without `ConnectionStrings:redis`:
+  it exits at startup with an explanatory `InvalidOperationException`.
 
 ## 3. Provider (bank aggregator) unavailable
 - **Detection**: Outbound HTTP calls through `IBankAggregatorClient` fail;
@@ -295,6 +298,69 @@ reads exactly 1). No alert rule is wired up against these yet — that's a
 Grafana/Prometheus configuration step outside this repo's code, tracked in
 the production readiness checklist under "Dashboards/alerting configured in
 a real environment."
+
+## 17a. Permanent vs transient failures (typed classification)
+Since this review, retrying is no longer the answer to every failure. `FailureClassifier`
+(`BuildingBlocks.Messaging`) sorts each inbox/outbox failure:
+
+| Kind | Examples | Handling |
+|---|---|---|
+| **Permanent** | `ErrorType.Forbidden` (source not authorized for the account's institution), `ErrorType.Validation`, `PoisonMessageException`/`JsonException` (undecodable payload), `DomainException`, an outbox message with a schema version newer than this dispatcher reads | Dead-lettered on the **first** attempt, audited, `*_dead_lettered_total` incremented |
+| **Transient** | Database/network/timeouts, `NotFound` (bank link not activated yet), `Conflict`, anything unrecognised | Exponential backoff (2 s … 300 s) up to `MaxAttempts`, then dead-lettered |
+
+`LastError` is truncated to its 2000-character column. Before this, an over-long error
+message made the status update itself fail, and the message cycled through stale-claim
+reclaims forever. Pinned by `FailureClassificationTests`.
+
+## 20. Transient database failure during the ingestion commit
+**Failure mode (fixed, this review):** `TransactionsDbContext.SaveChangesAsync` runs inside
+the retrying execution strategy (`EnableRetryOnFailure`). The first save used to accept its
+changes as soon as the rows were written. If the outbox flush or the `COMMIT` then failed
+transiently, the transaction rolled back, but the retry saw the transaction rows as
+`Unchanged` and committed only the outbox/audit rows. The inbox message was marked
+processed, and the transactions it announced were gone.
+
+- **Fix:** both contexts save with `acceptAllChangesOnSuccess: false`; changes are
+  accepted only after `CommitAsync` succeeds; domain events are dispatched once, outside
+  the retried lambda.
+- **Verification:** `IngestionIntegrityTests.SaveChanges_TransientFailureOnCommit_…` injects
+  a retryable `40001` in place of the first commit and asserts that the transaction row
+  and exactly one `TransactionSynced` outbox row both exist. The test fails against the
+  old code (verified by reverting the fix).
+- **Residual:** a commit whose outcome is unknown (connection lost *after* the server
+  committed) is retried and hits the unique index. The handler's conflict path treats that
+  as a duplicate, so there's no double insert, and any duplicate outbox row is harmless
+  because every consumer is idempotent.
+
+## 21. Source delivers for an account at an institution it doesn't serve
+A leaked or misconfigured source key naming another institution's `externalAccountId`.
+Processing applies the delivery only to links at the source's `AuthorizedInstitutions`
+([ADR-0013](adr/0013-webhook-source-institution-scoping.md)). If none remain, the inbox
+message is dead-lettered at once (permanent) with an `inbound.dead_lettered` audit event,
+and nothing is stored. If an admin later scopes the source correctly, replaying the
+delivery requeues it.
+
+## 22. Idempotency key reused for different content
+The same `Idempotency-Key` arrives with a different body. This is a sender bug, or a
+replayed key carrying new data. It used to be acknowledged as a duplicate, silently
+dropping the new transactions. Now: webhook → `422 Inbox.IdempotencyKeyReused` (audited
+as `inbound.rejected`); Kafka → dead-letter topic. The stored `PayloadHash` makes the
+comparison exact; rows written before the column existed are treated as matching.
+
+## 23. Kafka consumer loop dies
+A fatal broker error or a bug outside the per-record retry loop used to end the consumer
+thread with only a `LogCritical`. The worker stayed up, `/alive` stayed green, and
+ingestion stopped silently. Now the consumer sets exit code 1 and stops the host, so
+Kubernetes/compose restart the process, which rejoins the group at the last committed
+offset (no loss: offsets are only stored after a record settles).
+`kafka_bank_transactions_consumer_crashes_total` counts each occurrence.
+
+## 24. Deploy against an old schema
+The cluster runs as Production, where no pod self-migrates. `deploy-k8s.sh` used to apply
+the API directly and never ran the `db-migrate` Job, so a fresh cluster booted against an
+empty schema. It now runs the Job with the same image tag, waits for completion, and
+refuses to roll out the API if migrations fail. The CI job
+"Migrations in sync with the model" fails a PR whose model changed without a migration.
 
 ## 18. Invalid authentication
 - **Customer-facing API**: JWT validation (issuer, audience, lifetime, signing

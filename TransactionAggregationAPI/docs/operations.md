@@ -229,35 +229,25 @@ or the Job shows `Failed`.
 
 ## 6. Rolling back a bad deployment
 
-**Read this before an incident, not during one** — this repo has a real gap
-here, described honestly rather than papered over:
+Every image is tagged with the commit it was built from: `sha-<sha>` in CI (GHCR), and
+`$IMAGE_TAG` (default: git short sha) for local k3s builds. The manifests carry a
+`set-by-deploy-script` placeholder that `deploy-k8s.sh` replaces. Each ReplicaSet
+therefore references one immutable build, and `kubectl rollout undo` restores exactly
+the previous code. Base images are pinned by digest, so a rebuild of the same commit is
+the same image.
 
-`k8s/api/deployment.yaml` pins `image: transactionaggregationapi:latest`.
-Kubernetes' own rollback mechanism (`kubectl rollout undo
-deployment/transaction-api`) rolls back to the *previous ReplicaSet's pod
-template* — but if that previous template also said `:latest`, a rollback
-re-pulls whatever `:latest` currently resolves to (with `imagePullPolicy:
-IfNotPresent`, likely nothing changes at all, since the locally-cached image
-won't be re-pulled). **`kubectl rollout undo` will not reliably restore the
-previous code** under this manifest as it stands today. This is a real
-must-have gap for anyone relying on this repo's k8s manifests for an actual
-rollback — production deployments need a manifest pinned to an immutable,
-versioned tag (e.g. a git SHA or semver), not `:latest`.
-
-Until that's fixed, the actually-reliable rollback procedure is:
-
-1. Identify the last known-good image tag/build (from CI history or your own
-   build log — there is currently no automated deploy step recording this;
-   see the "Automated deployment to staging/production" row in
-   `production-readiness-checklist.md`).
-2. Rebuild or re-pull that specific version, tag it explicitly, and edit the
-   image directly:
+1. Roll back the workload to the previous revision, or to a specific known-good tag:
    ```bash
-   kubectl set image deployment/transaction-api \
-     transaction-api=<registry>/transactionaggregationapi:<known-good-tag> \
-     -n transaction-aggregation
-   kubectl rollout status deployment/transaction-api -n transaction-aggregation
+   kubectl rollout undo deployment/transaction-api -n transaction-aggregation
+   kubectl rollout undo deployment/transaction-worker -n transaction-aggregation
+   # or, to a named build:
+   IMAGE_TAG=<known-good-sha> ./deploy-k8s.sh
    ```
+   Re-running the script with an older `IMAGE_TAG` also re-runs `db-migrate` with that
+   image. EF Core migrations only apply *forward* (an older image finds its migrations
+   already applied), so it doesn't touch the schema. Read step 3 before assuming that's
+   safe.
+2. Watch the rollout: `kubectl rollout status deployment/transaction-api -n transaction-aggregation`.
 3. If the bad deploy included a database migration that isn't safely
    backward-compatible with the old code, rolling back the Deployment alone
    is not sufficient — this is exactly why ADR guidance favors expand/contract

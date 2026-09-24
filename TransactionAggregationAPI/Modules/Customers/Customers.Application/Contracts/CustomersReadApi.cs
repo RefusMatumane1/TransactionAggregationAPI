@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Application.Persistence;
 using Modules.Customers.Contracts;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Customers.Application.Contracts
 {

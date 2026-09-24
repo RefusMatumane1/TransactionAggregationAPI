@@ -1,7 +1,7 @@
-using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Outbox;
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres

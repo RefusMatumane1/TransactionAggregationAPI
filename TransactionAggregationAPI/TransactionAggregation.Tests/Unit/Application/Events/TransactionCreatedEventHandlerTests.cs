@@ -1,20 +1,20 @@
+using BuildingBlocks.Messaging.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using NSubstitute;
-using System.Text.Json;
-using SharedKernel.Common.Interfaces;
-using BuildingBlocks.Messaging.Persistence;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Application.Features.Transactions.Events;
 using Modules.Transactions.Application.Services;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Domain.Events.Transaction;
+using NSubstitute;
+using SharedKernel.Common.Interfaces;
+using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -128,7 +128,7 @@ public class TransactionCreatedEventHandlerTests
 
         await handler.Handle(new TransactionCreatedDomainEvent(transaction), CancellationToken.None);
 
-        await categorization.DidNotReceive().CategorizeTransactionAsync(Arg.Any<Transaction>(), Arg.Any<CancellationToken>());
+        await categorization.DidNotReceive().CategorizeTransactionAsync(Arg.Any<Transaction>(), Arg.Any<TransactionCategory?>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

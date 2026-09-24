@@ -9,5 +9,6 @@ public enum TransactionStatus
     Settled = 4,
     Refunded = 5,
     Disputed = 6,
-    Cancelled = 7
+    Cancelled = 7,
+    Expired = 8
 }

@@ -16,6 +16,12 @@ page.
   there is no cleanup/retention job for them either (see the "Cleanup/retention"
   gap noted in [ADR-0003](adr/0003-polling-inbox-outbox-not-a-broker.md) —
   worth a follow-up once dead-lettered message volume is measured).
+- Inbound audit events (`audit."AuditEvents"`, see
+  [ADR-0011](adr/0011-audit-trail-for-inbound-data.md)) are retained indefinitely
+  and are **append-only at the database level**: a trigger rejects UPDATE, DELETE and
+  TRUNCATE. Any retention purge must be a deliberate, reviewed script that disables
+  the trigger for its own transaction. The retention period is one of the open
+  questions below.
 - **There is no customer deletion capability at all.** The README's endpoint
   table lists `DELETE /customers/{id} — Delete account`, but no such endpoint
   exists in `CustomerEndpoints.cs` (the only `MapDelete` in the whole API is
@@ -37,7 +43,7 @@ page.
 | How long must transaction records be retained? | Unknown — banking/financial regulations in the operating jurisdiction(s) may mandate a minimum (commonly multi-year) retention period | Determines whether "retain forever" (current behavior) is actually compliant, over-retention (a liability/minimization concern), or under-retention |
 | Is there a maximum retention period, or a right-to-erasure obligation (e.g. POPIA in South Africa, given the ZAR currency and `.co.za` seed data, or GDPR if any EU customers)? | Unknown — not confirmed which regulatory regime applies | Determines whether indefinite retention is itself a compliance gap |
 | Must deleted customers' transaction history be retained for audit purposes even after account deletion? | Unknown | Directly conflicts with a naive "delete everything on customer delete" implementation if audit retention is required |
-| What counts as an audit trail requirement here — do `AuditEntry`-style records need their own extended retention independent of the source data? | No dedicated `AuditEntry` entity currently exists in the domain model (the brief listed it as a candidate entity, not a confirmed requirement) | If audit logging is legally required, it needs its own retention policy, likely longer than operational data |
+| What counts as an audit trail requirement here — do `AuditEntry`-style records need their own extended retention independent of the source data? | An inbound-data audit trail now exists (`AuditEvent`, ADR-0011): retained indefinitely and append-only. Its required retention period is still unconfirmed | If audit logging is legally required, it needs its own retention policy, likely longer than operational data |
 | Are there data residency requirements (e.g. data must stay in-region)? | Unknown — not evaluated; infrastructure/deployment region isn't specified in this repo | Affects where Postgres/backups/logs can physically live |
 | Does encryption-at-rest need to be field-level for PII (not just disk-level), and does encryption-in-transit need to be enforced end-to-end (TLS termination point matters)? | Assumed disk-level (Postgres/cloud provider) is sufficient today | A stricter regime may require field-level encryption for email/name, not just tokens |
 

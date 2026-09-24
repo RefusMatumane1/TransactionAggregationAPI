@@ -1,9 +1,9 @@
-using System.Reflection;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.BankLinks.Application.Contracts;
 using Modules.BankLinks.Contracts;
+using System.Reflection;
 
 namespace Modules.BankLinks
 {

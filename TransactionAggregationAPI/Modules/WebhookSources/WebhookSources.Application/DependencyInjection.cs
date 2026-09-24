@@ -1,9 +1,9 @@
-using System.Reflection;
 using FluentValidation;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.WebhookSources.Application.Contracts;
 using Modules.WebhookSources.Contracts;
+using System.Reflection;
 
 namespace Modules.WebhookSources
 {
@@ -21,6 +21,7 @@ namespace Modules.WebhookSources
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
 
             services.AddScoped<IWebhookSourceAuthenticator, WebhookSourceAuthenticator>();
+            services.AddScoped<IWebhookSourceDirectory, WebhookSourceDirectory>();
 
             return services;
         }

@@ -1,0 +1,439 @@
+@page "/admin/audit"
+@attribute [Authorize(Roles = "admin")]
+@inject AuditService AuditService
+@inject NavigationManager Nav
+
+<PageTitle>Audit Trail</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <h4 class="mb-0">Audit Trail</h4>
+    <form class="d-flex gap-2" @onsubmit="FindLineage">
+        <input class="form-control form-control-sm font-monospace" style="width:22rem"
+               placeholder="Transaction id: where did it come from?" @bind="_lineageLookup" />
+        <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">
+            <i class="bi bi-signpost-split me-1"></i>Trace origin
+        </button>
+    </form>
+</div>
+
+<p class="text-muted small">
+    Every inbound delivery (webhook or Kafka) and everything that happened to it afterwards: receipt,
+    replays, rejections, processing, and each transaction it carried. This history is append-only
+    and can't be edited or deleted.
+</p>
+
+@if (_lookupError is not null)
+{
+    <div class="alert alert-warning py-2">@_lookupError</div>
+}
+
+@if (Lineage is not null)
+{
+    <button class="btn btn-sm btn-link px-0 mb-2" @onclick="BackToSearch">
+        <i class="bi bi-arrow-left me-1"></i>Back to search
+    </button>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-warning">@_error</div>
+    }
+    else if (_lineage is not null)
+    {
+        <div class="card mb-3">
+            <div class="card-body">
+                <h6 class="card-title mb-3">
+                    Origin of transaction <span class="font-monospace">@_lineage.TransactionId</span>
+                </h6>
+                <div class="row g-3 small">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="text-muted">Channel</div>
+                        <div class="fs-6"><ChannelLabel Channel="@_lineage.Channel" /></div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="text-muted">Source</div>
+                        <div class="fs-6">@_lineage.SourceName</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="text-muted">Received</div>
+                        <div class="fs-6">@FormatTime(_lineage.ReceivedAt)</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="text-muted">Ingested</div>
+                        <div class="fs-6">@FormatTime(_lineage.IngestedAt)</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="text-muted">Bank's transaction id</div>
+                        <div class="font-monospace">@(_lineage.ExternalTransactionId ?? "—")</div>
+                    </div>
+                    <div class="col-sm-6 col-lg-9">
+                        <div class="text-muted">Delivery</div>
+                        @if (_lineage.InboxMessageId is { } inboxId)
+                        {
+                            <a href="@DeliveryUrl(inboxId)" class="font-monospace">@inboxId</a>
+                        }
+                        else
+                        {
+                            <span>—</span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="mb-2">Timeline</h6>
+        <ul class="audit-timeline list-unstyled">
+            @foreach (var e in _lineage.Events)
+            {
+                <li class="audit-timeline-item">
+                    <div class="d-flex flex-wrap align-items-baseline gap-2">
+                        <span class="text-muted small text-nowrap">@FormatTime(e.OccurredAt)</span>
+                        <EventBadge EventType="@e.EventType" />
+                        <span class="small">@e.Detail</span>
+                    </div>
+                    <MetadataTable Event="e" />
+                </li>
+            }
+        </ul>
+    }
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <div class="row g-2 align-items-end">
+                <div class="col-sm-6 col-md-2">
+                    <label class="form-label small">Channel</label>
+                    <select class="form-select form-select-sm" @bind="_draft.Channel">
+                        <option value="">All</option>
+                        @foreach (var channel in AuditVocabulary.Channels)
+                        {
+                            <option value="@channel">@channel</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label small">Event</label>
+                    <select class="form-select form-select-sm" @bind="_draft.EventType">
+                        <option value="">All</option>
+                        @foreach (var group in AuditVocabulary.EventTypes.GroupBy(e => e.Group))
+                        {
+                            <optgroup label="@group.Key">
+                                @foreach (var type in group)
+                                {
+                                    <option value="@type.Type">@type.Label</option>
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                </div>
+                <div class="col-sm-6 col-md-2">
+                    <label class="form-label small">Source</label>
+                    <input class="form-control form-control-sm" @bind="_draft.SourceName" placeholder="exact name" />
+                </div>
+                <div class="col-sm-6 col-md-2">
+                    <label class="form-label small">External account</label>
+                    <input class="form-control form-control-sm" @bind="_draft.ExternalAccountId" />
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label small">Bank's transaction id</label>
+                    <input class="form-control form-control-sm" @bind="_draft.ExternalTransactionId" />
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label small">From</label>
+                    <input type="datetime-local" class="form-control form-control-sm" @bind="_draft.From" />
+                </div>
+                <div class="col-sm-6 col-md-3">
+                    <label class="form-label small">To</label>
+                    <input type="datetime-local" class="form-control form-control-sm" @bind="_draft.To" />
+                </div>
+                <div class="col-md-6 d-flex flex-wrap gap-2 justify-content-md-end">
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" @onclick="() => ApplyRange(TimeSpan.FromHours(1))">1h</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => ApplyRange(TimeSpan.FromDays(1))">24h</button>
+                        <button class="btn btn-outline-secondary" @onclick="() => ApplyRange(TimeSpan.FromDays(7))">7d</button>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="Reset">Reset</button>
+                    <button class="btn btn-sm btn-primary" @onclick="Search">
+                        <i class="bi bi-search me-1"></i>Search
+                    </button>
+                </div>
+            </div>
+
+            @if (_filter.InboxMessageId is not null || _filter.TransactionId is not null)
+            {
+                <div class="mt-2 d-flex flex-wrap gap-2">
+                    @if (_filter.InboxMessageId is { } inbox)
+                    {
+                        <span class="badge rounded-pill text-bg-light border">
+                            Delivery <span class="font-monospace">@inbox</span>
+                            <button class="btn-close btn-close-sm ms-1 align-middle" style="font-size:.55rem"
+                                    title="Clear" @onclick="() => ClearScope(clearDelivery: true)"></button>
+                        </span>
+                    }
+                    @if (_filter.TransactionId is { } txn)
+                    {
+                        <span class="badge rounded-pill text-bg-light border">
+                            Transaction <span class="font-monospace">@txn</span>
+                            <button class="btn-close btn-close-sm ms-1 align-middle" style="font-size:.55rem"
+                                    title="Clear" @onclick="() => ClearScope(clearDelivery: false)"></button>
+                        </span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger py-2">@_error</div>
+    }
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-content-center py-5"><div class="spinner-border text-primary"></div></div>
+    }
+    else if (_page is { } results)
+    {
+        @if (results.Items.Count == 0)
+        {
+            <div class="alert alert-info">No audit events match these filters.</div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table table-hover align-middle small">
+                    <thead>
+                        <tr>
+                            <th style="width:1rem"></th>
+                            <th>Time</th>
+                            <th>Event</th>
+                            <th>Channel</th>
+                            <th>Source</th>
+                            <th>Account</th>
+                            <th>Detail</th>
+                            <th>Links</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var e in results.Items)
+                        {
+                            var expanded = _expanded.Contains(e.Id);
+                            <tr class="audit-row" @onclick="() => Toggle(e.Id)">
+                                <td><i class="bi @(expanded ? "bi-chevron-down" : "bi-chevron-right") text-muted"></i></td>
+                                <td class="text-nowrap">@FormatTime(e.OccurredAt)</td>
+                                <td><EventBadge EventType="@e.EventType" /></td>
+                                <td class="text-nowrap"><ChannelLabel Channel="@e.Channel" /></td>
+                                <td>@e.SourceName</td>
+                                <td class="font-monospace">@e.ExternalAccountId</td>
+                                <td class="audit-detail" title="@e.Detail">
+                                    @if (e.ExternalTransactionId is not null)
+                                    {
+                                        <span class="font-monospace me-1">@e.ExternalTransactionId</span>
+                                    }
+                                    @e.Detail
+                                </td>
+                                <td class="text-nowrap" @onclick:stopPropagation="true">
+                                    @if (e.InboxMessageId is { } inboxId && _filter.InboxMessageId != inboxId)
+                                    {
+                                        <a href="@DeliveryUrl(inboxId)" class="me-2" title="All events of this delivery">
+                                            <i class="bi bi-box-seam"></i> delivery
+                                        </a>
+                                    }
+                                    @if (e.TransactionId is { } transactionId)
+                                    {
+                                        <a href="@LineageUrl(transactionId)" title="Where this transaction came from">
+                                            <i class="bi bi-signpost-split"></i> origin
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                            @if (expanded)
+                            {
+                                <tr class="audit-expanded">
+                                    <td></td>
+                                    <td colspan="7"><MetadataTable Event="e" /></td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-center small">
+                <span class="text-muted">
+                    @results.TotalCount event@(results.TotalCount == 1 ? "" : "s") · page @results.PageNumber of @Math.Max(results.TotalPages, 1)
+                </span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-secondary" disabled="@(results.PageNumber <= 1)"
+                            @onclick="() => GoToPage(results.PageNumber - 1)">
+                        <i class="bi bi-chevron-left"></i> Newer
+                    </button>
+                    <button class="btn btn-outline-secondary" disabled="@(results.PageNumber >= results.TotalPages)"
+                            @onclick="() => GoToPage(results.PageNumber + 1)">
+                        Older <i class="bi bi-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    }
+}
+
+@code {
+    // Filters live in the query string so a filtered view (or a delivery / lineage drill-down)
+    // is a shareable link and the browser's back button undoes a drill-down.
+    [SupplyParameterFromQuery(Name = "channel")] public string? Channel { get; set; }
+    [SupplyParameterFromQuery(Name = "event")] public string? EventType { get; set; }
+    [SupplyParameterFromQuery(Name = "source")] public string? SourceName { get; set; }
+    [SupplyParameterFromQuery(Name = "account")] public string? ExternalAccountId { get; set; }
+    [SupplyParameterFromQuery(Name = "externalTxn")] public string? ExternalTransactionId { get; set; }
+    [SupplyParameterFromQuery(Name = "delivery")] public Guid? InboxMessageId { get; set; }
+    [SupplyParameterFromQuery(Name = "transaction")] public Guid? TransactionId { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] public int? PageNumber { get; set; }
+    [SupplyParameterFromQuery(Name = "lineage")] public Guid? Lineage { get; set; }
+
+    private const string LocalFormat = "yyyy-MM-ddTHH:mm";
+
+    private AuditFilter _filter = new();
+    private AuditFilter _draft = new();
+    private AuditEventPageModel? _page;
+    private TransactionLineageModel? _lineage;
+    private readonly HashSet<Guid> _expanded = [];
+    private bool _loading = true;
+    private string? _error;
+    private string? _lineageLookup;
+    private string? _lookupError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        _expanded.Clear();
+
+        if (Lineage is { } transactionId)
+        {
+            _lineageLookup = transactionId.ToString();
+            (_lineage, _error) = await AuditService.GetLineageAsync(transactionId);
+        }
+        else
+        {
+            _filter = FilterFromQuery();
+            _draft = Copy(_filter);
+            (_page, _error) = await AuditService.SearchAsync(_filter);
+        }
+
+        _loading = false;
+    }
+
+    private AuditFilter FilterFromQuery() => new()
+    {
+        Channel = Channel,
+        EventType = EventType,
+        SourceName = SourceName,
+        ExternalAccountId = ExternalAccountId,
+        ExternalTransactionId = ExternalTransactionId,
+        InboxMessageId = InboxMessageId,
+        TransactionId = TransactionId,
+        From = ParseLocal(From),
+        To = ParseLocal(To),
+        PageNumber = Math.Max(PageNumber ?? 1, 1)
+    };
+
+    private static AuditFilter Copy(AuditFilter f) => new()
+    {
+        Channel = f.Channel,
+        EventType = f.EventType,
+        SourceName = f.SourceName,
+        ExternalAccountId = f.ExternalAccountId,
+        ExternalTransactionId = f.ExternalTransactionId,
+        InboxMessageId = f.InboxMessageId,
+        TransactionId = f.TransactionId,
+        From = f.From,
+        To = f.To,
+        PageNumber = f.PageNumber
+    };
+
+    private static DateTime? ParseLocal(string? value) =>
+        DateTime.TryParseExact(value, LocalFormat, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.None, out var parsed) ? parsed : null;
+
+    private string SearchUrl(AuditFilter f) => Nav.GetUriWithQueryParameters("/admin/audit", new Dictionary<string, object?>
+    {
+        ["channel"] = Blank(f.Channel),
+        ["event"] = Blank(f.EventType),
+        ["source"] = Blank(f.SourceName),
+        ["account"] = Blank(f.ExternalAccountId),
+        ["externalTxn"] = Blank(f.ExternalTransactionId),
+        ["delivery"] = f.InboxMessageId,
+        ["transaction"] = f.TransactionId,
+        ["from"] = f.From?.ToString(LocalFormat),
+        ["to"] = f.To?.ToString(LocalFormat),
+        ["page"] = f.PageNumber > 1 ? f.PageNumber : null
+    });
+
+    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private string DeliveryUrl(Guid inboxMessageId) => SearchUrl(new AuditFilter { InboxMessageId = inboxMessageId });
+
+    private string LineageUrl(Guid transactionId) =>
+        Nav.GetUriWithQueryParameters("/admin/audit", new Dictionary<string, object?> { ["lineage"] = transactionId });
+
+    private void Search()
+    {
+        var next = Copy(_draft);
+        next.PageNumber = 1;
+        Nav.NavigateTo(SearchUrl(next));
+    }
+
+    private void Reset() => Nav.NavigateTo("/admin/audit");
+
+    private void ApplyRange(TimeSpan range)
+    {
+        _draft.To = null;
+        _draft.From = DateTime.Now.Subtract(range);
+        Search();
+    }
+
+    private void ClearScope(bool clearDelivery)
+    {
+        var next = Copy(_filter);
+        if (clearDelivery)
+            next.InboxMessageId = null;
+        else
+            next.TransactionId = null;
+        next.PageNumber = 1;
+        Nav.NavigateTo(SearchUrl(next));
+    }
+
+    private void GoToPage(int pageNumber)
+    {
+        var next = Copy(_filter);
+        next.PageNumber = pageNumber;
+        Nav.NavigateTo(SearchUrl(next));
+    }
+
+    private void BackToSearch() => Nav.NavigateTo("/admin/audit");
+
+    private void FindLineage()
+    {
+        _lookupError = null;
+        if (Guid.TryParse(_lineageLookup?.Trim(), out var transactionId))
+            Nav.NavigateTo(LineageUrl(transactionId));
+        else
+            _lookupError = "Enter a transaction id (GUID) to trace its origin.";
+    }
+
+    private void Toggle(Guid id)
+    {
+        if (!_expanded.Remove(id))
+            _expanded.Add(id);
+    }
+
+    private static string FormatTime(DateTime? utc) =>
+        utc is { } value ? DateTime.SpecifyKind(value, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "—";
+}

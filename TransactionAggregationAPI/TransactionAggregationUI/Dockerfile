@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
@@ -12,6 +12,7 @@ RUN apt-get update \
 ENV NUGET_CERT_REVOCATION_MODE=offline
 ENV DOTNET_SYSTEM_NET_HTTP_SOCKETSHTTPHANDLER_HTTP3SUPPORT=0
 
+COPY ["nuget.config", "."]
 COPY ["Directory.Packages.props", "."]
 COPY ["Directory.Build.props", "."]
 COPY ["TransactionAggregationUI/TransactionAggregationUI.csproj", "TransactionAggregationUI/"]
@@ -21,14 +22,22 @@ COPY . .
 WORKDIR "/src/TransactionAggregationUI"
 RUN dotnet publish "./TransactionAggregationUI.csproj" -c $BUILD_CONFIGURATION -o /app/publish
 
-FROM nginx:alpine AS final
-# Copy the published Blazor WASM static files
-COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+# nginx-unprivileged runs master and workers as uid 101 — nothing in this container runs as
+# root, so it listens on 8080 (ports < 1024 need root). The entrypoint scripts rewrite
+# default.conf and appsettings.json at startup, so those paths are owned by that user.
+FROM nginxinc/nginx-unprivileged:1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 AS final
+# The base image runs as uid 101 but leaves the web root owned by root; the Keycloak
+# entrypoint script rewrites appsettings.json in place, so the directory must be writable.
+USER root
+RUN chown 101:0 /usr/share/nginx/html
+USER 101
+COPY --from=build --chown=101:0 /app/publish/wwwroot /usr/share/nginx/html
 # nginx.conf uses ${API_UPSTREAM} — processed at startup by the entrypoint script below
-COPY TransactionAggregationUI/nginx.conf /etc/nginx/templates/default.conf.template
+COPY --chown=101:0 TransactionAggregationUI/nginx.conf /etc/nginx/templates/default.conf.template
 # Entrypoint scripts: run envsubst on the nginx template and on the published
 # appsettings.json (Keycloak authority) before nginx starts.
-COPY TransactionAggregationUI/docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/10-api-upstream.sh
-COPY TransactionAggregationUI/docker-entrypoint.d/20-keycloak-authority.sh /docker-entrypoint.d/20-keycloak-authority.sh
-RUN chmod +x /docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/20-keycloak-authority.sh
-EXPOSE 80
+COPY --chown=101:0 --chmod=0755 TransactionAggregationUI/docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/10-api-upstream.sh
+COPY --chown=101:0 --chmod=0755 TransactionAggregationUI/docker-entrypoint.d/20-keycloak-authority.sh /docker-entrypoint.d/20-keycloak-authority.sh
+USER 101
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1

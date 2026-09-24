@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Persistence;
 using Modules.WebhookSources.Application.Persistence;
 using Modules.WebhookSources.Domain;
+using SharedKernel.Persistence;
 
 namespace Modules.WebhookSources.Infrastructure.Persistence
 {

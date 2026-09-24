@@ -1,10 +1,9 @@
-using System.Reflection;
 using FluentValidation;
-using Mapster;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.Customers.Application.Contracts;
 using Modules.Customers.Contracts;
+using System.Reflection;
 
 namespace Modules.Customers
 {
@@ -21,12 +20,6 @@ namespace Modules.Customers
             services.AddMediatR(cfg =>
                 cfg.RegisterServicesFromAssembly(typeof(AssemblyReference).Assembly));
 
-            // CustomerProfile (Customer -> CustomerDto) is picked up by Mapster's global
-            // config the same way it was when this lived in the legacy
-            // Modules.Transactions.Application project — TypeAdapterConfig.GlobalSettings
-            // is a shared static, so any module scanning its own assembly into it is safe.
-            TypeAdapterConfig.GlobalSettings.Scan(typeof(AssemblyReference).Assembly);
-
             // CustomersReadApi needs ICustomersDbContext, which is why the read-contract
             // implementation lives here (Application) rather than in Contracts itself —
             // Contracts stays a leaf project with no EF/persistence dependency.
@@ -37,7 +30,7 @@ namespace Modules.Customers
     }
 
     /// <summary>
-    /// Anchor type for locating this assembly (MediatR/FluentValidation/Mapster
+    /// Anchor type for locating this assembly (MediatR/FluentValidation
     /// scanning, architecture tests) without relying on
     /// <see cref="Assembly.GetExecutingAssembly"/>, which would resolve to the wrong
     /// assembly once this method is called from Infrastructure's DependencyInjection.

@@ -1,15 +1,15 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using SharedKernel.Common.Enums;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions;
-using Modules.Transactions.Infrastructure.Persistence;
-using Modules.Transactions.Domain.Common.ValueObjects;
-using SharedKernel.Common.ValueObjects;
-using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using Modules.Customers.Application.Contracts;
 using Modules.Customers.Domain;
 using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions;
+using Modules.Transactions.Domain.Common.ValueObjects;
+using Modules.Transactions.Domain.Entities;
+using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

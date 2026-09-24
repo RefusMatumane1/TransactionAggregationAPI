@@ -38,6 +38,10 @@ namespace Modules.WebhookSources.Infrastructure.Persistence
 
             builder.Property(s => s.LastUsedAt);
 
+            builder.Property(s => s.AuthorizedInstitutions)
+                .HasColumnType("text[]")
+                .IsRequired();
+
             builder.Property(s => s.CreatedAt).IsRequired();
             builder.Property(s => s.UpdatedAt);
         }

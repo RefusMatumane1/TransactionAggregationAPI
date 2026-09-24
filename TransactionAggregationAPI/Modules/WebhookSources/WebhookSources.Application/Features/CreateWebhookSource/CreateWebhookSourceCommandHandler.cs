@@ -1,10 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.WebhookSources.Application.Persistence;
+using Modules.WebhookSources.Domain;
 using SharedKernel.Abstractions;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Models;
-using Modules.WebhookSources.Application.Persistence;
-using Modules.WebhookSources.Domain;
 
 namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
 {
@@ -23,16 +23,17 @@ namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
                 return Result.Failure<CreateWebhookSourceResult>(
                     Error.Conflict($"A webhook source named '{request.Name}' already exists."));
 
-            var (source, apiKey) = WebhookSource.Create(request.Name);
+            var (source, apiKey) = WebhookSource.Create(request.Name, request.AuthorizedInstitutions);
 
             await context.WebhookSources.AddAsync(source, cancellationToken);
             await context.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
-                "Webhook source {SourceName} ({SourceId}) created by admin {AdminId}",
-                source.Name, source.Id.Value, userContext.UserId);
+                "Webhook source {SourceName} ({SourceId}) created by admin {AdminId} for institutions {Institutions}",
+                source.Name, source.Id.Value, userContext.UserId, source.AuthorizedInstitutions);
 
-            return Result.Success(new CreateWebhookSourceResult(source.Id.Value, source.Name, apiKey));
+            return Result.Success(new CreateWebhookSourceResult(
+                source.Id.Value, source.Name, apiKey, source.AuthorizedInstitutions));
         }
     }
 }

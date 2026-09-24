@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Common.ValueObjects;
-using Modules.Customers.Contracts;
+using Modules.Customers.Application.Ports;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
 using Modules.Customers.Infrastructure.Persistence;
@@ -8,6 +7,7 @@ using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Common.ValueObjects;
 
 namespace TransactionAggregationAPI;
 

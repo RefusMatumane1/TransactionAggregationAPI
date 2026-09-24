@@ -1,53 +1,23 @@
-using MediatR;
+using BuildingBlocks.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using BuildingBlocks.Messaging.Persistence;
+using SharedKernel.Persistence;
 
 namespace Modules.Transactions.Infrastructure.Persistence;
 
 public class TransactionsDbContextFactory : IDesignTimeDbContextFactory<TransactionsDbContext>
 {
-    private const string DesignTimeConnectionString = "Host=localhost;Database=transactiondb;Username=postgres;Password=postgres";
-
     public TransactionsDbContext CreateDbContext(string[] args)
     {
+        var connectionString = DesignTime.ConnectionString;
+
         var optionsBuilder = new DbContextOptionsBuilder<TransactionsDbContext>();
-        optionsBuilder.UseNpgsql(DesignTimeConnectionString);
+        optionsBuilder.UseNpgsql(connectionString);
 
         var messagingOptionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
-        messagingOptionsBuilder.UseNpgsql(DesignTimeConnectionString);
-        var messagingDbContext = new MessagingDbContext(messagingOptionsBuilder.Options, new NoOpMediator());
+        messagingOptionsBuilder.UseNpgsql(connectionString);
+        var messagingDbContext = new MessagingDbContext(messagingOptionsBuilder.Options, DesignTime.NoOpMediator);
 
-        return new TransactionsDbContext(optionsBuilder.Options, new NoOpMediator(), messagingDbContext);
-    }
-
-    private sealed class NoOpMediator : IMediator
-    {
-        public Task<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)
-            => Task.FromResult<TResponse>(default!);
-
-        public Task Send<TRequest>(TRequest request, CancellationToken cancellationToken = default) where TRequest : IRequest
-            => Task.CompletedTask;
-
-        public Task<object?> Send(object request, CancellationToken cancellationToken = default)
-            => Task.FromResult<object?>(null);
-
-        public async IAsyncEnumerable<TResponse> CreateStream<TResponse>(IStreamRequest<TResponse> request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {
-            await Task.CompletedTask;
-            yield break;
-        }
-
-        public async IAsyncEnumerable<object?> CreateStream(object request, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
-        {
-            await Task.CompletedTask;
-            yield break;
-        }
-
-        public Task Publish(object notification, CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
-
-        public Task Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default) where TNotification : INotification
-            => Task.CompletedTask;
+        return new TransactionsDbContext(optionsBuilder.Options, DesignTime.NoOpMediator, messagingDbContext);
     }
 }

@@ -8,8 +8,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_API: ${{ github.repository_owner }}/transactionaggregationapi
-  IMAGE_UI: ${{ github.repository_owner }}/transactionaggregationui
   DOTNET_VERSION: '10.0.x'
   SOLUTION: TransactionAggregationAPI/TransactionAggregationAPI.slnx
   TEST_PROJECT: TransactionAggregationAPI/TransactionAggregation.Tests/TransactionAggregation.Tests.csproj
@@ -28,6 +26,7 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      # Package sources come from TransactionAggregationAPI/nuget.config (nuget.org only).
       - name: Restore dependencies
         run: dotnet restore ${{ env.SOLUTION }}
 
@@ -35,17 +34,46 @@ jobs:
         run: dotnet format ${{ env.SOLUTION }} --verify-no-changes --no-restore
 
       - name: Build
-        run: dotnet build ${{ env.SOLUTION }} --no-restore -c Release /warnaserror
+        run: dotnet build ${{ env.SOLUTION }} --no-restore -c Release -warnaserror
 
+      # Per project, not per solution: `dotnet list <sln>` aborts on the docker-compose
+      # .dcproj before scanning anything, and piping it through tee hid that failure — the
+      # step "passed" without scanning a single package.
       - name: Dependency vulnerability scan
+        shell: bash
         run: |
-          set -e
-          dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulnerable-packages.txt
-          if grep -q "has the following vulnerable packages" vulnerable-packages.txt; then
+          set -euo pipefail
+          found=0
+          for project in $(find TransactionAggregationAPI -name '*.csproj' -not -path '*/bin/*' -not -path '*/obj/*'); do
+            output=$(dotnet list "$project" package --vulnerable --include-transitive)
+            echo "$output"
+            if grep -q "has the following vulnerable packages" <<<"$output"; then found=1; fi
+          done
+          if [ "$found" -ne 0 ]; then
             echo "::error::Vulnerable NuGet packages detected — see log above."
             exit 1
           fi
 
+      # Every module owns its own migrations; a model change without a migration would only
+      # surface when the db-migrate Job runs against a real environment.
+      - name: Migrations in sync with the model
+        shell: bash
+        env:
+          # `has-pending-model-changes` never connects; the design-time factories only need a value.
+          ConnectionStrings__transactiondb: Host=localhost;Database=ci;Username=ci;Password=ci
+        run: |
+          set -euo pipefail
+          dotnet tool install --global dotnet-ef
+          cd TransactionAggregationAPI
+          check() { dotnet ef migrations has-pending-model-changes --no-build --configuration Release -p "$1" -s "$1" --context "$2"; }
+          check BuildingBlocks/BuildingBlocks.Messaging MessagingDbContext
+          check Modules/Transactions/Transactions.Infrastructure TransactionsDbContext
+          check Modules/WebhookSources/WebhookSources.Infrastructure WebhookSourcesDbContext
+          check Modules/BankLinks/BankLinks.Infrastructure BankLinksDbContext
+          check Modules/Customers/Customers.Infrastructure CustomersDbContext
+          check Modules/Audit/Audit.Infrastructure AuditDbContext
+
+      # Includes the Testcontainers PostgreSQL suites (Docker is available on ubuntu-latest).
       - name: Test
         run: |
           dotnet test ${{ env.TEST_PROJECT }} \
@@ -80,14 +108,22 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_CONFIG: .gitleaks.toml
 
-  # ─── Docker Build (validation, scan, SBOM) ──────────────────────────────────
+  # ─── Docker Build (validation, non-root check, scan, SBOM) ──────────────────
   docker-build:
-    name: Docker Build
+    name: Docker Build (${{ matrix.image.name }})
     runs-on: ubuntu-latest
     needs: build-and-test
     permissions:
       contents: read
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: api, repository: transactionaggregationapi, dockerfile: TransactionAggregationAPI/Dockerfile }
+          - { name: worker, repository: transactionaggregationworker, dockerfile: TransactionAggregation.Worker/Dockerfile }
+          - { name: ui, repository: transactionaggregationui, dockerfile: TransactionAggregationUI/Dockerfile }
+          - { name: mock-aggregator, repository: transactionaggregationmockaggregator, dockerfile: TransactionAggregation.MockAggregator/Dockerfile }
 
     steps:
       - uses: actions/checkout@v4
@@ -95,43 +131,30 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build API image
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: TransactionAggregationAPI
-          file: TransactionAggregationAPI/TransactionAggregationAPI/Dockerfile
+          file: TransactionAggregationAPI/${{ matrix.image.dockerfile }}
           push: false
           load: true
-          tags: ${{ env.IMAGE_API }}:ci
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
+          tags: ${{ matrix.image.repository }}:ci
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
 
-      - name: Build UI image
-        uses: docker/build-push-action@v6
-        with:
-          context: TransactionAggregationAPI
-          file: TransactionAggregationAPI/TransactionAggregationUI/Dockerfile
-          push: false
-          load: true
-          tags: ${{ env.IMAGE_UI }}:ci
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,scope=ui,mode=max
+      # Executed, not just declared: the image's effective user must not be root.
+      - name: Assert the container runs as non-root
+        run: |
+          uid=$(docker run --rm --entrypoint id ${{ matrix.image.repository }}:ci -u)
+          echo "Container uid: $uid"
+          test "$uid" != "0" || { echo "::error::${{ matrix.image.name }} runs as root"; exit 1; }
 
-      - name: Scan API image (Trivy)
+      - name: Scan image (Trivy) — report
         uses: aquasecurity/trivy-action@0.28.0
         with:
-          image-ref: ${{ env.IMAGE_API }}:ci
+          image-ref: ${{ matrix.image.repository }}:ci
           format: sarif
-          output: trivy-api.sarif
-          severity: CRITICAL,HIGH
-          exit-code: '0'
-
-      - name: Scan UI image (Trivy)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE_UI }}:ci
-          format: sarif
-          output: trivy-ui.sarif
+          output: trivy-${{ matrix.image.name }}.sarif
           severity: CRITICAL,HIGH
           exit-code: '0'
 
@@ -139,28 +162,33 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: .
-          category: trivy
+          sarif_file: trivy-${{ matrix.image.name }}.sarif
+          category: trivy-${{ matrix.image.name }}
 
-      - name: Generate SBOMs (SPDX)
+      # Blocking gate: a CRITICAL vulnerability with a published fix fails the build.
+      # HIGH is reported above but not blocking, so an upstream base-image CVE without a
+      # fix can't wedge every pipeline; Dependabot's digest bumps pick fixes up weekly.
+      - name: Scan image (Trivy) — gate
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ matrix.image.repository }}:ci
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.IMAGE_API }}:ci
+          image: ${{ matrix.image.repository }}:ci
           format: spdx-json
-          output-file: sbom-api.spdx.json
+          output-file: sbom-${{ matrix.image.name }}.spdx.json
 
-      - name: Generate SBOM (UI)
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ env.IMAGE_UI }}:ci
-          format: spdx-json
-          output-file: sbom-ui.spdx.json
-
-      - name: Upload SBOMs
+      - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
-          name: sboms
-          path: sbom-*.spdx.json
+          name: sbom-${{ matrix.image.name }}
+          path: sbom-${{ matrix.image.name }}.spdx.json
 
   # ─── Kubernetes Manifest Validation ─────────────────────────────────────────
   k8s-validate:
@@ -186,8 +214,10 @@ jobs:
         run: |
           kubeconform -strict -summary TransactionAggregationAPI/k8s/postgres/
           kubeconform -strict -summary TransactionAggregationAPI/k8s/redis/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/kafka/
           kubeconform -strict -summary TransactionAggregationAPI/k8s/seq/
           kubeconform -strict -summary TransactionAggregationAPI/k8s/api/
+          kubeconform -strict -summary TransactionAggregationAPI/k8s/worker/
           kubeconform -strict -summary TransactionAggregationAPI/k8s/ui/
 
       - name: Validate dev-tools
@@ -197,13 +227,19 @@ jobs:
 
   # ─── Publish Images to GHCR (main branch only) ──────────────────────────────
   publish:
-    name: Publish Images
+    name: Publish (${{ matrix.image.name }})
     runs-on: ubuntu-latest
     needs: [docker-build, k8s-validate, secret-scan]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        image:
+          - { name: api, repository: transactionaggregationapi, dockerfile: TransactionAggregationAPI/Dockerfile }
+          - { name: worker, repository: transactionaggregationworker, dockerfile: TransactionAggregation.Worker/Dockerfile }
+          - { name: ui, repository: transactionaggregationui, dockerfile: TransactionAggregationUI/Dockerfile }
 
     steps:
       - uses: actions/checkout@v4
@@ -218,53 +254,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Extract metadata — API
-        id: meta-api
+      # The immutable sha tag is what deployments reference; `latest` is a convenience only.
+      - name: Extract metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_API }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image.repository }}
           tags: |
             type=sha,prefix=sha-
             type=raw,value=latest
 
-      - name: Extract metadata — UI
-        id: meta-ui
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_UI }}
-          tags: |
-            type=sha,prefix=sha-
-            type=raw,value=latest
-
-      - name: Push API image
+      - name: Push image
         uses: docker/build-push-action@v6
         with:
           context: TransactionAggregationAPI
-          file: TransactionAggregationAPI/TransactionAggregationAPI/Dockerfile
+          file: TransactionAggregationAPI/${{ matrix.image.dockerfile }}
           push: true
-          tags: ${{ steps.meta-api.outputs.tags }}
-          labels: ${{ steps.meta-api.outputs.labels }}
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
-
-      - name: Push UI image
-        uses: docker/build-push-action@v6
-        with:
-          context: TransactionAggregationAPI
-          file: TransactionAggregationAPI/TransactionAggregationUI/Dockerfile
-          push: true
-          tags: ${{ steps.meta-ui.outputs.tags }}
-          labels: ${{ steps.meta-ui.outputs.labels }}
-          cache-from: type=gha,scope=ui
-          cache-to: type=gha,scope=ui,mode=max
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image.name }}
+          cache-to: type=gha,scope=${{ matrix.image.name }},mode=max
 
       - name: Summary
-        run: |
-          echo "### Images published" >> $GITHUB_STEP_SUMMARY
-          echo "| Image | Tags |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|------|" >> $GITHUB_STEP_SUMMARY
-          echo "| API | \`${{ steps.meta-api.outputs.tags }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| UI  | \`${{ steps.meta-ui.outputs.tags }}\` |" >> $GITHUB_STEP_SUMMARY
+        run: echo "| ${{ matrix.image.name }} | \`${{ steps.meta.outputs.tags }}\` |" >> $GITHUB_STEP_SUMMARY
 
   # ─── Deploy (manual / environment-gated) ────────────────────────────────────
   deploy:
@@ -273,11 +285,9 @@ jobs:
     needs: publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     environment: production
-    # Requires a self-hosted runner or a kubeconfig secret pointing at your cluster.
-    # Set KUBECONFIG_DATA secret in repo settings to enable this job.
-    # Remove the condition below once the secret is configured.
-    # env:
-    #   KUBECONFIG: ${{ secrets.KUBECONFIG_DATA }}
+    # Requires a kubeconfig secret pointing at your cluster. Order matters and is encoded
+    # in deploy-k8s.sh: the db-migrate Job (k8s/api/migration-job.yaml) must complete
+    # before the API/worker Deployments roll to the new sha tag.
 
     steps:
       - uses: actions/checkout@v4
@@ -285,7 +295,8 @@ jobs:
       - name: Deploy notice
         run: |
           echo "### Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "Add a \`KUBECONFIG_DATA\` secret and a self-hosted runner to enable automated k8s deployment." >> $GITHUB_STEP_SUMMARY
-          echo "Images ready at:" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ env.IMAGE_API }}:sha-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- \`ghcr.io/${{ env.IMAGE_UI }}:sha-${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Add a \`KUBECONFIG_DATA\` secret to enable automated k8s deployment." >> $GITHUB_STEP_SUMMARY
+          echo "Images ready at (immutable tags):" >> $GITHUB_STEP_SUMMARY
+          for image in transactionaggregationapi transactionaggregationworker transactionaggregationui; do
+            echo "- \`ghcr.io/${{ github.repository_owner }}/$image:sha-${GITHUB_SHA::7}\`" >> $GITHUB_STEP_SUMMARY
+          done

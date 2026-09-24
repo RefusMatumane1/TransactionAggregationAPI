@@ -4,6 +4,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\SharedKernel\SharedKernel.csproj" />
 	</ItemGroup>
 </Project>

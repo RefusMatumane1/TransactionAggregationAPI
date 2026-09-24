@@ -5,7 +5,7 @@ using Microsoft.Extensions.Options;
 using Modules.BankLinks.Contracts;
 using Modules.Customers.Application.Adapters;
 using Modules.Customers.Application.Persistence;
-using Modules.Customers.Contracts;
+using Modules.Customers.Application.Ports;
 using Modules.Customers.Infrastructure.Authentication;
 using Modules.Customers.Infrastructure.Persistence;
 

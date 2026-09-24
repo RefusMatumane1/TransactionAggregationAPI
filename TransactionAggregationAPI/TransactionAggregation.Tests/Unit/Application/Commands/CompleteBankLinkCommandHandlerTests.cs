@@ -1,22 +1,21 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
-using Modules.BankLinks.Application.DTOs;
 using Modules.BankLinks.Application.Features.CompleteBankLink;
 using Modules.BankLinks.Application.Features.InitiateBankLink;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Application.Ports;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Application.Adapters;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
 using Modules.Customers.Infrastructure.Persistence;
+using NSubstitute;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Modules.WebhookSources.Domain;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Domain;
@@ -10,7 +11,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void Create_SetsNameAndActivatesTheSource()
     {
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         source.Name.Should().Be("stitch");
         source.IsActive.Should().BeTrue();
@@ -20,7 +21,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void Create_ReturnsAPlaintextKeyWhoseHashMatchesTheStoredHash()
     {
-        var (source, plaintextKey) = WebhookSource.Create("stitch");
+        var (source, plaintextKey) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         WebhookSource.HashKey(plaintextKey).Should().Be(source.KeyHash);
     }
@@ -28,8 +29,8 @@ public class WebhookSourceEntityTests
     [Fact]
     public void Create_TwoSources_GetDifferentKeys()
     {
-        var (_, keyA) = WebhookSource.Create("source-a");
-        var (_, keyB) = WebhookSource.Create("source-b");
+        var (_, keyA) = WebhookSource.Create("source-a", TestInstitutions.All);
+        var (_, keyB) = WebhookSource.Create("source-b", TestInstitutions.All);
 
         keyA.Should().NotBe(keyB);
     }
@@ -37,7 +38,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void RotateKey_ReturnsANewKeyThatDoesNotMatchTheOldHash()
     {
-        var (source, originalKey) = WebhookSource.Create("stitch");
+        var (source, originalKey) = WebhookSource.Create("stitch", TestInstitutions.All);
         var originalHash = source.KeyHash;
 
         var newKey = source.RotateKey();
@@ -49,7 +50,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void RotateKey_NewKeysHashMatchesTheNewStoredHash()
     {
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         var newKey = source.RotateKey();
 
@@ -59,7 +60,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void RotateKey_OldKeyNoLongerHashesToTheStoredHash()
     {
-        var (source, originalKey) = WebhookSource.Create("stitch");
+        var (source, originalKey) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         source.RotateKey();
 
@@ -69,7 +70,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void Deactivate_SetsIsActiveFalse()
     {
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         source.Deactivate();
 
@@ -79,7 +80,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void Activate_AfterDeactivate_SetsIsActiveTrueAgain()
     {
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
         source.Deactivate();
 
         source.Activate();
@@ -90,7 +91,7 @@ public class WebhookSourceEntityTests
     [Fact]
     public void RecordUsage_SetsLastUsedAt()
     {
-        var (source, _) = WebhookSource.Create("stitch");
+        var (source, _) = WebhookSource.Create("stitch", TestInstitutions.All);
 
         source.RecordUsage();
 
@@ -117,5 +118,44 @@ public class WebhookSourceEntityTests
 
         hash.Should().HaveLength(64);
         hash.Should().MatchRegex("^[0-9A-F]+$");
+    }
+
+    private const string ProvisionedKey = "dev-only-provisioned-key-at-least-32-characters";
+
+    [Fact]
+    public void CreateWithProvisionedKey_StoresOnlyTheHash()
+    {
+        var source = WebhookSource.CreateWithProvisionedKey("mock-aggregator", ProvisionedKey, TestInstitutions.All);
+
+        source.IsActive.Should().BeTrue();
+        source.KeyHash.Should().Be(WebhookSource.HashKey(ProvisionedKey));
+        source.KeyHash.Should().NotContain(ProvisionedKey);
+        source.HasKey(ProvisionedKey).Should().BeTrue();
+        source.HasKey("some-other-key-that-is-also-long-enough").Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("too-short-for-a-webhook-key")]
+    public void ProvisionedKey_ShorterThanAGeneratedOne_IsRefused(string key)
+    {
+        var create = () => WebhookSource.CreateWithProvisionedKey("mock-aggregator", key, TestInstitutions.All);
+        var replace = () => WebhookSource.CreateWithProvisionedKey("mock-aggregator", ProvisionedKey, TestInstitutions.All).UseProvisionedKey(key);
+
+        create.Should().Throw<SharedKernel.Exceptions.DomainException>();
+        replace.Should().Throw<SharedKernel.Exceptions.DomainException>();
+    }
+
+    [Fact]
+    public void UseProvisionedKey_RetiresTheOldKeyImmediately()
+    {
+        var source = WebhookSource.CreateWithProvisionedKey("mock-aggregator", ProvisionedKey, TestInstitutions.All);
+        const string replacement = "dev-only-replacement-key-at-least-32-characters";
+
+        source.UseProvisionedKey(replacement);
+
+        source.HasKey(replacement).Should().BeTrue();
+        source.HasKey(ProvisionedKey).Should().BeFalse();
     }
 }

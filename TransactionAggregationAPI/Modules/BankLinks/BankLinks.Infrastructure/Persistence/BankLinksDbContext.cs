@@ -1,8 +1,8 @@
 using MediatR;
 using Microsoft.EntityFrameworkCore;
-using SharedKernel.Persistence;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Domain;
+using SharedKernel.Persistence;
 
 namespace Modules.BankLinks.Infrastructure.Persistence
 {

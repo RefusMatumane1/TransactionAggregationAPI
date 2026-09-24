@@ -1,5 +1,5 @@
-using SharedKernel.Abstractions;
 using Modules.BankLinks.Application.DTOs;
+using SharedKernel.Abstractions;
 
 namespace Modules.BankLinks.Application.Features.GetBankLinks
 {

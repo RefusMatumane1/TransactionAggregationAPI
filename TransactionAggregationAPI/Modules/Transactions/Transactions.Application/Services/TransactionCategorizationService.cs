@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Options;
-using SharedKernel.Common.Interfaces;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.Interfaces;
 
 namespace Modules.Transactions.Application.Services
 {
@@ -18,6 +18,7 @@ namespace Modules.Transactions.Application.Services
 
         public Task<TransactionCategory> CategorizeTransactionAsync(
             Transaction transaction,
+            TransactionCategory? bankCategory,
             CancellationToken cancellationToken)
         {
             var description = transaction.Description.ToLowerInvariant();
@@ -27,6 +28,9 @@ namespace Modules.Transactions.Application.Services
                 if (description.Contains(keyword))
                     return Task.FromResult(category);
             }
+
+            if (bankCategory is { } fromBank && fromBank != TransactionCategory.Uncategorized)
+                return Task.FromResult(fromBank);
 
             if (transaction.Amount.Amount > 0)
                 return Task.FromResult(TransactionCategory.Income);

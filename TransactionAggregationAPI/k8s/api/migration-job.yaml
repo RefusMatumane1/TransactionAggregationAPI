@@ -43,7 +43,7 @@ spec:
 
       containers:
         - name: migrate
-          image: transactionaggregationapi:latest
+          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
           imagePullPolicy: IfNotPresent
 
           # --migrate-only is handled in Program.cs: the app applies all pending

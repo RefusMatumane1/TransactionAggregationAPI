@@ -1,15 +1,17 @@
+using BuildingBlocks.Messaging;
+using BuildingBlocks.Messaging.Inbox;
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Messaging.Persistence;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
-using BuildingBlocks.Messaging.Inbox;
-using BuildingBlocks.Messaging.Observability;
-using BuildingBlocks.Messaging.Persistence;
+using Modules.Audit.Contracts;
+using Modules.Transactions.Application.Common.Audit;
 using Modules.Transactions.Application.Common.Inbox;
-using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
+using System.Text.Json;
 
 namespace Modules.Transactions.Infrastructure.BackgroundServices
 {
@@ -74,28 +76,32 @@ namespace Modules.Transactions.Infrastructure.BackgroundServices
             _logger.LogInformation("Claimed {Count} inbox messages", claimed.Count);
 
             foreach (var message in claimed)
-                await ProcessMessageAsync(message, sender, cancellationToken);
+                await ProcessMessageAsync(message, sender, messaging, cancellationToken);
 
+            // Persists each message's new status together with the audit records of its
+            // failures, so a retry/dead-letter is audited if and only if it was recorded.
             await messaging.SaveChangesAsync(cancellationToken);
         }
 
         internal async Task ProcessMessageAsync(
-            InboxMessage message, ISender sender, CancellationToken cancellationToken)
+            InboxMessage message, ISender sender, IMessagingDbContext messaging, CancellationToken cancellationToken)
         {
+            InboundTransactionsPayload? payload = null;
             try
             {
-                var payload = JsonSerializer.Deserialize<InboundTransactionsPayload>(message.Payload)
-                    ?? throw new InvalidOperationException(
+                payload = JsonSerializer.Deserialize<InboundTransactionsPayload>(message.Payload)
+                    ?? throw new PoisonMessageException(
                         $"Inbox message {message.Id.Value} has an empty/invalid payload");
 
                 var command = new ProcessInboundTransactionsCommand(
-                    message.SourceName, payload.ExternalAccountId, payload.Transactions);
+                    message.SourceName, payload.ExternalAccountId, payload.Transactions, message.Id.Value,
+                    message.Channel ?? AuditChannels.Unknown);
 
                 var result = await sender.Send(command, cancellationToken);
 
                 if (result.IsFailure)
                 {
-                    RecordFailure(message, result.Error.Description, ComputeBackoff(message.Attempts), _options.MaxAttempts);
+                    RecordFailure(message, payload, messaging, result.Error.Description, FailureClassifier.Classify(result.Error));
                     return;
                 }
 
@@ -103,17 +109,54 @@ namespace Modules.Transactions.Infrastructure.BackgroundServices
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to process inbox message {MessageId} from {SourceName}",
-                    message.Id.Value, message.SourceName);
-                RecordFailure(message, ex.Message, ComputeBackoff(message.Attempts), _options.MaxAttempts);
+                var kind = FailureClassifier.Classify(ex);
+                _logger.LogError(ex, "Failed to process inbox message {MessageId} from {SourceName} ({FailureKind})",
+                    message.Id.Value, message.SourceName, kind);
+                RecordFailure(message, payload, messaging, ex.Message, kind);
             }
         }
 
-        private static void RecordFailure(InboxMessage message, string error, TimeSpan backoff, int maxAttempts)
+        private void RecordFailure(
+            InboxMessage message,
+            InboundTransactionsPayload? payload,
+            IMessagingDbContext messaging,
+            string error,
+            FailureKind kind)
         {
-            message.MarkFailed(error, backoff, maxAttempts);
-            if (message.Status == InboxMessageStatus.DeadLettered)
+            var maxAttempts = _options.MaxAttempts;
+            if (kind == FailureKind.Permanent)
+                message.MarkDeadLettered(error);
+            else
+                message.MarkFailed(error, ComputeBackoff(message.Attempts), maxAttempts);
+
+            var deadLettered = message.Status == InboxMessageStatus.DeadLettered;
+            if (deadLettered)
                 DeadLetterMetrics.InboxMessagesDeadLettered.WithLabels(message.SourceName).Inc();
+
+            var metadata = new Dictionary<string, string>
+            {
+                ["attempt"] = message.Attempts.ToString(),
+                ["maxAttempts"] = maxAttempts.ToString(),
+                ["failureKind"] = kind.ToString()
+            };
+            if (message.NextAttemptAt is { } nextAttemptAt && !deadLettered)
+                metadata["nextAttemptAt"] = nextAttemptAt.ToString("O");
+
+            InboundAudit.Enqueue(messaging,
+            [
+                new AuditEventRecord(
+                    EventId: Guid.NewGuid(),
+                    EventType: deadLettered ? AuditEventTypes.InboundDeadLettered : AuditEventTypes.InboundProcessingFailed,
+                    OccurredAt: DateTime.UtcNow,
+                    Channel: message.Channel ?? AuditChannels.Unknown,
+                    SourceName: message.SourceName,
+                    ExternalAccountId: payload?.ExternalAccountId,
+                    InboxMessageId: message.Id.Value,
+                    IdempotencyKey: message.IdempotencyKey,
+                    Detail: error,
+                    Metadata: metadata,
+                    TraceId: InboundAudit.CurrentTraceId)
+            ]);
         }
 
         private static TimeSpan ComputeBackoff(int attempts)

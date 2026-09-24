@@ -1,15 +1,15 @@
-using System.Text.Json;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
 using Modules.BankLinks.Application.Features.InitiateBankLink;
 using Modules.BankLinks.Application.Persistence;
 using Modules.BankLinks.Application.Ports;
 using Modules.BankLinks.Domain;
 using Modules.BankLinks.Domain.ValueObjects;
+using NSubstitute;
 using SharedKernel.Common.Enums;
 using SharedKernel.Common.ValueObjects;
+using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -103,18 +103,26 @@ public class InitiateBankLinkCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_InstitutionAlreadyPending_ReturnsConflict()
+    public async Task Handle_AbandonedPendingLink_CanBeRestartedWithAFreshState()
     {
+        // A consent that was denied or never finished leaves the link PendingAuthorization;
+        // refusing to restart it would lock the customer out of that bank for good.
         var context = InMemoryBankLinksDbContextFactory.Create();
         var customerId = CustomerId.Create();
         context.BankLinks.Add(BankLink.Create(customerId, Institution.FNB));
         await context.SaveChangesAsync();
-        var handler = BuildHandler(context, BuildClient(), new FakeDistributedCache());
+        var client = BuildClient();
+        var states = new List<string>();
+        client.BuildAuthorizationUrl(Institution.FNB, Arg.Do<string>(states.Add)).Returns("https://aggregator.example/authorize");
+        var handler = BuildHandler(context, client, new FakeDistributedCache());
 
-        var result = await handler.Handle(new InitiateBankLinkCommand(customerId.Value, Institution.FNB), CancellationToken.None);
+        var first = await handler.Handle(new InitiateBankLinkCommand(customerId.Value, Institution.FNB), CancellationToken.None);
+        var retry = await handler.Handle(new InitiateBankLinkCommand(customerId.Value, Institution.FNB), CancellationToken.None);
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.Conflict);
+        first.IsSuccess.Should().BeTrue();
+        retry.IsSuccess.Should().BeTrue();
+        states.Should().HaveCount(2).And.OnlyHaveUniqueItems();
+        context.BankLinks.Should().ContainSingle().Which.Status.Should().Be(BankLinkStatus.PendingAuthorization);
     }
 
     [Theory]

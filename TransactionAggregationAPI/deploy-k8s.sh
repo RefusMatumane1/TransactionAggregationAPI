@@ -4,14 +4,17 @@
 # Deploy the Transaction Aggregation stack to a local Kubernetes cluster
 # (Rancher Desktop / k3s).
 #
-# Assumes the API image is already built into the k8s.io containerd namespace:
-#   transactionaggregationapi:latest
+# Assumes the API and worker images are already built into the k8s.io containerd namespace,
+# tagged with IMAGE_TAG (default: the current git short sha — immutable, so a rollout always
+# runs exactly the code it was built from):
+#   transactionaggregationapi:$IMAGE_TAG
+#   transactionaggregationworker:$IMAGE_TAG
 # Pass --ui to also deploy the Blazor WASM frontend (requires ui image too).
 #
 # Usage:
-#   ./deploy-k8s.sh                  Deploy core stack  (API + data stores)
+#   ./deploy-k8s.sh                  Deploy core stack  (API + worker + data stores)
 #   ./deploy-k8s.sh --ui             Also deploy the Blazor WASM UI
-#   ./deploy-k8s.sh --dev-tools      Also deploy pgAdmin + Redis Commander
+#   ./deploy-k8s.sh --dev-tools      Also deploy pgAdmin + Redis Commander + Kafka UI
 #   ./deploy-k8s.sh --monitoring     Also deploy Prometheus + Grafana
 #   ./deploy-k8s.sh --skip-hosts     Skip /etc/hosts update
 #   ./deploy-k8s.sh --teardown       Delete the namespace (removes all data)
@@ -37,8 +40,16 @@ log_error() { echo -e "   ${RED}✘${NC}  $*" >&2; }
 
 # ── Config ────────────────────────────────────────────────────────────────────
 NAMESPACE="transaction-aggregation"
-API_IMAGE="transactionaggregationapi:latest"
-UI_IMAGE="transactionaggregationui:latest"
+IMAGE_TAG="${IMAGE_TAG:-$(git -C "$(dirname "$0")" rev-parse --short HEAD 2>/dev/null || echo local)}"
+API_IMAGE="transactionaggregationapi:${IMAGE_TAG}"
+WORKER_IMAGE="transactionaggregationworker:${IMAGE_TAG}"
+UI_IMAGE="transactionaggregationui:${IMAGE_TAG}"
+MIGRATION_TIMEOUT="300s"
+
+# Applies a workload manifest with its image placeholder replaced by IMAGE_TAG.
+apply_with_image_tag() {
+  sed "s#:set-by-deploy-script#:${IMAGE_TAG}#g" "$1" | kubectl apply -f -
+}
 ROLLOUT_TIMEOUT="180s"
 
 # Detect WSL2 so we can surface Windows-specific hosts-file guidance
@@ -66,7 +77,7 @@ for arg in "$@"; do
       echo ""
       echo "Options:"
       echo "  --ui           Also deploy the Blazor WASM UI"
-      echo "  --dev-tools    Also deploy pgAdmin and Redis Commander"
+      echo "  --dev-tools    Also deploy pgAdmin, Redis Commander and Kafka UI"
       echo "  --monitoring   Also deploy Prometheus and Grafana"
       echo "  --skip-hosts   Skip updating /etc/hosts"
       echo "  --teardown     Delete namespace '$NAMESPACE' and all its data"
@@ -132,7 +143,7 @@ CURRENT_CTX="$(kubectl config current-context 2>/dev/null || echo 'unknown')"
 log_ok "Cluster is reachable  (context: ${CURRENT_CTX})"
 
 if command -v nerdctl &>/dev/null; then
-  if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transactionaggregationapi"; then
+  if nerdctl --namespace k8s.io images 2>/dev/null | grep -qE "transactionaggregationapi[[:space:]]+${IMAGE_TAG}([[:space:]]|$)"; then
     log_ok "API image present:  $API_IMAGE"
   else
     log_error "API image NOT found in the k8s.io namespace: $API_IMAGE"
@@ -141,8 +152,17 @@ if command -v nerdctl &>/dev/null; then
     exit 1
   fi
 
+  if nerdctl --namespace k8s.io images 2>/dev/null | grep -qE "transactionaggregationworker[[:space:]]+${IMAGE_TAG}([[:space:]]|$)"; then
+    log_ok "Worker image present:  $WORKER_IMAGE"
+  else
+    log_error "Worker image NOT found in the k8s.io namespace: $WORKER_IMAGE"
+    log_error "Build it first, then re-run this script:"
+    log_error "  nerdctl --namespace k8s.io build -t $WORKER_IMAGE -f TransactionAggregation.Worker/Dockerfile ."
+    exit 1
+  fi
+
   if $OPT_UI; then
-    if nerdctl --namespace k8s.io images 2>/dev/null | grep -q "transactionaggregationui"; then
+    if nerdctl --namespace k8s.io images 2>/dev/null | grep -qE "transactionaggregationui[[:space:]]+${IMAGE_TAG}([[:space:]]|$)"; then
       log_ok "UI  image present:  $UI_IMAGE"
     else
       log_error "UI image NOT found in the k8s.io namespace: $UI_IMAGE"
@@ -155,6 +175,7 @@ else
   log_warn "nerdctl not found — cannot verify images are present in the k8s.io namespace."
   log_warn "If a pod fails with ErrImagePull, build the images first:"
   log_warn "  nerdctl --namespace k8s.io build -t $API_IMAGE -f TransactionAggregationAPI/Dockerfile ."
+  log_warn "  nerdctl --namespace k8s.io build -t $WORKER_IMAGE -f TransactionAggregation.Worker/Dockerfile ."
   if $OPT_UI; then
     log_warn "  nerdctl --namespace k8s.io build -t $UI_IMAGE -f TransactionAggregationUI/Dockerfile ."
   fi
@@ -188,10 +209,11 @@ if $OPT_UI; then
 fi
 
 # ── Step 3: Data stores ──────────────────────────────────────────────────────
-step "Data stores  (PostgreSQL · Redis · Seq)"
+step "Data stores  (PostgreSQL · Redis · Seq · Kafka)"
 kubectl apply -f "$K8S/postgres/"
 kubectl apply -f "$K8S/redis/"
 kubectl apply -f "$K8S/seq/"
+kubectl apply -f "$K8S/kafka/"
 
 log_info "Waiting for PostgreSQL to be ready…"
 kubectl rollout status statefulset/postgres -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
@@ -201,13 +223,30 @@ log_info "Waiting for Redis to be ready…"
 kubectl rollout status statefulset/redis -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
 log_ok "Redis is ready"
 
-# ── Step 4: API ───────────────────────────────────────────────────────────────
-# NOTE: EF Core migrations run automatically inside the API on startup
-# (Program.cs → ApplyMigrationsAsync). k8s/api/migration-job.yaml exists if
-# you ever need to run migrations as a separate pre-deploy Job instead.
+# The worker retries topic setup until the broker answers, so this wait isn't strictly
+# required — it just surfaces a broken broker here instead of in the worker logs.
+log_info "Waiting for Kafka to be ready…"
+kubectl rollout status statefulset/kafka -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
+log_ok "Kafka is ready"
+
+# ── Step 4: Migrations, then API ──────────────────────────────────────────────
+# The cluster runs as Production, where no pod self-migrates (Program.cs only does that in
+# Development). The db-migrate Job applies every module's migrations with the same image the
+# API is about to run, and the API rolls out only once it has completed — so replicas never
+# start against a schema older than their code.
+step "Database migrations  (db-migrate Job)"
+kubectl delete job db-migrate -n "$NAMESPACE" --ignore-not-found
+apply_with_image_tag "$K8S/api/migration-job.yaml"
+if ! kubectl wait --for=condition=complete job/db-migrate -n "$NAMESPACE" --timeout="$MIGRATION_TIMEOUT"; then
+  log_error "Migrations did not complete — not rolling out the API. Job logs:"
+  kubectl logs job/db-migrate -n "$NAMESPACE" --tail=100 || true
+  exit 1
+fi
+log_ok "Migrations applied"
+
 step "API  (service · deployment · ingress · HPA · PDB)"
 kubectl apply -f "$K8S/api/service.yaml"
-kubectl apply -f "$K8S/api/deployment.yaml"
+apply_with_image_tag "$K8S/api/deployment.yaml"
 kubectl apply -f "$K8S/api/ingress.yaml"
 kubectl apply -f "$K8S/api/hpa.yaml"
 kubectl apply -f "$K8S/api/pdb.yaml"
@@ -216,10 +255,19 @@ log_info "Waiting for API replicas to pass the readiness probe (/health)…"
 kubectl rollout status deployment/transaction-api -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
 log_ok "API is running"
 
+# Background processing: Kafka consumer + inbox/outbox/pending-expiry dispatchers.
+step "Worker  (deployment · PDB)"
+apply_with_image_tag "$K8S/worker/deployment.yaml"
+kubectl apply -f "$K8S/worker/pdb.yaml"
+
+log_info "Waiting for worker replicas to start (/alive)…"
+kubectl rollout status deployment/transaction-worker -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
+log_ok "Worker is running"
+
 # ── Step 5: UI (optional) ─────────────────────────────────────────────────────
 if $OPT_UI; then
   step "UI  (deployment · service · ingress)"
-  kubectl apply -f "$K8S/ui/deployment.yaml"
+  apply_with_image_tag "$K8S/ui/deployment.yaml"
   kubectl apply -f "$K8S/ui/service.yaml"
   kubectl apply -f "$K8S/ui/ingress.yaml"
   log_info "Waiting for UI replicas to be ready…"
@@ -237,9 +285,10 @@ log_info "(Enforced only when your CNI supports NetworkPolicy: Calico, Cilium, C
 
 # ── Step 7: Dev tools (optional) ─────────────────────────────────────────────
 if $OPT_DEV_TOOLS; then
-  step "Dev tools  (pgAdmin · Redis Commander)"
+  step "Dev tools  (pgAdmin · Redis Commander · Kafka UI)"
   kubectl apply -f "$K8S/dev-tools/pgadmin/"
   kubectl apply -f "$K8S/dev-tools/redis-commander/"
+  kubectl apply -f "$K8S/dev-tools/kafka-ui/"
   log_ok "Dev tools deployed"
 else
   log_info "Dev tools skipped — pass --dev-tools to enable"
@@ -297,7 +346,8 @@ HOSTS_ENTRIES=(
 
 if $OPT_UI;         then HOSTS_ENTRIES+=("127.0.0.1  ui.transaction.local"); fi
 if $OPT_DEV_TOOLS;  then HOSTS_ENTRIES+=("127.0.0.1  pgadmin.transaction.local"
-                                          "127.0.0.1  redis-commander.transaction.local"); fi
+                                          "127.0.0.1  redis-commander.transaction.local"
+                                          "127.0.0.1  kafka-ui.transaction.local"); fi
 if $OPT_MONITORING; then HOSTS_ENTRIES+=("127.0.0.1  prometheus.transaction.local"
                                           "127.0.0.1  grafana.transaction.local"); fi
 
@@ -380,6 +430,7 @@ fi
 if $OPT_DEV_TOOLS; then
   echo -e "  ${GREEN}→${NC}  pgAdmin          http://pgadmin.transaction.local"
   echo -e "  ${GREEN}→${NC}  Redis Commander  http://redis-commander.transaction.local"
+  echo -e "  ${GREEN}→${NC}  Kafka UI         http://kafka-ui.transaction.local"
 fi
 if $OPT_MONITORING; then
   echo -e "  ${GREEN}→${NC}  Prometheus       http://prometheus.transaction.local"
@@ -394,6 +445,7 @@ echo -e "  Password Test@12345"
 echo ""
 echo -e "${BOLD}  Port-forward shortcuts${NC}"
 echo -e "  ${BLUE}kubectl port-forward svc/transaction-api 8080:80   -n $NAMESPACE${NC}"
+echo -e "  ${BLUE}kubectl port-forward svc/kafka           9092:9092 -n $NAMESPACE${NC}   (then produce to localhost:9092)"
 if $OPT_UI; then
   echo -e "  ${BLUE}kubectl port-forward svc/transaction-ui  7200:80   -n $NAMESPACE${NC}"
 fi
@@ -407,6 +459,7 @@ echo -e "${BOLD}  Useful commands${NC}"
 echo -e "  ${BLUE}kubectl get pods    -n $NAMESPACE${NC}"
 echo -e "  ${BLUE}kubectl get events  -n $NAMESPACE --sort-by='.lastTimestamp'${NC}"
 echo -e "  ${BLUE}kubectl logs -f deployment/transaction-api -n $NAMESPACE${NC}"
+echo -e "  ${BLUE}kubectl logs -f deployment/transaction-worker -n $NAMESPACE${NC}"
 if $OPT_UI;         then echo -e "  ${BLUE}kubectl logs -f deployment/transaction-ui  -n $NAMESPACE${NC}"; fi
 if $OPT_MONITORING; then
   echo -e "  ${BLUE}kubectl logs -f deployment/prometheus      -n $NAMESPACE${NC}"

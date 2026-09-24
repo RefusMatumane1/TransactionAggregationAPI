@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Modules.WebhookSources.Application.Features.CreateWebhookSource;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
-using Modules.WebhookSources.Domain;
-using Modules.WebhookSources.Application.Features.CreateWebhookSource;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -26,7 +26,7 @@ public class CreateWebhookSourceCommandHandlerTests
         var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
 
-        var result = await handler.Handle(new CreateWebhookSourceCommand("stitch"), CancellationToken.None);
+        var result = await handler.Handle(new CreateWebhookSourceCommand("stitch", TestInstitutions.All), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Name.Should().Be("stitch");
@@ -43,9 +43,9 @@ public class CreateWebhookSourceCommandHandlerTests
     {
         var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
-        await handler.Handle(new CreateWebhookSourceCommand("stitch"), CancellationToken.None);
+        await handler.Handle(new CreateWebhookSourceCommand("stitch", TestInstitutions.All), CancellationToken.None);
 
-        var result = await handler.Handle(new CreateWebhookSourceCommand("stitch"), CancellationToken.None);
+        var result = await handler.Handle(new CreateWebhookSourceCommand("stitch", TestInstitutions.All), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.Conflict);
@@ -58,8 +58,8 @@ public class CreateWebhookSourceCommandHandlerTests
         var context = InMemoryWebhookSourcesDbContextFactory.Create();
         var handler = BuildHandler(context);
 
-        var a = await handler.Handle(new CreateWebhookSourceCommand("source-a"), CancellationToken.None);
-        var b = await handler.Handle(new CreateWebhookSourceCommand("source-b"), CancellationToken.None);
+        var a = await handler.Handle(new CreateWebhookSourceCommand("source-a", TestInstitutions.All), CancellationToken.None);
+        var b = await handler.Handle(new CreateWebhookSourceCommand("source-b", TestInstitutions.All), CancellationToken.None);
 
         a.IsSuccess.Should().BeTrue();
         b.IsSuccess.Should().BeTrue();

@@ -1,7 +1,7 @@
+using Modules.Customers.Domain.ValueObjects;
 using SharedKernel.Common;
 using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
-using Modules.Customers.Domain.ValueObjects;
 
 namespace Modules.Customers.Domain
 {

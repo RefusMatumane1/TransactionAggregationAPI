@@ -1,11 +1,12 @@
+using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Persistence;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
-using SharedKernel.Common;
-using BuildingBlocks.Messaging.Persistence;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Infrastructure.Persistence.Configurations;
+using SharedKernel.Common;
 
 namespace Modules.Transactions.Infrastructure.Persistence
 {
@@ -42,19 +43,21 @@ namespace Modules.Transactions.Infrastructure.Persistence
         /// — see docs/adr/0009-schema-per-module-database-strategy.md. ADR-0003 requires
         /// that write commit atomically with this context's own changes (the whole point
         /// of the Outbox pattern), so both contexts are registered against one shared
-        /// NpgsqlConnection (Program.cs) and explicitly share one transaction here.
-        /// EnableRetryOnFailure forbids a manually-managed transaction unless it runs
-        /// inside CreateExecutionStrategy().ExecuteAsync — hence the wrapper below.
-        /// NOT verified against a live Postgres (no Docker in this session) — test this
-        /// path specifically before trusting it: a crash between the two contexts'
-        /// SaveChangesAsync calls must leave neither committed, not just the DB one.
+        /// NpgsqlConnection (registered in TransactionAggregation.Hosting) and explicitly
+        /// share one transaction here.
+        ///
+        /// EnableRetryOnFailure forbids a manually-managed transaction unless it runs inside
+        /// CreateExecutionStrategy().ExecuteAsync, which re-runs the whole lambda after a
+        /// transient failure. Both saves therefore pass acceptAllChangesOnSuccess: false and
+        /// changes are accepted only after the commit: had the first save accepted its
+        /// changes, a failure in the second save or the commit would roll the rows back
+        /// while leaving them marked Unchanged, and the retry would commit the outbox/inbox
+        /// rows without the transactions they describe. Covered against real Postgres by
+        /// OutboxAtomicityTests.
         ///
         /// The in-memory provider (unit/integration tests) doesn't support real
-        /// transactions at all — BeginTransactionAsync throws there — so the
-        /// transaction-sharing dance only runs against a real relational database;
-        /// tests fall back to calling both contexts' SaveChangesAsync in sequence,
-        /// which is enough to exercise the actual business logic even though it can't
-        /// exercise the atomicity guarantee itself (only a real Postgres run can).
+        /// transactions — BeginTransactionAsync throws there — so it saves both contexts in
+        /// sequence, which exercises the business logic but not the atomicity guarantee.
         /// </summary>
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
@@ -71,9 +74,12 @@ namespace Modules.Transactions.Infrastructure.Persistence
                 }
             }
 
+            // Once, outside the retried lambda: the events' handlers only stage outbox rows,
+            // and those stay staged (not accepted) across retries until the commit succeeds.
+            await DispatchDomainEvents();
+
             if (!Database.IsRelational())
             {
-                await DispatchDomainEvents();
                 var nonRelationalResult = await base.SaveChangesAsync(cancellationToken);
                 await _messagingDbContext.SaveChangesAsync(cancellationToken);
                 return nonRelationalResult;
@@ -81,25 +87,51 @@ namespace Modules.Transactions.Infrastructure.Persistence
 
             var strategy = Database.CreateExecutionStrategy();
 
-            return await strategy.ExecuteAsync(async () =>
+            var result = await strategy.ExecuteAsync(async () =>
             {
                 await using var transaction = await Database.BeginTransactionAsync(cancellationToken);
                 await _messagingDbContext.Database.UseTransactionAsync(transaction.GetDbTransaction(), cancellationToken);
 
-                await DispatchDomainEvents();
+                try
+                {
+                    var saved = await base.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
 
-                var result = await base.SaveChangesAsync(cancellationToken);
+                    // Sharing the transaction does not share change-tracking: rows staged on
+                    // _messagingDbContext (by the caller or a domain-event handler) must be
+                    // flushed before this transaction commits, or they're never persisted.
+                    await _messagingDbContext.SaveChangesAsync(acceptAllChangesOnSuccess: false, cancellationToken);
 
-                // Sharing the transaction above does not share change-tracking: a
-                // caller (or a domain-event handler dispatched above) may have added
-                // entities to _messagingDbContext that still need flushing before this
-                // transaction commits — otherwise they're silently never persisted.
-                await _messagingDbContext.SaveChangesAsync(cancellationToken);
+                    await transaction.CommitAsync(cancellationToken);
 
-                await transaction.CommitAsync(cancellationToken);
-
-                return result;
+                    return saved;
+                }
+                finally
+                {
+                    // Otherwise _messagingDbContext keeps pointing at this (now committed or
+                    // rolled-back) transaction, and its next standalone SaveChangesAsync in the
+                    // same scope would try to enlist in it.
+                    await _messagingDbContext.Database.UseTransactionAsync(null, CancellationToken.None);
+                }
             });
+
+            ChangeTracker.AcceptAllChanges();
+            _messagingDbContext.ChangeTracker.AcceptAllChanges();
+
+            return result;
+        }
+
+        public void DiscardPendingChanges()
+        {
+            ChangeTracker.Clear();
+
+            // Only Added rows — the inbox dispatcher shares this MessagingDbContext and still
+            // needs its tracked InboxMessages (claimed, then marked processed/failed).
+            foreach (var entry in _messagingDbContext.ChangeTracker.Entries<OutboxMessage>()
+                         .Where(e => e.State == EntityState.Added)
+                         .ToList())
+            {
+                entry.State = EntityState.Detached;
+            }
         }
 
         private async Task DispatchDomainEvents()

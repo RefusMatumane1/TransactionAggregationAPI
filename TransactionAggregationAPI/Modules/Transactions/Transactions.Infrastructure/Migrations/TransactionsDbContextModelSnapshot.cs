@@ -66,6 +66,12 @@ namespace Modules.Transactions.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId")
@@ -100,8 +106,8 @@ namespace Modules.Transactions.Infrastructure.Migrations
                                 .HasColumnType("uuid");
 
                             b1.Property<decimal>("Amount")
-                                .HasPrecision(18, 2)
-                                .HasColumnType("numeric(18,2)")
+                                .HasPrecision(19, 4)
+                                .HasColumnType("numeric(19,4)")
                                 .HasColumnName("Amount");
 
                             b1.Property<string>("Currency")

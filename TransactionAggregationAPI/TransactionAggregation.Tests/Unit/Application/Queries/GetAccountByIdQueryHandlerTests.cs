@@ -1,7 +1,5 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Application.Features.GetAccountById;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
@@ -11,6 +9,8 @@ using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -48,7 +48,7 @@ public class GetAccountByIdQueryHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.Id.Should().Be(account.Id.Value);
@@ -71,7 +71,7 @@ public class GetAccountByIdQueryHandlerTests
 
         var handler = BuildHandler(context);
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.Value.CustomerId.Should().Be(customerId.Value);
     }
@@ -86,7 +86,7 @@ public class GetAccountByIdQueryHandlerTests
 
         var handler = BuildHandler(context);
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.IsActive.Should().BeFalse();
@@ -99,7 +99,7 @@ public class GetAccountByIdQueryHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new GetAccountByIdQuery(Guid.NewGuid()), CancellationToken.None);
+            new GetAccountByIdQuery(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
@@ -114,7 +114,7 @@ public class GetAccountByIdQueryHandlerTests
 
         var handler = BuildHandler(context);
         var result = await handler.Handle(
-            new GetAccountByIdQuery(acc2.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(acc2.Id.Value, acc2.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         result.Value.AccountNumber.Should().Be("ACC-002");
@@ -129,7 +129,7 @@ public class GetAccountByIdQueryHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.Value.CreatedAt.Should().NotBe(default);
     }
@@ -151,15 +151,15 @@ public class GetAccountByIdQueryHandlerTests
 
         transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(1000m, "ZAR"), "Salary",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id));
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id).Settled());
         transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(-150m, "ZAR"), "Groceries",
-            TransactionCategory.Groceries, TransactionSource.Create("Bank A", "ext-2"), account.Id));
+            TransactionCategory.Groceries, TransactionSource.Create("Bank A", "ext-2"), account.Id).Settled());
         await transactionsCtx.SaveChangesAsync();
 
         var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.Value.Balance.Should().Be(850m);
     }
@@ -174,16 +174,34 @@ public class GetAccountByIdQueryHandlerTests
         var transactionsCtx = InMemoryDbContextFactory.Create();
         transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(500m, "ZAR"), "This account's income",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id));
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-1"), account.Id).Settled());
         transactionsCtx.Transactions.Add(Transaction.Create(
             account.CustomerId, Money.Create(999m, "ZAR"), "Other account's income",
-            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-2"), otherAccount.Id));
+            TransactionCategory.Income, TransactionSource.Create("Bank A", "ext-2"), otherAccount.Id).Settled());
         await transactionsCtx.SaveChangesAsync();
 
         var handler = BuildHandler(context, transactionsCtx);
         var result = await handler.Handle(
-            new GetAccountByIdQuery(account.Id.Value), CancellationToken.None);
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.Value.Balance.Should().Be(500m);
+    }
+
+    [Fact]
+    public async Task Handle_AnotherCustomersAccount_ReturnsNotFoundButOwnerCanReadIt()
+    {
+        var context = InMemoryCustomersDbContextFactory.Create();
+        var account = await SeedAccountAsync(context);
+        var handler = BuildHandler(context);
+
+        var notOwned = await handler.Handle(
+            new GetAccountByIdQuery(account.Id.Value, Guid.NewGuid()), CancellationToken.None);
+        var asOwner = await handler.Handle(
+            new GetAccountByIdQuery(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
+
+        notOwned.IsFailure.Should().BeTrue();
+        notOwned.Error.Type.Should().Be(ErrorType.NotFound);
+        asOwner.IsSuccess.Should().BeTrue("the owner can still read it");
+        notOwned.Error.Should().Be(Modules.Customers.Application.Errors.AccountErrors.NotFound(account.Id.Value));
     }
 }

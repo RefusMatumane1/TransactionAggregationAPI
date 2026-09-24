@@ -1,12 +1,12 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Modules.WebhookSources.Application.Features.ActivateWebhookSource;
+using Modules.WebhookSources.Application.Features.DeactivateWebhookSource;
+using Modules.WebhookSources.Domain;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using NSubstitute;
 using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Enums;
-using Modules.WebhookSources.Domain;
-using Modules.WebhookSources.Application.Features.ActivateWebhookSource;
-using Modules.WebhookSources.Application.Features.DeactivateWebhookSource;
-using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -23,7 +23,7 @@ public class ActivateDeactivateWebhookSourceCommandHandlerTests
 
     private static async Task<WebhookSource> SeedSourceAsync(WebhookSourcesDbContext ctx, string name = "stitch")
     {
-        var (source, _) = WebhookSource.Create(name);
+        var (source, _) = WebhookSource.Create(name, TestInstitutions.All);
         ctx.WebhookSources.Add(source);
         await ctx.SaveChangesAsync();
         return source;

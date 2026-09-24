@@ -1,7 +1,7 @@
-﻿using System;
+﻿using Modules.Transactions.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Text;
-using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Application.Common.DTOs
 {

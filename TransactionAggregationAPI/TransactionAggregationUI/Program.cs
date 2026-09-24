@@ -27,10 +27,16 @@ builder.Services.AddHttpClient("api", client => client.BaseAddress = new Uri(api
     .AddHttpMessageHandler(sp => sp.GetRequiredService<AuthorizationMessageHandler>()
         .ConfigureHandler(authorizedUrls: [apiBaseUrl]));
 
+// For the few anonymous endpoints the app calls where a signed-in session isn't guaranteed
+// (the bank-link callback, reached from the bank's consent page).
+builder.Services.AddHttpClient("api-anonymous", client => client.BaseAddress = new Uri(apiBaseUrl));
+
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<BankLinkService>();
 builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<WebhookSourceService>();
+builder.Services.AddScoped<AuditService>();
 
 await builder.Build().RunAsync();

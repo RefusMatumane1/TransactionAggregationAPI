@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using Modules.Customers.Application.Features.DeactivateAccount;
 using Modules.Customers.Domain;
 using Modules.Customers.Domain.ValueObjects;
 using Modules.Customers.Infrastructure.Persistence;
+using SharedKernel.Common.Enums;
+using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -35,7 +35,7 @@ public class DeactivateAccountCommandHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new DeactivateAccountCommand(account.Id.Value), CancellationToken.None);
+            new DeactivateAccountCommand(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         context.Accounts.Single().IsActive.Should().BeFalse();
@@ -49,7 +49,7 @@ public class DeactivateAccountCommandHandlerTests
         var handler = BuildHandler(context);
 
         await handler.Handle(
-            new DeactivateAccountCommand(account.Id.Value), CancellationToken.None);
+            new DeactivateAccountCommand(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         context.Accounts.Single().UpdatedAt.Should().NotBeNull();
     }
@@ -64,7 +64,7 @@ public class DeactivateAccountCommandHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new DeactivateAccountCommand(account.Id.Value), CancellationToken.None);
+            new DeactivateAccountCommand(account.Id.Value, account.CustomerId.Value), CancellationToken.None);
 
         result.IsSuccess.Should().BeTrue();
         context.Accounts.Single().IsActive.Should().BeFalse();
@@ -77,7 +77,7 @@ public class DeactivateAccountCommandHandlerTests
         var handler = BuildHandler(context);
 
         var result = await handler.Handle(
-            new DeactivateAccountCommand(Guid.NewGuid()), CancellationToken.None);
+            new DeactivateAccountCommand(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
 
         result.IsFailure.Should().BeTrue();
         result.Error.Type.Should().Be(ErrorType.NotFound);
@@ -94,9 +94,24 @@ public class DeactivateAccountCommandHandlerTests
         await context.SaveChangesAsync();
 
         var handler = BuildHandler(context);
-        await handler.Handle(new DeactivateAccountCommand(acc1.Id.Value), CancellationToken.None);
+        await handler.Handle(new DeactivateAccountCommand(acc1.Id.Value, acc1.CustomerId.Value), CancellationToken.None);
 
         context.Accounts.Single(a => a.Id == acc1.Id).IsActive.Should().BeFalse();
         context.Accounts.Single(a => a.Id == acc2.Id).IsActive.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Handle_AnotherCustomersAccount_ReturnsNotFoundAndLeavesItActive()
+    {
+        var context = InMemoryCustomersDbContextFactory.Create();
+        var account = await SeedActiveAccountAsync(context);
+        var handler = BuildHandler(context);
+
+        var result = await handler.Handle(
+            new DeactivateAccountCommand(account.Id.Value, Guid.NewGuid()), CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Should().Be(Modules.Customers.Application.Errors.AccountErrors.NotFound(account.Id.Value));
+        context.Accounts.Single().IsActive.Should().BeTrue();
     }
 }

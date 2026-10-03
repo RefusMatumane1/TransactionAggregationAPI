@@ -17,9 +17,8 @@ CI gate on every PR.
   slow every PR for a signal that's only meaningful against realistic data volumes
   and infrastructure, which CI's ephemeral containers don't represent well. Instead,
   run it manually before a release, after a change to a hot query path, or on a
-  schedule against a staging environment — see [ADR-0006](../docs/adr/0006-no-partitioning-yet.md)
-  and [ADR-0007](../docs/adr/0007-offset-pagination.md) for the query-shape
-  assumptions this test is meant to validate.
+  schedule against a staging environment, to validate the query-shape assumptions
+  below.
 
 ## Assumptions and targets
 
@@ -28,18 +27,30 @@ production traffic yet. Update them once real usage data exists.
 
 | Assumption | Value | Why |
 |---|---|---|
-| Per-customer transaction volume | Low thousands, not millions | Consumer banking aggregation, not a payments processor. Informs ADR-0006 (no partitioning) and ADR-0007 (offset pagination). |
-| Read:write ratio | Heavily read-skewed | Customers check balances/history far more often than new transactions arrive. |
+| Transaction volume | Hundreds of thousands, not hundreds of millions | Aggregation across a bounded set of provider accounts, not a payments processor. Why the table is not partitioned, and why every list uses cursor pagination. |
+| Read:write ratio | Heavily read-skewed | Staff browse dashboards and lists far more often than deliveries arrive. |
 | Target load | 20 concurrent virtual users sustained | A reasonable early-stage concurrent-user assumption; revisit once real traffic is observed. |
-| `GET .../accounts` p95 latency | < 200ms | Simple indexed lookup, no aggregation. |
-| `GET .../transactions/filter` p95 latency | < 300ms | Indexed (`CustomerId+Date+Category`/`CustomerId+Status`, see `TransactionConfiguration.cs`) paginated query — the query this system's indexing strategy is built around. |
-| `GET .../transactions/summary` p95 latency | < 400ms | Aggregates a customer's full date-ranged transaction set in memory after querying — the most expensive read endpoint, and the first candidate for caching or a materialized view if it exceeds this target under real volume. |
+| `GET /transactions` p95 latency | < 300ms | Keyset-paginated over the `Date DESC, Id DESC` covering index — the query this system's indexing strategy is built around. |
+| `GET /transactions/summary` p95 latency | < 400ms | Aggregates in PostgreSQL (`GROUP BY` month and category), so the result is at most ~120 month buckets whatever the history length; the period is capped at 10 years. |
+| `GET /transactions/aggregates/{providers,categories}` p95 latency | < 400ms | `GROUP BY` in PostgreSQL over one reporting period (12 months by default). |
 | Error rate | < 1% | Anything higher under sustained load indicates a real problem, not noise. |
 
 If a run misses these thresholds, that's a signal to profile the specific query
 (check `EXPLAIN ANALYZE` against the actual index usage) before reaching for
 caching, denormalization, or partitioning — see the "revisit when" sections in
 the ADRs linked above.
+
+## Measured on every CI run
+
+The load test needs a production-like environment. What can be measured without one is
+measured in the test suite, against real PostgreSQL:
+
+| Measurement | Result | Test |
+|---|---|---|
+| Transaction list page (`ORDER BY Date DESC, Id DESC LIMIT 21`, first page and a deep keyset page) at 50,000 rows / 200 providers | index scan on `IX_Transactions_Date_Id_Covering`, no sequential scan or sort, < 50 ms (`EXPLAIN ANALYZE`) | `ProcessingGuaranteesPostgresTests.HistoryAndExpiryQueries_UseTheirIndexes_AndStayFastAtVolume` |
+| Amount sort, account statement and description search at the same volume | partial indexes `IX_Transactions_Amount_Id`, `IX_Transactions_Account_Date_Id`, `IX_Transactions_Description_Trgm`; no sequential scan, < 50 ms | same |
+| Summary and balances | computed by SQL aggregation; memory bounded by bucket count | `AggregationPostgresTests` |
+| Cache invalidation | O(1) (`INCR` of a scope version), no keyspace scan | `RedisIntegrationTests` |
 
 ## Running it
 
@@ -57,13 +68,13 @@ never present in a production Keycloak realm.
 k6 run \
   -e BASE_URL=http://localhost:5001 \
   -e KEYCLOAK_URL=http://localhost:8081 \
+  -e STAFF_PASSWORD="$TRANSACTION_APP_STAFF_PASSWORD" \
   perf/k6/transactions-read.js
 ```
 
-The script's `setup()` registers a fresh throwaway customer and account per run
-so results aren't polluted by previous runs' data. It does **not** seed bulk
-transaction history automatically (see the comment in `seedAccountAndTransactions`
-in the script) — for a representative test of the filter/summary endpoints under
-real data volume, seed transactions through the webhook ingestion endpoint (the
-same path production traffic uses) against a linked bank account before running,
-using `SEED_TRANSACTION_COUNT` as a guide for how many to generate.
+The script's `setup()` signs in as the dev staff user (`staff@test.com`, or `-e STAFF_EMAIL=...`).
+`STAFF_PASSWORD` is required. The password is not committed anywhere, so take it from your
+`.env` (compose) or from `Parameters:app-staff-password` in the AppHost's `secrets.json`. It reads whatever data the environment holds:
+the Development seed and the mock aggregator's feed give a realistic starting volume; for a
+heavier test, push more deliveries through the webhook ingestion endpoint (the same path
+production traffic uses) before running.

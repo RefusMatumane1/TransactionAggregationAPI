@@ -25,22 +25,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # --wait returns once every service's healthcheck passes (the API's reports Healthy
+      # only after migrations and its dependencies are ready).
       - name: Start the stack
         working-directory: TransactionAggregationAPI
-        run: docker compose up -d --build
-
-      - name: Wait for API readiness
         run: |
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:5001/alive > /dev/null; then
-              echo "API is up"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::API did not become ready in time"
-          docker compose -f TransactionAggregationAPI/docker-compose.yml logs api || true
-          exit 1
+          docker compose up -d --build --wait --wait-timeout 600 || {
+            echo "::error::Stack did not become healthy"
+            docker compose logs api keycloak || true
+            exit 1
+          }
+
+      - name: Smoke test
+        working-directory: TransactionAggregationAPI
+        run: scripts/smoke-test.sh http://localhost:5001
 
       - name: ZAP baseline scan
         uses: zaproxy/action-baseline@v0.14.0
@@ -51,8 +49,13 @@ jobs:
           # disclosure, cookie flags, etc. — not injection/auth-bypass, which needs an
           # active scan against a disposable environment with real seeded data and is
           # out of scope for this lightweight pass.
-          cmd_options: '-a'
-          fail_action: false
+          # .zap/rules.tsv promotes the checks this API guarantees (anti-clickjacking,
+          # nosniff, no error/stack-trace disclosure) to FAIL: a regression breaks the run.
+          # Everything else stays advisory (-I), since the passive baseline also reports
+          # informational findings on the hosted SPA's static files.
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -I'
+          fail_action: true
 
       - name: Stop the stack
         if: always()

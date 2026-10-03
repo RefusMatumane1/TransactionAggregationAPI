@@ -1,8 +1,8 @@
-using SharedKernel.Abstractions;
+using BuildingBlocks.Application.Abstractions;
 
 namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
 {
-    public sealed record CreateWebhookSourceCommand(string Name, IReadOnlyList<string> AuthorizedInstitutions) : ICommand<CreateWebhookSourceResult>;
+    public sealed record CreateWebhookSourceCommand(string Code, string DisplayName, string Color) : ICommand<CreateWebhookSourceResult>;
 
-    public sealed record CreateWebhookSourceResult(Guid Id, string Name, string ApiKey, IReadOnlyList<string> AuthorizedInstitutions);
+    public sealed record CreateWebhookSourceResult(Guid Id, string Code, string DisplayName, string Color, string ApiKey);
 }

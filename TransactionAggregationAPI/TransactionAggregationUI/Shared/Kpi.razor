@@ -1,0 +1,45 @@
+@* A headline number with, optionally, its change on the previous period. The change is coloured by
+   whether the move is good (more income, less spending), and always carries an arrow and words,
+   so colour is never the only signal. *@
+<div class="kpi">
+    <div class="kpi-label">
+        @if (Swatch is not null)
+        {
+            <span class="kpi-swatch" style="background:@Swatch" aria-hidden="true"></span>
+        }
+        @Label
+    </div>
+    <div class="kpi-value num">@Value</div>
+    @if (HigherIsBetter is { } higherIsBetter && HasComparison)
+    {
+        <div class="kpi-delta">
+            @if (Change is { } change)
+            {
+                var good = change == 0 ? (bool?)null : (change > 0) == higherIsBetter;
+                <span class="@(good switch { true => "text-good", false => "text-bad", _ => "" })">
+                    <i class="bi @(change > 0 ? "bi-arrow-up-right" : change < 0 ? "bi-arrow-down-right" : "bi-dash")" aria-hidden="true"></i>
+                    @Format.Change(change)
+                </span>
+                <span>vs previous period</span>
+            }
+            else
+            {
+                <span>No spending or income in the previous period</span>
+            }
+        </div>
+    }
+    else if (Note is not null)
+    {
+        <div class="kpi-delta">@Note</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string? Swatch { get; set; }
+    [Parameter] public decimal? Change { get; set; }
+    [Parameter] public bool? HigherIsBetter { get; set; }
+    [Parameter] public bool HasComparison { get; set; }
+    [Parameter] public string? Note { get; set; }
+}

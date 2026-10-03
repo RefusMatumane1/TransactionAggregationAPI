@@ -17,7 +17,14 @@ namespace Modules.WebhookSources
             group.MapRotateWebhookSourceKey();
             group.MapActivateWebhookSource();
             group.MapDeactivateWebhookSource();
-            group.MapUpdateWebhookSourceInstitutions();
+            group.MapUpdateWebhookSource();
+            group.MapRegisterWebhookSourceSigningKey();
+
+            // The read-only view staff need to label transactions; no keys, no admin actions.
+            var banks = app.MapApiGroup("banks", "Banks")
+                           .RequireAuthorization(AuthorizationPolicies.Staff);
+
+            banks.MapGetBanks();
 
             return app;
         }

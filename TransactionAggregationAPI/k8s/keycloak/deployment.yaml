@@ -14,7 +14,13 @@ spec:
   # Single replica: start-dev mode keeps everything (including the realm) in an embedded H2
   # database, so replicas wouldn't share state anyway. Fine for this dev cluster — a real
   # deployment would run Keycloak in production mode against Postgres with multiple replicas.
+  # The H2 files live on the keycloak-data claim so staff and admin users (and their roles)
+  # outlive the pod.
   replicas: 1
+
+  # The claim is ReadWriteOnce and H2 takes a file lock, so the old pod must stop first.
+  strategy:
+    type: Recreate
 
   selector:
     matchLabels:
@@ -28,6 +34,9 @@ spec:
         app.kubernetes.io/part-of: transaction-aggregation
 
     spec:
+      securityContext:
+        fsGroup: 1000  # the image's keycloak user, so it can write to the claim
+
       containers:
         - name: keycloak
           image: quay.io/keycloak/keycloak:26.0
@@ -43,9 +52,17 @@ spec:
                   name: transaction-api-secrets
                   key: keycloak-admin-password
 
+            # The application's admin user (realm role "admin": audit trail, webhook-source
+            # management) takes its password from the Secret too, never from the realm file.
+            - name: TRANSACTION_APP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: app-admin-password
+
             # Fixed so the `iss` claim on every issued token matches Keycloak__PublicIssuer
             # (transaction-api-config) regardless of whether a request came in through the
-            # ingress hostname or the in-cluster service DNS — see Program.cs.
+            # ingress hostname or the in-cluster service DNS — see AuthenticationSetup.cs in the API.
             # Full URL (Keycloak 25+ hostname v2): pins the issuer's scheme too, instead of
             # deriving it from proxy headers. BACKCHANNEL_DYNAMIC keeps the API's in-cluster
             # metadata/JWKS calls on the service DNS name. KC_HOSTNAME_STRICT_HTTPS was a v1
@@ -63,6 +80,8 @@ spec:
               protocol: TCP
 
           volumeMounts:
+            - name: data
+              mountPath: /opt/keycloak/data
             - name: realm-import
               mountPath: /opt/keycloak/data/import
               readOnly: true
@@ -97,6 +116,9 @@ spec:
             failureThreshold: 3
 
       volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: keycloak-data
         - name: realm-import
           configMap:
             name: keycloak-realm-config

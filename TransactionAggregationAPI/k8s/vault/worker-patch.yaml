@@ -1,0 +1,25 @@
+# Strategic-merge patch for deployment/transaction-worker; see api-patch.yaml.
+spec:
+  template:
+    metadata:
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "transaction-worker"
+        vault.hashicorp.com/agent-pre-populate: "true"
+        vault.hashicorp.com/agent-inject-secret-secrets.json: "secret/data/transaction-aggregation/worker"
+        vault.hashicorp.com/agent-inject-template-secrets.json: |
+          {{- with secret "secret/data/transaction-aggregation/worker" -}}
+          {{ .Data.data | toJSON }}
+          {{- end }}
+    spec:
+      containers:
+        - name: transaction-worker
+          env:
+            - name: Secrets__FilePath
+              value: /vault/secrets/secrets.json
+            # Environment variables outrank secrets.json, so the Secret-based connection string
+            # is removed: the one in Vault is the only one the host sees.
+            - name: ConnectionStrings__transactiondb
+              $patch: delete
+            - name: APP_DB_PASSWORD
+              $patch: delete

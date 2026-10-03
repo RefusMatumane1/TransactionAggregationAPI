@@ -4,7 +4,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="MediatR" />
 		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 		<!-- IWebhookSourcesDbContext (the Application-layer persistence port) exposes
 		     DbSet<T> in its signature — EF Core is referenced for that type only, not
@@ -13,7 +12,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
 		<ProjectReference Include="..\WebhookSources.Domain\WebhookSources.Domain.csproj" />
 		<ProjectReference Include="..\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
 	</ItemGroup>
 </Project>

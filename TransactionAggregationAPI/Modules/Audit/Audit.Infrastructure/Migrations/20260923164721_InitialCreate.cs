@@ -4,10 +4,8 @@
 
 namespace Modules.Audit.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class InitialCreate : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.EnsureSchema(
@@ -75,10 +73,6 @@ namespace Modules.Audit.Infrastructure.Migrations
                 table: "AuditEvents",
                 column: "TransactionId");
 
-            // Append-only at the database level, not just by convention in code: any UPDATE,
-            // DELETE or TRUNCATE — from the app, a migration, or someone with psql — fails.
-            // A retention purge has to be a deliberate, reviewable act (disable the trigger in
-            // its own migration/script), never an accident. See docs/data-retention.md.
             migrationBuilder.Sql("""
                 CREATE OR REPLACE FUNCTION audit.prevent_audit_event_mutation()
                 RETURNS trigger
@@ -100,7 +94,6 @@ namespace Modules.Audit.Infrastructure.Migrations
                 """);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.Sql("""

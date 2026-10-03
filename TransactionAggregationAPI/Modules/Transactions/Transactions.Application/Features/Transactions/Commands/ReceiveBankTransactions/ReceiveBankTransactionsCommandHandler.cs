@@ -1,3 +1,5 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Logging;
 using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Observability;
 using BuildingBlocks.Messaging.Outbox;
@@ -7,9 +9,10 @@ using Microsoft.Extensions.Logging;
 using Modules.Audit.Contracts;
 using Modules.Transactions.Application.Common.Audit;
 using Modules.Transactions.Application.Common.Inbox;
+using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Outbox;
-using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -18,75 +21,92 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
 {
     internal sealed class ReceiveBankTransactionsCommandHandler(
         IMessagingDbContext messaging,
+        ITransactionsDbContext context,
         ILogger<ReceiveBankTransactionsCommandHandler> logger)
         : ICommandHandler<ReceiveBankTransactionsCommand, InboxReceipt>
     {
         public async Task<Result<InboxReceipt>> Handle(ReceiveBankTransactionsCommand request, CancellationToken cancellationToken)
         {
+            if (!InboundBank.Matches(request.SourceName, request.Institution))
+                return Result.Failure<InboxReceipt>(InboxErrors.InstitutionNotTheSourcesBank(request.SourceName, request.Institution!));
+
             var delivery = request.Delivery ?? InboundDelivery.Unspecified;
             var payloadJson = JsonSerializer.Serialize(
-                new InboundTransactionsPayload(request.ExternalAccountId, request.Transactions));
+                new InboundTransactionsPayload(request.ExternalAccountId, request.Institution, request.Transactions));
             var payloadHash = HashPayload(payloadJson);
             var keyFromSender = !string.IsNullOrWhiteSpace(request.IdempotencyKey);
             var idempotencyKey = keyFromSender ? request.IdempotencyKey!.Trim() : payloadHash;
 
-            var existing = await FindExistingAsync(request.SourceName, idempotencyKey, cancellationToken);
-            if (existing is not null)
-                return await AcknowledgeDuplicateAsync(existing, request, delivery, idempotencyKey, payloadHash, cancellationToken);
+            var known = await FindKnownAsync(request.SourceName, idempotencyKey, cancellationToken);
+            if (known is not null)
+                return await AcknowledgeDuplicateAsync(known, request, delivery, idempotencyKey, payloadHash, cancellationToken);
 
-            var inboxMessage = InboxMessage.Create(request.SourceName, payloadJson, idempotencyKey, delivery.Channel, payloadHash);
+            var inboxMessage = InboxMessage.Create(
+                request.SourceName, payloadJson, idempotencyKey, delivery.Channel, payloadHash,
+                correlationId: delivery.CorrelationId ?? Activity.Current?.TraceId.ToString(),
+                traceParent: Activity.Current?.Id);
             messaging.InboxMessages.Add(inboxMessage);
 
-            // Same SaveChanges as the inbox row: the receipt is audited if and only if it was stored.
-            var auditMessage = InboundAudit.Enqueue(messaging,
-            [
-                BuildDeliveryEvent(AuditEventTypes.InboundReceived, request, delivery, inboxMessage.Id.Value,
-                    idempotencyKey, payloadHash, detail: $"{request.Transactions.Count} transaction(s) queued",
-                    extra: new() { ["idempotencyKeySource"] = keyFromSender ? "sender" : "payload-hash" })
-            ]);
+            var received = BuildDeliveryEvent(AuditEventTypes.InboundReceived, request, delivery, inboxMessage.Id.Value,
+                idempotencyKey, payloadHash, detail: $"{request.Transactions.Count} transaction(s) queued",
+                extra: new() { ["idempotencyKeySource"] = keyFromSender ? "sender" : "payload-hash" });
+
+            context.StageAudit([received]);
 
             try
             {
-                await messaging.SaveChangesAsync(cancellationToken);
+                await context.SaveChangesAsync(cancellationToken);
             }
             catch (DbUpdateException ex) when (ex.IsUniqueViolation())
             {
-                // Lost a race with a concurrent delivery of the same key (two replicas each
-                // receiving the same webhook retry, or a Kafka rebalance overlapping a slow
-                // consumer) — the winner's row is the canonical copy.
+                context.DiscardPendingChanges();
                 messaging.InboxMessages.Entry(inboxMessage).State = EntityState.Detached;
-                if (auditMessage is not null)
-                    messaging.OutboxMessages.Entry(auditMessage).State = EntityState.Detached;
 
-                existing = await FindExistingAsync(request.SourceName, idempotencyKey, cancellationToken)
+                known = await FindKnownAsync(request.SourceName, idempotencyKey, cancellationToken)
                     ?? throw new InvalidOperationException(
                         $"Unique violation on inbox key '{idempotencyKey}' but no existing row was found", ex);
 
-                return await AcknowledgeDuplicateAsync(existing, request, delivery, idempotencyKey, payloadHash, cancellationToken);
+                return await AcknowledgeDuplicateAsync(known, request, delivery, idempotencyKey, payloadHash, cancellationToken);
             }
+
+            logger.LogInformation(
+                "Queued delivery {InboxMessageId} from {SourceName} via {Channel}: {TransactionCount} transaction(s) for account {AccountRef}",
+                inboxMessage.Id.Value, request.SourceName, delivery.Channel, request.Transactions.Count,
+                LogRedaction.Account(request.ExternalAccountId));
 
             return Result.Success(new InboxReceipt(inboxMessage.Id.Value, IsDuplicate: false));
         }
 
-        private Task<InboxMessage?> FindExistingAsync(string sourceName, string idempotencyKey, CancellationToken cancellationToken) =>
-            messaging.InboxMessages.FirstOrDefaultAsync(
+        private async Task<KnownDelivery?> FindKnownAsync(string sourceName, string idempotencyKey, CancellationToken cancellationToken)
+        {
+            var live = await messaging.InboxMessages.FirstOrDefaultAsync(
                 m => m.SourceName == sourceName && m.IdempotencyKey == idempotencyKey, cancellationToken);
+            if (live is not null)
+                return new KnownDelivery(live.Id.Value, live.Status, live.HasSamePayloadAs, live.RequeueIfDeadLettered);
+
+            var archived = await messaging.ArchivedInboxMessages.AsNoTracking().FirstOrDefaultAsync(
+                m => m.SourceName == sourceName && m.IdempotencyKey == idempotencyKey, cancellationToken);
+            return archived is null
+                ? null
+                : new KnownDelivery(archived.Id, archived.Status, archived.HasSamePayloadAs, static () => false);
+        }
+
+        private sealed record KnownDelivery(
+            Guid Id, InboxMessageStatus Status, Func<string, bool> HasSamePayloadAs, Func<bool> RequeueIfDeadLettered);
 
         private async Task<Result<InboxReceipt>> AcknowledgeDuplicateAsync(
-            InboxMessage existing,
+            KnownDelivery existing,
             ReceiveBankTransactionsCommand request,
             InboundDelivery delivery,
             string idempotencyKey,
             string payloadHash,
             CancellationToken cancellationToken)
         {
-            // Same key, different content: not a redelivery but a sender bug (or a replayed key
-            // carrying new data). Acknowledging it as a duplicate would silently drop that data.
             if (!existing.HasSamePayloadAs(payloadHash))
             {
                 logger.LogWarning(
                     "Idempotency key reused with a different payload by {SourceName} (inbox message {InboxMessageId}) — refused",
-                    request.SourceName, existing.Id.Value);
+                    request.SourceName, existing.Id);
                 return Result.Failure<InboxReceipt>(InboxErrors.IdempotencyKeyReused(idempotencyKey));
             }
 
@@ -95,34 +115,31 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
 
             DuplicateMetrics.InboundDuplicates.WithLabels(request.SourceName, DuplicateMetrics.MessageLevel).Inc();
             logger.LogWarning(
-                "Duplicate inbound delivery from {SourceName} for account {ExternalAccountId} matched inbox message {InboxMessageId} (status {Status}, requeued {Requeued})",
-                request.SourceName, request.ExternalAccountId, existing.Id.Value, previousStatus, requeued);
+                "Duplicate inbound delivery from {SourceName} for account {AccountRef} matched inbox message {InboxMessageId} (status {Status}, requeued {Requeued})",
+                request.SourceName, LogRedaction.Account(request.ExternalAccountId), existing.Id, previousStatus, requeued);
 
             var notification = new DuplicateInboundDetectedOutboxPayload(
                 Level: DuplicateMetrics.MessageLevel,
                 SourceName: request.SourceName,
                 ExternalAccountId: request.ExternalAccountId,
                 DuplicateExternalIds: request.Transactions.Select(t => t.Id).ToList(),
-                InboxMessageId: existing.Id.Value,
-                CustomerId: null,
+                InboxMessageId: existing.Id,
                 DetectedAt: DateTime.UtcNow);
             messaging.OutboxMessages.Add(OutboxMessage.Create(
                 OutboxMessageTypes.DuplicateInboundDetected, JsonSerializer.Serialize(notification)));
 
-            InboundAudit.Enqueue(messaging,
-            [
-                BuildDeliveryEvent(
-                    requeued ? AuditEventTypes.InboundRequeued : AuditEventTypes.InboundDuplicate,
-                    request, delivery, existing.Id.Value, idempotencyKey, payloadHash,
-                    detail: requeued
-                        ? "Replay of a dead-lettered delivery — requeued for processing"
-                        : $"Replay of an existing delivery (status {previousStatus}) — not queued again",
-                    extra: new() { ["originalStatus"] = previousStatus.ToString() })
-            ]);
+            var replayed = BuildDeliveryEvent(
+                requeued ? AuditEventTypes.InboundRequeued : AuditEventTypes.InboundDuplicate,
+                request, delivery, existing.Id, idempotencyKey, payloadHash,
+                detail: requeued
+                    ? "Replay of a dead-lettered delivery — requeued for processing"
+                    : $"Replay of an existing delivery (status {previousStatus}) — not queued again",
+                extra: new() { ["originalStatus"] = previousStatus.ToString() });
 
-            await messaging.SaveChangesAsync(cancellationToken);
+            context.StageAudit([replayed]);
+            await context.SaveChangesAsync(cancellationToken);
 
-            return Result.Success(new InboxReceipt(existing.Id.Value, IsDuplicate: true, Requeued: requeued));
+            return Result.Success(new InboxReceipt(existing.Id, IsDuplicate: true, Requeued: requeued));
         }
 
         private static AuditEventRecord BuildDeliveryEvent(
@@ -137,6 +154,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
         {
             var metadata = new Dictionary<string, string>(delivery.Metadata)
             {
+                ["institution"] = request.SourceName,
                 ["transactionCount"] = request.Transactions.Count.ToString(),
                 ["payloadSha256"] = payloadHash
             };

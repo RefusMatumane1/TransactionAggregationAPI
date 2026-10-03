@@ -4,10 +4,8 @@
 
 namespace Modules.Transactions.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddAccountIdToTransactions : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<Guid>(
@@ -30,7 +28,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                 onDelete: ReferentialAction.SetNull);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(

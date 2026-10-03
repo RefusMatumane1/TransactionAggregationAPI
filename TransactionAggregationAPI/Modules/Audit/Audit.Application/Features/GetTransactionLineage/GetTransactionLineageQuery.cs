@@ -1,8 +1,8 @@
+using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Audit.Application.DTOs;
 using Modules.Audit.Application.Persistence;
 using Modules.Audit.Contracts;
-using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
 
 namespace Modules.Audit.Application.Features.GetTransactionLineage
@@ -20,14 +20,9 @@ namespace Modules.Audit.Application.Features.GetTransactionLineage
                 .OrderBy(e => e.OccurredAt)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            // Seeded / pre-audit transactions have no ingestion record — that's "no lineage", not an error in the data.
             if (ingested is null)
                 return Result.Failure<TransactionLineageDto>(Error.NotFound("TransactionLineage", request.TransactionId));
 
-            // The ingesting delivery's own events (receipt, retries, processing) — not every
-            // per-transaction event of a 500-transaction batch, which would bury the one that
-            // matters — plus anything later about this transaction itself, e.g. the settlement
-            // that arrived in a different delivery when the bank posted it.
             var inboxMessageId = ingested.InboxMessageId;
             var events = await context.AuditEvents
                 .AsNoTracking()

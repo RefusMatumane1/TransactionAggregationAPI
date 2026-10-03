@@ -17,8 +17,8 @@ namespace Modules.WebhookSources.Application.Contracts
             if (source is null)
                 return null;
 
-            source.RecordUsage();
-            await context.SaveChangesAsync(cancellationToken);
+            if (source.RecordUsage(DateTime.UtcNow))
+                await context.SaveChangesAsync(cancellationToken);
 
             return source.Name;
         }

@@ -28,13 +28,14 @@ namespace Modules.Audit.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Actor")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(32)
                         .HasColumnType("character varying(32)");
-
-                    b.Property<Guid?>("CustomerId")
-                        .HasColumnType("uuid");
 
                     b.Property<string>("Detail")
                         .HasMaxLength(2000)
@@ -92,6 +93,10 @@ namespace Modules.Audit.Infrastructure.Migrations
 
                     b.HasIndex("TransactionId")
                         .HasDatabaseName("IX_AuditEvents_TransactionId");
+
+                    b.HasIndex("Actor", "OccurredAt")
+                        .HasDatabaseName("IX_AuditEvents_Actor_OccurredAt")
+                        .HasFilter("\"Actor\" IS NOT NULL");
 
                     b.HasIndex("EventType", "OccurredAt")
                         .HasDatabaseName("IX_AuditEvents_EventType_OccurredAt");

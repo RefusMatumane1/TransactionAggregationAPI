@@ -7,12 +7,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    /// <summary>
-    /// The in-memory provider can't enforce IX_InboxMessages_SourceName_IdempotencyKey, so
-    /// only a real Postgres run proves two concurrent deliveries of the same key (two API
-    /// replicas receiving one webhook retry, or a Kafka rebalance redelivering a record)
-    /// leave exactly one inbox row, with the loser reporting a duplicate rather than failing.
-    /// </summary>
     [Collection(PostgresCollection.Name)]
     public class InboxIdempotencyTests
     {
@@ -36,13 +30,13 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 Category = string.Empty,
                 Date = DateTime.UtcNow
             };
-            var command = new ReceiveBankTransactionsCommand(sourceName, "ext-acc-1", [dto], "delivery-1");
+            var command = new ReceiveBankTransactionsCommand(sourceName, "ext-acc-1", null, [dto], "delivery-1");
 
             async Task<InboxReceipt> ReceiveAsync()
             {
                 using var messaging = _fixture.CreateMessagingContext();
                 var handler = new ReceiveBankTransactionsCommandHandler(
-                    messaging, NullLogger<ReceiveBankTransactionsCommandHandler>.Instance);
+                    messaging, _fixture.CreateRetryingContext(messaging), NullLogger<ReceiveBankTransactionsCommandHandler>.Instance);
                 var result = await handler.Handle(command, CancellationToken.None);
                 result.IsSuccess.Should().BeTrue();
                 return result.Value;

@@ -23,10 +23,13 @@ namespace BuildingBlocks.Messaging.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("BuildingBlocks.Messaging.Inbox.InboxMessage", b =>
+            modelBuilder.Entity("BuildingBlocks.Messaging.Archiving.ArchivedInboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("Attempts")
                         .HasColumnType("integer");
@@ -37,6 +40,10 @@ namespace BuildingBlocks.Messaging.Migrations
 
                     b.Property<DateTime?>("ClaimedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("IdempotencyKey")
                         .HasMaxLength(200)
@@ -71,7 +78,142 @@ namespace BuildingBlocks.Messaging.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAt")
+                        .HasDatabaseName("IX_InboxMessagesArchive_ReceivedAt");
+
+                    b.HasIndex("SourceName", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("IX_InboxMessagesArchive_SourceName_IdempotencyKey")
+                        .HasFilter("\"IdempotencyKey\" IS NOT NULL");
+
+                    b.ToTable("InboxMessagesArchive", "messaging");
+                });
+
+            modelBuilder.Entity("BuildingBlocks.Messaging.Archiving.ArchivedOutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("ArchivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("IX_OutboxMessagesArchive_OccurredAt");
+
+                    b.ToTable("OutboxMessagesArchive", "messaging");
+                });
+
+            modelBuilder.Entity("BuildingBlocks.Messaging.Inbox.InboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Channel")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("ClaimedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("PayloadHash")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("IX_InboxMessages_Processed_ProcessedAt")
+                        .HasFilter("\"Status\" = 2");
 
                     b.HasIndex("SourceName", "IdempotencyKey")
                         .IsUnique()
@@ -94,6 +236,10 @@ namespace BuildingBlocks.Messaging.Migrations
 
                     b.Property<DateTime?>("ClaimedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CorrelationId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("LastError")
                         .HasMaxLength(2000)
@@ -120,12 +266,20 @@ namespace BuildingBlocks.Messaging.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<string>("TraceParent")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("Type")
                         .IsRequired()
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProcessedAt")
+                        .HasDatabaseName("IX_OutboxMessages_Processed_ProcessedAt")
+                        .HasFilter("\"Status\" = 2");
 
                     b.HasIndex("Status", "NextAttemptAt")
                         .HasDatabaseName("IX_OutboxMessages_Status_NextAttemptAt");

@@ -1,9 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-	<PropertyGroup>
-		<RootNamespace>Modules.BankLinks.Domain</RootNamespace>
-	</PropertyGroup>
-
-	<ItemGroup>
-		<ProjectReference Include="..\..\..\BuildingBlocks\SharedKernel\SharedKernel.csproj" />
-	</ItemGroup>
-</Project>

@@ -1,16 +1,17 @@
+using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using SharedKernel.Persistence;
 
-namespace BuildingBlocks.Messaging.Persistence;
-
-public class MessagingDbContextFactory : IDesignTimeDbContextFactory<MessagingDbContext>
+namespace BuildingBlocks.Messaging.Persistence
 {
-    public MessagingDbContext CreateDbContext(string[] args)
+    public class MessagingDbContextFactory : IDesignTimeDbContextFactory<MessagingDbContext>
     {
-        var optionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
-        optionsBuilder.UseNpgsql(DesignTime.ConnectionString);
+        public MessagingDbContext CreateDbContext(string[] args)
+        {
+            var optionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
+            optionsBuilder.UseNpgsql(DesignTime.ConnectionString);
 
-        return new MessagingDbContext(optionsBuilder.Options, DesignTime.NoOpMediator);
+            return new MessagingDbContext(optionsBuilder.Options);
+        }
     }
 }

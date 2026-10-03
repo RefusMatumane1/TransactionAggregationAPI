@@ -1,65 +1,49 @@
-using MapsterMapper;
-using MediatR;
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Pagination;
 using Microsoft.EntityFrameworkCore;
+using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Application.Common.Models;
+using Modules.Transactions.Application.Common.Pagination;
 using Modules.Transactions.Domain.Entities;
 using SharedKernel.Common.Models;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions
 {
-    public sealed class GetTransactionsQueryHandler : IRequestHandler<GetTransactionsQuery, Result<PaginatedResponse<TransactionListItemDto>>>
+    internal sealed class GetTransactionsQueryHandler(
+        ITransactionsDbContext context, ITransactionSearch search, IKeysetPaginator paginator)
+        : IQueryHandler<GetTransactionsQuery, CursorPage<TransactionListItemDto>>
     {
-        private readonly ITransactionsDbContext _context;
-        private readonly IMapper _mapper;
-
-        public GetTransactionsQueryHandler(ITransactionsDbContext context, IMapper mapper)
-        {
-            _context = context;
-            _mapper = mapper;
-        }
-
-        public async Task<Result<PaginatedResponse<TransactionListItemDto>>> Handle(
+        public async Task<Result<CursorPage<TransactionListItemDto>>> Handle(
             GetTransactionsQuery request,
             CancellationToken cancellationToken)
         {
-            var query = _context.Transactions
-                .Where(t => t.CustomerId == CustomerId.CreateFrom(request.CustomerId))
-                .AsNoTracking();
+            var filtered = ApplyFilters(context.Transactions.Ledger(request.Filter), request);
 
-            query = ApplyFilters(query, request);
+            BoundedCount? total = request.IncludeTotal
+                ? await BoundedCount.OfAsync(filtered, (q, ct) => q.CountAsync(ct), cancellationToken)
+                : null;
 
-            query = ApplySorting(query, request);
+            var sort = TransactionSorts.Resolve(request.SortBy);
+            var window = PageCursor.TryDecode(request.Cursor, out var cursor)
+                ? sort.After(filtered, paginator, cursor!)
+                : filtered;
 
-            var totalCount = await query.CountAsync(cancellationToken);
+            var fetched = await sort.Order(window, request.SortDescending)
+                .Take(request.PageSize + 1)
+                .ToListAsync(cancellationToken);
 
-            var items = await query
-                                .Skip((request.PageNumber - 1) * request.PageSize)
-                                .Take(request.PageSize)
-                                .ToListAsync(cancellationToken);
-
-            var dtos = _mapper.Map<List<TransactionListItemDto>>(items);
-
-            var response = PaginatedResponse<TransactionListItemDto>.Create(
-                dtos,
-                totalCount,
-                request.PageNumber,
-                request.PageSize);
-
-            return Result<PaginatedResponse<TransactionListItemDto>>.Success(response);
+            return Result.Success(sort.ToPage(
+                fetched, request.PageSize, request.SortDescending, TransactionListItemDto.From, total));
         }
 
-        private static IQueryable<Transaction> ApplyFilters(
-            IQueryable<Transaction> query,
-            GetTransactionsQuery request)
+        private IQueryable<Transaction> ApplyFilters(IQueryable<Transaction> query, GetTransactionsQuery request)
         {
             if (request.Category.HasValue)
                 query = query.Where(t => t.Category == request.Category.Value);
 
-            if (request.Status.HasValue)
-                query = query.Where(t => t.Status == request.Status.Value);
+            if (!string.IsNullOrEmpty(request.Currency))
+                query = query.Where(t => t.Amount.Currency == request.Currency);
 
             if (request.FromDate.HasValue)
             {
@@ -73,6 +57,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 query = query.Where(t => t.Date <= to);
             }
 
+            // Magnitude filters. Amount is INCLUDEd in the date index, so they are evaluated on index tuples.
             if (request.MinAmount.HasValue)
                 query = query.Where(t => Math.Abs(t.Amount.Amount) >= request.MinAmount.Value);
 
@@ -80,51 +65,9 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 query = query.Where(t => Math.Abs(t.Amount.Amount) <= request.MaxAmount.Value);
 
             if (!string.IsNullOrWhiteSpace(request.SearchTerm))
-            {
-                var searchTerm = request.SearchTerm.ToLower();
-                query = query.Where(t =>
-                    t.Description.ToLower().Contains(searchTerm) ||
-                    t.Source.Name.ToLower().Contains(searchTerm));
-            }
-
-            if (!string.IsNullOrWhiteSpace(request.Source))
-            {
-                query = query.Where(t => t.Source.Name == request.Source);
-            }
+                query = search.DescriptionContains(query, request.SearchTerm.Trim());
 
             return query;
-        }
-
-        private static IQueryable<Transaction> ApplySorting(
-            IQueryable<Transaction> query,
-            GetTransactionsQuery request)
-        {
-            if (string.IsNullOrWhiteSpace(request.SortBy))
-                return request.SortDescending
-                    ? query.OrderByDescending(t => t.Date)
-                    : query.OrderBy(t => t.Date);
-
-            return request.SortBy.ToLower() switch
-            {
-                "amount" => request.SortDescending
-                    ? query.OrderByDescending(t => t.Amount.Amount)
-                    : query.OrderBy(t => t.Amount.Amount),
-                "date" => request.SortDescending
-                    ? query.OrderByDescending(t => t.Date)
-                    : query.OrderBy(t => t.Date),
-                "category" => request.SortDescending
-                    ? query.OrderByDescending(t => t.Category)
-                    : query.OrderBy(t => t.Category),
-                "status" => request.SortDescending
-                    ? query.OrderByDescending(t => t.Status)
-                    : query.OrderBy(t => t.Status),
-                "description" => request.SortDescending
-                    ? query.OrderByDescending(t => t.Description)
-                    : query.OrderBy(t => t.Description),
-                _ => request.SortDescending
-                    ? query.OrderByDescending(t => t.Date)
-                    : query.OrderBy(t => t.Date)
-            };
         }
     }
 }

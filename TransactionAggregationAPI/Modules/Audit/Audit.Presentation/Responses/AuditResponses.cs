@@ -12,32 +12,17 @@ namespace Modules.Audit.Presentation.Responses
         string? ExternalAccountId,
         Guid? InboxMessageId,
         string? IdempotencyKey,
-        Guid? CustomerId,
         Guid? TransactionId,
         string? ExternalTransactionId,
         string? Detail,
         IReadOnlyDictionary<string, string> Metadata,
-        string? TraceId)
+        string? TraceId,
+        string? Actor)
     {
         internal static AuditEventResponse From(AuditEventDto e) => new(
             e.Id, e.EventType, e.OccurredAt, e.RecordedAt, e.Channel, e.SourceName,
-            e.ExternalAccountId, e.InboxMessageId, e.IdempotencyKey, e.CustomerId,
-            e.TransactionId, e.ExternalTransactionId, e.Detail, e.Metadata, e.TraceId);
-    }
-
-    public sealed record AuditEventPageResponse(
-        IReadOnlyList<AuditEventResponse> Items,
-        int PageNumber,
-        int PageSize,
-        int TotalCount,
-        int TotalPages)
-    {
-        internal static AuditEventPageResponse From(AuditEventPage page) => new(
-            page.Items.Select(AuditEventResponse.From).ToList(),
-            page.PageNumber,
-            page.PageSize,
-            page.TotalCount,
-            page.TotalPages);
+            e.ExternalAccountId, e.InboxMessageId, e.IdempotencyKey,
+            e.TransactionId, e.ExternalTransactionId, e.Detail, e.Metadata, e.TraceId, e.Actor);
     }
 
     public sealed record TransactionLineageResponse(

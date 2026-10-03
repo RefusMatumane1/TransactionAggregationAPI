@@ -23,23 +23,71 @@ namespace Modules.Transactions.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Modules.Transactions.Application.Common.Aggregation.AggregationCheckpoint", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("AsOf")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("Watermark")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AggregationCheckpoints", "transactions");
+                });
+
+            modelBuilder.Entity("Modules.Transactions.Application.Common.Aggregation.DailyTotal", b =>
+                {
+                    b.Property<string>("SourceName")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("ExternalAccountId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateOnly>("Day")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Currency")
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<int>("ExpenseCount")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Expenses")
+                        .HasPrecision(28, 4)
+                        .HasColumnType("numeric(28,4)");
+
+                    b.Property<decimal>("Income")
+                        .HasPrecision(28, 4)
+                        .HasColumnType("numeric(28,4)");
+
+                    b.Property<int>("IncomeCount")
+                        .HasColumnType("integer");
+
+                    b.HasKey("SourceName", "ExternalAccountId", "Day", "Category", "Currency");
+
+                    b.ToTable("DailyTotals", "transactions");
+                });
+
             modelBuilder.Entity("Modules.Transactions.Domain.Entities.Transaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
-
-                    b.Property<Guid?>("AccountId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("AccountId");
 
                     b.Property<int>("Category")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("CustomerId")
-                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp with time zone");
@@ -49,9 +97,10 @@ namespace Modules.Transactions.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("Metadata")
+                    b.Property<string>("ExternalAccountId")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -59,36 +108,23 @@ namespace Modules.Transactions.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<uint>("Version")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
+                    b.Property<string>("_metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("Metadata");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AccountId")
-                        .HasDatabaseName("IX_Transactions_AccountId");
+                    b.ToTable("Transactions", "transactions", t =>
+                        {
+                            t.HasCheckConstraint("CK_Transactions_Amount_NonZero", "\"Amount\" <> 0");
 
-                    b.HasIndex("Category")
-                        .HasDatabaseName("IX_Transactions_Category");
+                            t.HasCheckConstraint("CK_Transactions_Category_Defined", "\"Category\" BETWEEN 0 AND 11");
 
-                    b.HasIndex("CustomerId")
-                        .HasDatabaseName("IX_Transactions_CustomerId");
+                            t.HasCheckConstraint("CK_Transactions_Currency_Iso4217", "\"Currency\" ~ '^[A-Z]{3}$'");
 
-                    b.HasIndex("Date")
-                        .HasDatabaseName("IX_Transactions_Date");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_Transactions_Status");
-
-                    b.HasIndex("CustomerId", "Status")
-                        .HasDatabaseName("IX_Transactions_Customer_Status");
-
-                    b.HasIndex("CustomerId", "Date", "Category")
-                        .HasDatabaseName("IX_Transactions_Customer_Date_Category");
-
-                    b.ToTable("Transactions", "transactions");
+                            t.HasCheckConstraint("CK_Transactions_Status_Defined", "\"Status\" IN (0, 4, 8)");
+                        });
                 });
 
             modelBuilder.Entity("Modules.Transactions.Domain.Entities.Transaction", b =>
@@ -135,9 +171,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                                 .HasColumnName("SourceName");
 
                             b1.HasKey("TransactionId");
-
-                            b1.HasIndex("ExternalId")
-                                .HasDatabaseName("IX_Transactions_SourceExternalId");
 
                             b1.ToTable("Transactions", "transactions");
 

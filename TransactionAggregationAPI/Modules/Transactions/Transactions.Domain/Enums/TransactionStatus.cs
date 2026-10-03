@@ -1,21 +1,12 @@
 namespace Modules.Transactions.Domain.Enums
 {
+    // Values are persisted as integers and never reused. Every row written since the ledger became
+    // insert-only is Booked; Pending and Expired exist only on rows stored before that and
+    // are not ledger entries, so no read path returns them.
     public enum TransactionStatus
     {
         Pending = 0,
-        Approved = 1,
-        Rejected = 2,
-        Flagged = 3,
-        Settled = 4,
-        Refunded = 5,
-        Disputed = 6,
-        Cancelled = 7,
-
-        /// <summary>
-        /// Pending for longer than the configured window with no posting from the bank — most
-        /// likely a dropped authorisation. Unlike Cancelled this is our inference, not the
-        /// bank's word: a later posting still settles it.
-        /// </summary>
+        Booked = 4,
         Expired = 8
     }
 }

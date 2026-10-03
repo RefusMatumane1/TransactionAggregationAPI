@@ -1,0 +1,51 @@
+# Least-privilege database roles.
+#
+#   tagg_migrator  owns every module schema and table; used only by the db-migrate Job.
+#   tagg_app       SELECT/INSERT/UPDATE/DELETE on those tables, nothing else; used by the API
+#                  and the worker. It cannot create, alter or drop anything, so it cannot
+#                  disable the audit trail's append-only triggers — and a migration revokes
+#                  UPDATE/DELETE/TRUNCATE on the audit table from it outright.
+#
+# Mounted into /docker-entrypoint-initdb.d, so it runs automatically on a fresh volume.
+# Idempotent: for an existing database, run it once by hand —
+#   kubectl -n transaction-aggregation exec -it postgres-0 -- \
+#     env MIGRATOR_DB_PASSWORD=... APP_DB_PASSWORD=... bash /docker-entrypoint-initdb.d/10-roles.sh
+# then re-assign ownership of existing objects to tagg_migrator.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-roles
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: database
+data:
+  10-roles.sh: |
+    #!/bin/bash
+    set -euo pipefail
+    : "${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD must be set}"
+    : "${APP_DB_PASSWORD:?APP_DB_PASSWORD must be set}"
+
+    psql -v ON_ERROR_STOP=1 \
+         --username "${POSTGRES_USER}" --dbname "${POSTGRES_DB}" \
+         -v migrator_pw="${MIGRATOR_DB_PASSWORD}" -v app_pw="${APP_DB_PASSWORD}" <<'SQL'
+    SELECT format('CREATE ROLE tagg_migrator LOGIN PASSWORD %L', :'migrator_pw')
+      WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tagg_migrator') \gexec
+    SELECT format('CREATE ROLE tagg_app LOGIN PASSWORD %L', :'app_pw')
+      WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'tagg_app') \gexec
+    SELECT format('ALTER ROLE tagg_migrator PASSWORD %L', :'migrator_pw') \gexec
+    SELECT format('ALTER ROLE tagg_app PASSWORD %L', :'app_pw') \gexec
+
+    ALTER ROLE tagg_migrator NOSUPERUSER NOCREATEDB NOCREATEROLE;
+    ALTER ROLE tagg_app NOSUPERUSER NOCREATEDB NOCREATEROLE;
+
+    SELECT format('GRANT CONNECT ON DATABASE %I TO tagg_migrator, tagg_app', current_database()) \gexec
+    -- Migrations create one schema per module and the history table in public.
+    SELECT format('GRANT CREATE ON DATABASE %I TO tagg_migrator', current_database()) \gexec
+    GRANT USAGE, CREATE ON SCHEMA public TO tagg_migrator;
+
+    -- Everything tagg_migrator creates from now on is usable, but not alterable, by tagg_app.
+    ALTER DEFAULT PRIVILEGES FOR ROLE tagg_migrator GRANT USAGE ON SCHEMAS TO tagg_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE tagg_migrator GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tagg_app;
+    ALTER DEFAULT PRIVILEGES FOR ROLE tagg_migrator GRANT USAGE, SELECT ON SEQUENCES TO tagg_app;
+    SQL

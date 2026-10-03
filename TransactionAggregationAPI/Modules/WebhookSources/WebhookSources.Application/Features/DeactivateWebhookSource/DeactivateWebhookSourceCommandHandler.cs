@@ -1,9 +1,11 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Abstractions.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Audit.Contracts;
+using Modules.WebhookSources.Application.Common;
 using Modules.WebhookSources.Application.Persistence;
 using Modules.WebhookSources.Domain.ValueObjects;
-using SharedKernel.Abstractions;
-using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Models;
 
 namespace Modules.WebhookSources.Application.Features.DeactivateWebhookSource
@@ -24,6 +26,7 @@ namespace Modules.WebhookSources.Application.Features.DeactivateWebhookSource
                 return Result.Failure(Error.NotFound("WebhookSource", request.Id));
 
             source.Deactivate();
+            context.StageAudit([AdminAudit.Of(AuditEventTypes.SourceDeactivated, source, userContext.UserId, "Deactivated: deliveries with its key are refused")]);
             await context.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(

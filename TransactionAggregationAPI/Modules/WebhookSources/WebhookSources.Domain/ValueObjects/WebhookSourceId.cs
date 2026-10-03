@@ -2,7 +2,7 @@ using SharedKernel.Common.ValueObjects;
 
 namespace Modules.WebhookSources.Domain.ValueObjects
 {
-    public sealed class WebhookSourceId : ValueObject
+    public sealed class WebhookSourceId : ValueObject, IComparable<WebhookSourceId>, IComparable
     {
         public Guid Value { get; }
 
@@ -12,6 +12,10 @@ namespace Modules.WebhookSources.Domain.ValueObjects
         public static WebhookSourceId CreateFrom(Guid value) => new(value);
 
         public override string ToString() => Value.ToString();
+
+        public int CompareTo(WebhookSourceId? other) => other is null ? 1 : Value.CompareTo(other.Value);
+
+        public int CompareTo(object? obj) => CompareTo(obj as WebhookSourceId);
 
         protected override IEnumerable<object> GetEqualityComponents()
         {

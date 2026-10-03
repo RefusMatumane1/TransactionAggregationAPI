@@ -2,7 +2,6 @@ using Prometheus;
 
 namespace BuildingBlocks.Messaging.Observability
 {
-    /// <summary>Counters an alert can fire on when inbox/outbox messages are dead-lettered.</summary>
     public static class DeadLetterMetrics
     {
         public static readonly Counter InboxMessagesDeadLettered = Prometheus.Metrics.CreateCounter(

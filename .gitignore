@@ -63,3 +63,15 @@ nunit-*.xml
 
 # Mock aggregator consents (development state)
 **/TransactionAggregation.MockAggregator/App_Data/
+
+# Secrets: each host reads a git-ignored secrets.json (shape documented by its tracked
+# secrets.template.json). Environments render the same file from Vault.
+**/secrets.json
+**/secrets.*.json
+!**/secrets.template.json
+# docker compose credentials (shape documented by .env.template).
+**/.env
+
+# Local documentation (not tracked)
+TransactionAggregationAPI/docs/
+/.gitleaks.toml

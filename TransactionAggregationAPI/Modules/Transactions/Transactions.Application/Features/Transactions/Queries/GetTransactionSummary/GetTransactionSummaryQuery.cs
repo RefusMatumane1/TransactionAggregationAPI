@@ -1,16 +1,20 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Caching;
+using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Caching;
 using Modules.Transactions.Application.Common.DTOs;
-using SharedKernel.Abstractions;
-using SharedKernel.Common.Behaviors;
+using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
 {
     public sealed record GetTransactionSummaryQuery(
-        Guid CustomerId,
         DateTime StartDate,
-        DateTime EndDate) : IQuery<TransactionSummaryDto>, ICacheableQuery, ICacheKeyPrefix
+        DateTime EndDate,
+        TransactionFilter Filter,
+        string Currency = SupportedCurrency.Default) : IQuery<TransactionSummaryDto>, ICacheableQuery
     {
-        public TimeSpan? CacheExpiration => TimeSpan.FromMinutes(5);
+        public TimeSpan? CacheExpiration => TransactionCacheScopes.AggregatesExpiration;
 
-        public string CachePrefix => $"summary:{CustomerId}";
+        public string CacheScope => TransactionCacheScopes.Aggregates;
     }
 }

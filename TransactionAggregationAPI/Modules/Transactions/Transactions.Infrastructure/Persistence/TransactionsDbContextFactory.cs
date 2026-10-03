@@ -1,23 +1,25 @@
 using BuildingBlocks.Messaging.Persistence;
+using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-using SharedKernel.Persistence;
+using Modules.Audit.Contracts;
 
-namespace Modules.Transactions.Infrastructure.Persistence;
-
-public class TransactionsDbContextFactory : IDesignTimeDbContextFactory<TransactionsDbContext>
+namespace Modules.Transactions.Infrastructure.Persistence
 {
-    public TransactionsDbContext CreateDbContext(string[] args)
+    public class TransactionsDbContextFactory : IDesignTimeDbContextFactory<TransactionsDbContext>
     {
-        var connectionString = DesignTime.ConnectionString;
+        public TransactionsDbContext CreateDbContext(string[] args)
+        {
+            var connectionString = DesignTime.ConnectionString;
 
-        var optionsBuilder = new DbContextOptionsBuilder<TransactionsDbContext>();
-        optionsBuilder.UseNpgsql(connectionString);
+            var optionsBuilder = new DbContextOptionsBuilder<TransactionsDbContext>();
+            optionsBuilder.UseNpgsql(connectionString);
 
-        var messagingOptionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
-        messagingOptionsBuilder.UseNpgsql(connectionString);
-        var messagingDbContext = new MessagingDbContext(messagingOptionsBuilder.Options, DesignTime.NoOpMediator);
+            var messagingOptionsBuilder = new DbContextOptionsBuilder<MessagingDbContext>();
+            messagingOptionsBuilder.UseNpgsql(connectionString);
+            var messagingDbContext = new MessagingDbContext(messagingOptionsBuilder.Options);
 
-        return new TransactionsDbContext(optionsBuilder.Options, DesignTime.NoOpMediator, messagingDbContext);
+            return new TransactionsDbContext(optionsBuilder.Options, messagingDbContext, new UnavailableAuditTrail());
+        }
     }
 }

@@ -1,4 +1,9 @@
+using BuildingBlocks.Application;
+using BuildingBlocks.Application.Caching;
+using BuildingBlocks.Application.Pagination;
 using BuildingBlocks.Messaging;
+using BuildingBlocks.Persistence;
+using BuildingBlocks.Persistence.Pagination;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -7,29 +12,24 @@ using Microsoft.Extensions.Caching.StackExchangeRedis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Modules.Audit;
-using Modules.BankLinks;
-using Modules.Customers;
 using Modules.Transactions;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources;
 using Npgsql;
 using Serilog;
-using SharedKernel.Common.Interfaces;
 using StackExchange.Redis;
 using TransactionAggregation.Hosting.Caching;
+using TransactionAggregation.Hosting.Health;
 using TransactionAggregation.Hosting.Logging;
 
 namespace TransactionAggregation.Hosting
 {
     public static class HostingExtensions
     {
-        /// <summary>
-        /// Data Protection keys are shared by every process that reads bank-link credentials,
-        /// so the application name must be identical in all of them — not the per-host
-        /// ApplicationName, which differs between the API and the worker.
-        /// </summary>
         private const string DataProtectionApplicationName = "TransactionAggregationAPI";
 
         private const string DataProtectionKeysKey = "DataProtection-Keys";
@@ -57,31 +57,30 @@ namespace TransactionAggregation.Hosting
             return builder;
         }
 
-        /// <summary>
-        /// Everything the business modules need from their host: the shared Postgres
-        /// connection, every module's registrations, Redis (cache + Data Protection key ring)
-        /// and the ingestion rules (normalization and categorization). Host-specific concerns — HTTP pipeline, auth,
-        /// background processing — stay in each host's Program.cs.
-        /// </summary>
         public static WebApplicationBuilder AddApplicationModules(this WebApplicationBuilder builder)
         {
             builder.AddRulesFile(CategorizationRulesFile);
             builder.AddRulesFile(NormalizationRulesFile);
 
-            var connectionString = builder.Configuration.GetConnectionString("transactiondb");
+            var connectionString = builder.Configuration.GetConnectionString(ModuleDbContextRegistration.ConnectionStringName);
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new InvalidOperationException(
+                    $"ConnectionStrings:{ModuleDbContextRegistration.ConnectionStringName} must be configured: PostgreSQL is the system of record.");
 
-            // TransactionsDbContext and MessagingDbContext share one scoped connection so an outbox write
-            // commits in the same transaction as the change that caused it (ADR-0009).
             builder.Services.AddScoped(_ => new NpgsqlConnection(connectionString));
 
+            builder.Services.AddApplicationPipeline(
+                builder.Configuration.GetSection(CachingOptions.SectionName).Get<CachingOptions>());
+            builder.Services.AddSingleton<IKeysetPaginator, RowValueKeysetPaginator>();
+            builder.Services.TryAddSingleton(TimeProvider.System);
             builder.Services.AddMessagingBuildingBlock();
-            builder.Services.AddAuditModule(builder.Configuration);
-            builder.Services.AddWebhookSourcesModule(builder.Configuration);
-            builder.Services.AddBankLinksModule(builder.Configuration);
-            builder.Services.AddCustomersModule(builder.Configuration);
+            builder.Services.AddAuditModule();
+            builder.Services.AddWebhookSourcesModule();
             builder.Services.AddTransactionsModule(builder.Configuration, builder.Environment.IsDevelopment());
 
-            builder.EnrichNpgsqlDbContext<TransactionsDbContext>();
+            builder.EnrichNpgsqlDbContext<TransactionsDbContext>(settings => settings.DisableHealthChecks = true);
+            builder.Services.AddHealthChecks()
+                .AddCheck<PostgresHealthCheck>("postgres", HealthStatus.Unhealthy, [Microsoft.Extensions.Hosting.Extensions.ReadyTag]);
 
             builder.AddRedisClient("redis", configureSettings: s => s.DisableHealthChecks = true);
             builder.AddSharedState();
@@ -91,12 +90,6 @@ namespace TransactionAggregation.Hosting
             return builder;
         }
 
-        /// <summary>
-        /// Loaded as the lowest-precedence source, so appsettings.*.json and environment
-        /// variables can still override individual rules per host or environment. An optional
-        /// "{name}.{Environment}.json" sits directly above its base file — e.g. the mock banks'
-        /// rules that only Development loads.
-        /// </summary>
         private static void AddRulesFile(this WebApplicationBuilder builder, string fileName)
         {
             var environmentFile = Path.ChangeExtension(fileName, $"{builder.Environment.EnvironmentName}.json");
@@ -117,16 +110,6 @@ namespace TransactionAggregation.Hosting
             return source;
         }
 
-        /// <summary>
-        /// Redis holds the state every replica must share and that must survive restarts: the Data
-        /// Protection key ring (bank-link tokens are encrypted with it) and IDistributedCache (OAuth
-        /// state between bank-link initiation and its callback, which can land on another pod). Both
-        /// reuse the Aspire-managed IConnectionMultiplexer.
-        ///
-        /// Outside Development a missing Redis connection fails startup: ephemeral keys would make stored
-        /// tokens undecryptable after a restart. Development falls back to ephemeral keys and an
-        /// in-process cache so the app runs without Redis.
-        /// </summary>
         private static void AddSharedState(this WebApplicationBuilder builder)
         {
             var dataProtection = builder.Services.AddDataProtection()
@@ -137,7 +120,7 @@ namespace TransactionAggregation.Hosting
                 if (!builder.Environment.IsDevelopment())
                     throw new InvalidOperationException(
                         "ConnectionStrings:redis must be configured outside Development: it holds the Data Protection key ring " +
-                        "that bank-link tokens are encrypted with and the OAuth state shared between API replicas.");
+                        "and the response cache shared between API replicas.");
 
                 Log.Warning("No Redis connection string configured (Development) — using ephemeral Data Protection keys and an in-process cache.");
                 dataProtection.UseEphemeralDataProtectionProvider();

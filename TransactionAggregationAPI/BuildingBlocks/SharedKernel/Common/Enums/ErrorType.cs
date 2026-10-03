@@ -8,7 +8,6 @@ namespace SharedKernel.Common.Enums
         NotFound = 3,
         Conflict = 4,
 
-        /// <summary>The caller is identified but not permitted to act on this resource.</summary>
         Forbidden = 5
     }
 }

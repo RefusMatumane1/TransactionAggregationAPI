@@ -5,10 +5,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Persistence
 {
-    /// <summary>
-    /// The Metadata ValueComparer runs on every SaveChanges and must tolerate null (e.g. a raw jsonb
-    /// `null`): a throw there would abort an unrelated save. Pinned against the real EF Core model.
-    /// </summary>
     public class TransactionConfigurationTests
     {
         private static Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<Dictionary<string, string>> GetMetadataComparer()
@@ -16,7 +12,7 @@ namespace TransactionAggregation.Tests.Unit.Persistence
             using var context = InMemoryDbContextFactory.Create();
             var property = context.Model
                 .FindEntityType(typeof(Transaction))!
-                .FindProperty(nameof(Transaction.Metadata))!;
+                .FindProperty("_metadata")!;
 
             return (Microsoft.EntityFrameworkCore.ChangeTracking.ValueComparer<Dictionary<string, string>>)property.GetValueComparer();
         }

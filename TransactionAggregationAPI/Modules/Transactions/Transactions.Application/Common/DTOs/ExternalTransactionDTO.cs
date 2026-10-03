@@ -8,12 +8,6 @@ namespace Modules.Transactions.Application.Common.DTOs
         public string Description { get; init; } = null!;
         public string Category { get; init; } = null!;
         public DateTime Date { get; init; }
-
-        /// <summary>
-        /// The bank's view of the transaction: "pending" or "posted". Null means posted —
-        /// senders that predate this field only ever sent booked transactions.
-        /// See <see cref="BankTransactionStatus"/>.
-        /// </summary>
         public string? Status { get; init; }
     }
 

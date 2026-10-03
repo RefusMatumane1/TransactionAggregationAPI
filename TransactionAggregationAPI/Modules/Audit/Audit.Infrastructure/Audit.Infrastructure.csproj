@@ -4,7 +4,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="MediatR" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
 		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
@@ -16,8 +15,8 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Persistence\BuildingBlocks.Persistence.csproj" />
 		<ProjectReference Include="..\Audit.Application\Audit.Application.csproj" />
 		<ProjectReference Include="..\Audit.Domain\Audit.Domain.csproj" />
-		<ProjectReference Include="..\Audit.Contracts\Audit.Contracts.csproj" />
 	</ItemGroup>
 </Project>

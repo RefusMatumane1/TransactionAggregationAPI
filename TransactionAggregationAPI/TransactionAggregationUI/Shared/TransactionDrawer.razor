@@ -1,0 +1,134 @@
+@inject TransactionService TransactionService
+@inject IJSRuntime JS
+
+<div class="drawer-backdrop" @onclick="Close"></div>
+<aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" @onkeydown="OnKeyDown">
+    <div class="drawer-header">
+        <div>
+            <div class="small text-muted">Transaction</div>
+            <h2 id="drawer-title" class="h5 mb-0">@(_detail?.Description ?? "Loading…")</h2>
+        </div>
+        <button @ref="_closeButton" type="button" class="btn-close" aria-label="Close" @onclick="Close"></button>
+    </div>
+    <div class="drawer-body">
+        @if (_error is not null)
+        {
+            <ErrorPanel Message="@_error" OnRetry="LoadAsync" />
+        }
+        else if (_detail is null)
+        {
+            <Skeleton Height="2rem" Width="50%" Class="mb-3" />
+            @for (var i = 0; i < 6; i++)
+            {
+                <Skeleton Class="mb-2" />
+            }
+        }
+        else
+        {
+            var bank = BankDirectory.Find(Banks, _detail.Institution);
+            <div class="fs-3 fw-bold num mb-1 @(_detail.Amount > 0 ? "text-good" : "")">@Format.SignedMoney(_detail.Amount, _detail.Currency)</div>
+            <div class="mb-3"><CategoryBadge Category="@_detail.Category" /></div>
+
+            <dl>
+                <dt>Booked</dt>
+                <dd>@Format.BookingDate(_detail.TransactionDate)</dd>
+                <dt>Bank</dt>
+                <dd><BankBadge Bank="bank" /></dd>
+                <dt>Account</dt>
+                <dd class="font-monospace">@_detail.ExternalAccountId</dd>
+                <dt>Bank's reference</dt>
+                <dd class="font-monospace">@_detail.ExternalTransactionId</dd>
+                <dt>Recorded</dt>
+                <dd>@Format.Timestamp(_detail.RecordedAt)</dd>
+                @if (_detail.Metadata.TryGetValue(TransactionDetailModel.BankDescriptionKey, out var original))
+                {
+                    <dt>Bank's description</dt>
+                    <dd>@original</dd>
+                }
+                @if (_detail.Metadata.TryGetValue(TransactionDetailModel.BankCategoryKey, out var bankCategory))
+                {
+                    <dt>Bank's category</dt>
+                    <dd>@bankCategory</dd>
+                }
+                <dt>Id</dt>
+                <dd class="d-flex align-items-center gap-2">
+                    <span class="font-monospace small text-truncate">@_detail.Id</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0" @onclick="CopyId" aria-label="Copy transaction id">
+                        <i class="bi @(_copied ? "bi-check2" : "bi-clipboard")" aria-hidden="true"></i>
+                    </button>
+                    <span class="visually-hidden" aria-live="polite">@(_copied ? "Copied" : "")</span>
+                </dd>
+            </dl>
+
+            <div class="d-flex flex-wrap gap-2 mt-4">
+                <a class="btn btn-sm btn-outline-primary"
+                   href="@($"/transactions?bank={Uri.EscapeDataString(_detail.Institution)}&account={Uri.EscapeDataString(_detail.ExternalAccountId)}")">
+                    <i class="bi bi-list-ul me-1" aria-hidden="true"></i>This account's transactions
+                </a>
+                <AuthorizeView Roles="admin">
+                    <a class="btn btn-sm btn-outline-secondary" href="@($"/admin/audit?lineage={_detail.Id}")">
+                        <i class="bi bi-journal-check me-1" aria-hidden="true"></i>How it was ingested
+                    </a>
+                </AuthorizeView>
+            </div>
+        }
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, BankModel> Banks { get; set; } = null!;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private TransactionDetailModel? _detail;
+    private string? _error;
+    private bool _copied;
+    private Guid _loadedId;
+    private ElementReference _closeButton;
+    private bool _focused;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Id == _loadedId)
+            return;
+        _loadedId = Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _detail = null;
+        _error = null;
+        _copied = false;
+        (_detail, _error) = await TransactionService.GetAsync(Id);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Move focus into the dialog once, so Escape and Tab work from the start.
+        if (!_focused)
+        {
+            _focused = true;
+            await _closeButton.FocusAsync();
+        }
+    }
+
+    private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" ? Close() : Task.CompletedTask;
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    private async Task CopyId()
+    {
+        if (_detail is null)
+            return;
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _detail.Id.ToString());
+            _copied = true;
+        }
+        catch (JSException)
+        {
+            // Clipboard access can be refused (e.g. insecure origin); the id stays selectable.
+        }
+    }
+}

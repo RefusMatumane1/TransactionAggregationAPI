@@ -1,149 +1,107 @@
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
-using Modules.Customers.Application.Contracts;
-using Modules.Customers.Domain;
-using Modules.Customers.Domain.ValueObjects;
-using Modules.Transactions.Application.Adapters;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetCustomerWithTransactions;
+using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
-using SharedKernel.Common.ValueObjects;
+using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Application.Queries;
-
-/// <summary>
-/// The customer+transactions endpoint, the summary and account balances all use TransactionTotals;
-/// these pin that their figures agree.
-/// </summary>
-public class TotalsConsistencyTests
+namespace TransactionAggregation.Tests.Unit.Application.Queries
 {
-    private static readonly DateTime Day = new(2026, 9, 10, 12, 0, 0, DateTimeKind.Utc);
-
-    private sealed record Scenario(
-        Modules.Transactions.Infrastructure.Persistence.TransactionsDbContext Transactions,
-        Modules.Customers.Infrastructure.Persistence.CustomersDbContext Customers,
-        Customer Customer,
-        Account Account);
-
-    /// <summary>
-    /// Booked: +1000 income, -300 and -200 expenses → net 500.
-    /// Pending: +50 incoming, -80 outgoing. Rejected -999 and Cancelled +777 count nowhere.
-    /// </summary>
-    private static async Task<Scenario> SeedAsync()
+    public class TotalsConsistencyTests
     {
-        var customers = InMemoryCustomersDbContextFactory.Create();
-        var customer = Customer.Create(CustomerId.Create(), $"{Guid.NewGuid()}@example.com", "Totals Test");
-        var account = Account.Create(customer.Id, "ACC-TOT", "Everyday", AccountType.Checking);
-        customers.Customers.Add(customer);
-        customers.Accounts.Add(account);
-        await customers.SaveChangesAsync();
+        private static readonly DateTime Day = new(2026, 9, 10, 12, 0, 0, DateTimeKind.Utc);
+        private static readonly DateOnly ReportDay = DateOnly.FromDateTime(Day);
 
-        Transaction Tx(decimal amount, TransactionStatus status, int n)
+        private static async Task<TransactionsDbContext> SeedAsync()
         {
-            var tx = Transaction.Create(customer.Id, Money.Create(amount, "ZAR"), $"tx-{n}",
-                amount > 0 ? TransactionCategory.Income : TransactionCategory.Groceries,
-                TransactionSource.Create("Bank A", $"ext-{n}"), account.Id, Day.AddMinutes(n));
-            if (status == TransactionStatus.Settled)
-                tx.Settle();
-            else if (status != TransactionStatus.Pending)
-                tx.UpdateStatus(status);
-            return tx;
+            Transaction Tx(decimal amount, int n, string institution = TestInstitutions.FNB, string currency = "ZAR") =>
+                TestTransactions.Create(
+                    amount, $"tx-{n}", amount > 0 ? TransactionCategory.Income : TransactionCategory.Groceries,
+                    institution: institution, externalId: $"ext-{n}", date: Day.AddMinutes(n), currency: currency);
+
+            var transactions = InMemoryDbContextFactory.Create();
+            transactions.Transactions.AddRange(
+                Tx(1000m, 1),
+                Tx(-300m, 2),
+                Tx(-200m, 3, TestInstitutions.Absa),
+                Tx(-75m, 4, currency: "USD"));
+            await transactions.SaveChangesAsync();
+            await InMemoryDailyTotals.BuildAsync(transactions);
+
+            return transactions;
         }
 
-        var transactions = InMemoryDbContextFactory.Create();
-        transactions.Transactions.AddRange(
-            Tx(1000m, TransactionStatus.Settled, 1),
-            Tx(-300m, TransactionStatus.Settled, 2),
-            Tx(-200m, TransactionStatus.Settled, 3),
-            Tx(50m, TransactionStatus.Pending, 4),
-            Tx(-80m, TransactionStatus.Pending, 5),
-            Tx(-999m, TransactionStatus.Rejected, 6),
-            Tx(777m, TransactionStatus.Cancelled, 7));
-        await transactions.SaveChangesAsync();
+        private static Task<TransactionSummaryDto> SummaryAsync(TransactionsDbContext context, TransactionFilter filter, string currency = "ZAR") =>
+            new GetTransactionSummaryQueryHandler(context)
+                .Handle(new GetTransactionSummaryQuery(Day.AddDays(-1), Day.AddDays(1), filter, currency), CancellationToken.None)
+                .ContinueWith(t => t.Result.Value);
 
-        return new Scenario(transactions, customers, customer, account);
-    }
-
-    [Fact]
-    public async Task Summary_CountsBookedOnly_AndReportsPendingSeparately()
-    {
-        var s = await SeedAsync();
-        var handler = new GetTransactionSummaryQueryHandler(s.Transactions, NullLogger<GetTransactionSummaryQueryHandler>.Instance);
-
-        var summary = (await handler.Handle(
-            new GetTransactionSummaryQuery(s.Customer.Id.Value, Day.AddDays(-1), Day.AddDays(1)), CancellationToken.None)).Value;
-
-        summary.TotalIncome.Should().Be(1000m);
-        summary.TotalExpenses.Should().Be(500m);
-        summary.NetBalance.Should().Be(500m);
-        summary.SpendingByCategory[TransactionCategory.Groceries].Should().Be(500m);
-        summary.MonthlySummaries.Should().ContainSingle().Which.NetBalance.Should().Be(500m);
-        summary.PendingIncome.Should().Be(50m);
-        summary.PendingExpenses.Should().Be(80m);
-        summary.TotalTransactions.Should().Be(7);
-        summary.CompletedTransactions.Should().Be(3);
-        summary.PendingTransactions.Should().Be(2);
-    }
-
-    [Fact]
-    public async Task CustomerWithTransactions_TotalsCoverTheWholeRange_NotJustTheCurrentPage()
-    {
-        var s = await SeedAsync();
-        var handler = new GetCustomerWithTransactionsQueryHandler(
-            s.Transactions, new CustomersReadApi(s.Customers), NullLogger<GetCustomerWithTransactionsQueryHandler>.Instance);
-
-        var page1 = (await handler.Handle(
-            new GetCustomerWithTransactionsQuery(s.Customer.Id.Value, null, null, null, Page: 1, PageSize: 2), CancellationToken.None)).Value;
-        var page3 = (await handler.Handle(
-            new GetCustomerWithTransactionsQuery(s.Customer.Id.Value, null, null, null, Page: 3, PageSize: 2), CancellationToken.None)).Value;
-
-        foreach (var page in new[] { page1, page3 })
+        [Fact]
+        public async Task Summary_TotalsOneCurrency_NeverMixingInAnother()
         {
-            page.TotalIncome.Should().Be(1000m);
-            page.TotalExpenses.Should().Be(500m);
-            page.NetBalance.Should().Be(500m);
-            page.PendingIncome.Should().Be(50m);
-            page.PendingExpenses.Should().Be(80m);
+            var context = await SeedAsync();
+
+            var zar = await SummaryAsync(context, TestFilters.All);
+            var usd = await SummaryAsync(context, TestFilters.All, "USD");
+
+            zar.TotalIncome.Should().Be(1000m);
+            zar.TotalExpenses.Should().Be(500m);
+            zar.NetBalance.Should().Be(500m);
+            zar.TotalTransactions.Should().Be(3);
+            zar.SpendingByCategory[TransactionCategory.Groceries].Should().Be(500m);
+            zar.Currency.Should().Be("ZAR");
+            usd.TotalExpenses.Should().Be(75m);
+            usd.TotalTransactions.Should().Be(1);
         }
 
-        page1.Transactions.Select(t => t.TransactionDate).Should().BeInDescendingOrder();
-    }
-
-    [Fact]
-    public async Task AccountBalance_IsBookedOnly_WithPendingAndAvailableAlongside()
-    {
-        var s = await SeedAsync();
-        var provider = new TransactionBalanceProvider(s.Transactions);
-
-        var single = await provider.GetBalanceAsync(s.Account.Id.Value);
-        var byCustomer = (await provider.GetBalancesByCustomerAsync(s.Customer.Id.Value))[s.Account.Id.Value];
-
-        foreach (var balance in new[] { single, byCustomer })
+        [Fact]
+        public async Task EveryReadPath_AgreesOnTheNet()
         {
-            balance.Booked.Should().Be(500m);
-            balance.PendingDebits.Should().Be(-80m);
-            balance.PendingCredits.Should().Be(50m);
-            balance.Pending.Should().Be(-30m);
-            balance.Available.Should().Be(420m, "pending outflows are already unavailable; pending inflows aren't available yet");
+            var context = await SeedAsync();
+
+            var summary = await SummaryAsync(context, TestFilters.All);
+            var cashFlow = (await new GetCashFlowQueryHandler(context)
+                .Handle(new GetCashFlowQuery(ReportDay, ReportDay, TestFilters.All, TimeGranularity.Day), CancellationToken.None)).Value;
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(context)
+                .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, TestFilters.All), CancellationToken.None)).Value;
+
+            summary.NetBalance.Should().Be(500m);
+            cashFlow.Net.Should().Be(summary.NetBalance);
+            institutions.Institutions.Sum(i => i.Net).Should().Be(summary.NetBalance);
+            institutions.Institutions.Select(i => (i.Institution, i.Net)).Should().BeEquivalentTo(
+                [(TestInstitutions.FNB, 700m), (TestInstitutions.Absa, -200m)]);
         }
-    }
 
-    [Fact]
-    public async Task AllThreeReadPaths_AgreeOnTheNet()
-    {
-        var s = await SeedAsync();
+        [Fact]
+        public async Task EveryReadPath_CountsOnlyTheInstitutionsTheCallerMayRead()
+        {
+            var context = await SeedAsync();
+            var absaOnly = TestFilters.Only(TestInstitutions.Absa);
 
-        var summary = (await new GetTransactionSummaryQueryHandler(s.Transactions, NullLogger<GetTransactionSummaryQueryHandler>.Instance)
-            .Handle(new GetTransactionSummaryQuery(s.Customer.Id.Value, Day.AddDays(-1), Day.AddDays(1)), CancellationToken.None)).Value;
-        var customerView = (await new GetCustomerWithTransactionsQueryHandler(
-                s.Transactions, new CustomersReadApi(s.Customers), NullLogger<GetCustomerWithTransactionsQueryHandler>.Instance)
-            .Handle(new GetCustomerWithTransactionsQuery(s.Customer.Id.Value, null, null, null), CancellationToken.None)).Value;
-        var balance = await new TransactionBalanceProvider(s.Transactions).GetBalanceAsync(s.Account.Id.Value);
+            var summary = await SummaryAsync(context, absaOnly);
+            var cashFlow = (await new GetCashFlowQueryHandler(context)
+                .Handle(new GetCashFlowQuery(ReportDay, ReportDay, absaOnly, TimeGranularity.Day), CancellationToken.None)).Value;
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(context)
+                .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, absaOnly), CancellationToken.None)).Value;
 
-        summary.NetBalance.Should().Be(customerView.NetBalance).And.Be(balance.Booked);
+            summary.NetBalance.Should().Be(-200m);
+            cashFlow.Net.Should().Be(-200m);
+            institutions.Institutions.Should().ContainSingle().Which.Institution.Should().Be(TestInstitutions.Absa);
+        }
+
+        [Fact]
+        public async Task ACallerWithNoInstitutions_SeesNothing()
+        {
+            var context = await SeedAsync();
+
+            var summary = await SummaryAsync(context, TestFilters.Only());
+
+            summary.TotalTransactions.Should().Be(0);
+            summary.NetBalance.Should().Be(0m);
+        }
     }
 }

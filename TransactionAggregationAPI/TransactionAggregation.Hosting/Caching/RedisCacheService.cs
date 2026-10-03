@@ -1,6 +1,5 @@
-
+using BuildingBlocks.Application.Caching;
 using Microsoft.Extensions.Logging;
-using SharedKernel.Common.Interfaces;
 using StackExchange.Redis;
 using System.Text.Json;
 
@@ -8,18 +7,19 @@ namespace TransactionAggregation.Hosting.Caching
 {
     public class RedisCacheService : ICacheService
     {
-        private readonly IConnectionMultiplexer _redis;
+        public static readonly TimeSpan ScopeVersionTtl = TimeSpan.FromDays(1);
+        private static readonly TimeSpan DefaultEntryTtl = TimeSpan.FromHours(1);
+
         private readonly IDatabase _database;
         private readonly ILogger<RedisCacheService> _logger;
 
-        public RedisCacheService(
-            IConnectionMultiplexer redis,
-            ILogger<RedisCacheService> logger)
+        public RedisCacheService(IConnectionMultiplexer redis, ILogger<RedisCacheService> logger)
         {
-            _redis = redis;
             _database = redis.GetDatabase();
             _logger = logger;
         }
+
+        public static string ScopeVersionKey(string scope) => $"cachever:{scope}";
 
         public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
         {
@@ -29,13 +29,11 @@ namespace TransactionAggregation.Hosting.Caching
                 if (!cachedData.HasValue)
                     return null;
 
-                // RedisValue's conversion to byte[] is nullable only to represent the
-                // "no value" case, which HasValue already ruled out above.
-                return JsonSerializer.Deserialize<T>(new MemoryStream((byte[])cachedData!));
+                return JsonSerializer.Deserialize<T>((byte[])cachedData!);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is RedisException or JsonException)
             {
-                _logger.LogError(ex, "Error getting cached data for key {Key}", key);
+                _logger.LogWarning(ex, "Cache read failed for key {Key} — treating as a miss", key);
                 return null;
             }
         }
@@ -44,17 +42,11 @@ namespace TransactionAggregation.Hosting.Caching
         {
             try
             {
-                var serializedData = JsonSerializer.Serialize(value);
-                await _database.StringSetAsync(
-                    key,
-                    serializedData,
-                    expiration ?? TimeSpan.FromHours(1));
-
-                _logger.LogDebug("Cached data for key {Key}", key);
+                await _database.StringSetAsync(key, JsonSerializer.SerializeToUtf8Bytes(value), expiration ?? DefaultEntryTtl);
             }
-            catch (Exception ex)
+            catch (RedisException ex)
             {
-                _logger.LogError(ex, "Error setting cached data for key {Key}", key);
+                _logger.LogWarning(ex, "Cache write failed for key {Key}", key);
             }
         }
 
@@ -63,34 +55,35 @@ namespace TransactionAggregation.Hosting.Caching
             try
             {
                 await _database.KeyDeleteAsync(key);
-                _logger.LogDebug("Removed cached data for key {Key}", key);
             }
-            catch (Exception ex)
+            catch (RedisException ex)
             {
-                _logger.LogError(ex, "Error removing cached data for key {Key}", key);
+                _logger.LogWarning(ex, "Cache delete failed for key {Key}", key);
             }
         }
 
-        public async Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
+        public async Task<long?> GetScopeVersionAsync(string scope, CancellationToken cancellationToken = default)
         {
             try
             {
-                var endpoints = _redis.GetEndPoints();
-                if (endpoints.Length == 0) return;
-
-                var server = _redis.GetServer(endpoints[0]);
-
-                await foreach (var key in server.KeysAsync(pattern: pattern, pageSize: 100))
-                {
-                    await _database.KeyDeleteAsync(key);
-                }
-
-                _logger.LogDebug("Removed cached data for pattern {Pattern}", pattern);
+                var value = await _database.StringGetAsync(ScopeVersionKey(scope));
+                return value.HasValue && long.TryParse(value.ToString(), out var version) ? version : 0;
             }
-            catch (Exception ex)
+            catch (RedisException ex)
             {
-                _logger.LogError(ex, "Error removing cached data for pattern {Pattern}", pattern);
+                _logger.LogWarning(ex, "Cache scope version unavailable for {CacheScope} — bypassing the cache", scope);
+                return null;
             }
+        }
+
+        public async Task InvalidateScopeAsync(string scope, CancellationToken cancellationToken = default)
+        {
+            var key = ScopeVersionKey(scope);
+            var batch = _database.CreateTransaction();
+            var increment = batch.StringIncrementAsync(key);
+            var expire = batch.KeyExpireAsync(key, ScopeVersionTtl);
+            await batch.ExecuteAsync();
+            await Task.WhenAll(increment, expire);
         }
     }
 }

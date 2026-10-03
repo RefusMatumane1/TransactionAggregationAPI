@@ -19,12 +19,13 @@ namespace Modules.Audit.Infrastructure.Persistence
             builder.Property(e => e.OccurredAt).IsRequired();
             builder.Property(e => e.RecordedAt).IsRequired();
             builder.Property(e => e.Channel).HasMaxLength(32).IsRequired();
-            builder.Property(e => e.SourceName).HasMaxLength(200).IsRequired();
-            builder.Property(e => e.ExternalAccountId).HasMaxLength(200);
-            builder.Property(e => e.IdempotencyKey).HasMaxLength(200);
-            builder.Property(e => e.ExternalTransactionId).HasMaxLength(100);
+            builder.Property(e => e.SourceName).HasMaxLength(AuditEvent.MaxIdentifierLength).IsRequired();
+            builder.Property(e => e.ExternalAccountId).HasMaxLength(AuditEvent.MaxIdentifierLength);
+            builder.Property(e => e.IdempotencyKey).HasMaxLength(AuditEvent.MaxIdentifierLength);
+            builder.Property(e => e.ExternalTransactionId).HasMaxLength(AuditEvent.MaxExternalTransactionIdLength);
             builder.Property(e => e.Detail).HasMaxLength(AuditEvent.MaxDetailLength);
-            builder.Property(e => e.TraceId).HasMaxLength(64);
+            builder.Property(e => e.TraceId).HasMaxLength(AuditEvent.MaxTraceIdLength);
+            builder.Property(e => e.Actor).HasMaxLength(AuditEvent.MaxActorLength);
 
             builder.Property(e => e.Metadata)
                 .HasConversion(
@@ -37,15 +38,15 @@ namespace Modules.Audit.Infrastructure.Persistence
                 .HasColumnType("jsonb")
                 .IsRequired();
 
-            // One index per question the admin API answers: "what happened recently",
-            // "everything about this delivery", "where did this transaction come from",
-            // "what did this source/channel send", "what happened to this account".
             builder.HasIndex(e => e.OccurredAt).HasDatabaseName("IX_AuditEvents_OccurredAt");
             builder.HasIndex(e => e.InboxMessageId).HasDatabaseName("IX_AuditEvents_InboxMessageId");
             builder.HasIndex(e => e.TransactionId).HasDatabaseName("IX_AuditEvents_TransactionId");
             builder.HasIndex(e => new { e.Channel, e.SourceName, e.OccurredAt }).HasDatabaseName("IX_AuditEvents_Channel_Source_OccurredAt");
             builder.HasIndex(e => new { e.ExternalAccountId, e.OccurredAt }).HasDatabaseName("IX_AuditEvents_ExternalAccountId_OccurredAt");
             builder.HasIndex(e => new { e.EventType, e.OccurredAt }).HasDatabaseName("IX_AuditEvents_EventType_OccurredAt");
+            builder.HasIndex(e => new { e.Actor, e.OccurredAt })
+                .HasFilter("\"Actor\" IS NOT NULL")
+                .HasDatabaseName("IX_AuditEvents_Actor_OccurredAt");
         }
     }
 }

@@ -1,14 +1,13 @@
+using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Outbox;
+using BuildingBlocks.Messaging.Persistence;
+using BuildingBlocks.Messaging.ValueObjects;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    /// <summary>
-    /// A message stuck in Processing (claimed by a dispatcher that crashed before saving) is reclaimed
-    /// once the claim timeout passes, and not before. Needs real Postgres for FOR UPDATE SKIP LOCKED.
-    /// </summary>
     [Collection(PostgresCollection.Name)]
     public class StaleClaimReclaimTests
     {
@@ -26,8 +25,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var context = _fixture.CreateMessagingContext();
             var messageId = Guid.NewGuid();
 
-            // Simulates a dispatcher that claimed this message, then crashed before
-            // the final SaveChangesAsync() ever marked it Processed/Failed.
             await context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "messaging"."OutboxMessages"
                     ("Id", "Type", "Payload", "OccurredAt", "Status", "Attempts", "ClaimedAt", "NextAttemptAt", "ProcessedAt", "LastError")
@@ -35,8 +32,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                     ({messageId}, 'StaleClaimReclaimTest', {EmptyJsonPayload}::jsonb, now() - interval '30 minutes', 1, 0, now() - interval '15 minutes', NULL, NULL, NULL)
                 """);
 
-            // Default ClaimTimeoutMinutes is 10 — 15 minutes stale is past it.
-            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10));
+            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
 
             claimed.Should().ContainSingle(m => m.Id.Value == messageId,
                 "a message stuck in Processing past the claim timeout must be reclaimable, or a crashed dispatcher's work is lost forever");
@@ -48,8 +44,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var context = _fixture.CreateMessagingContext();
             var messageId = Guid.NewGuid();
 
-            // A different live dispatcher instance could still be actively working
-            // this message — reclaiming it too early would cause double-processing.
             await context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "messaging"."OutboxMessages"
                     ("Id", "Type", "Payload", "OccurredAt", "Status", "Attempts", "ClaimedAt", "NextAttemptAt", "ProcessedAt", "LastError")
@@ -57,7 +51,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                     ({messageId}, 'StaleClaimReclaimTest', {EmptyJsonPayload}::jsonb, now() - interval '2 minutes', 1, 0, now() - interval '1 minute', NULL, NULL, NULL)
                 """);
 
-            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10));
+            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
 
             claimed.Should().NotContain(m => m.Id.Value == messageId,
                 "a message still within its claim timeout might be actively processed by another dispatcher instance");
@@ -76,7 +70,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                     ({messageId}, 'stale-claim-test-source', {EmptyJsonPayload}::jsonb, now() - interval '30 minutes', 1, 0, now() - interval '15 minutes', NULL, NULL, NULL)
                 """);
 
-            var claimed = await context.ClaimInboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10));
+            var claimed = await context.ClaimInboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
 
             claimed.Should().ContainSingle(m => m.Id.Value == messageId);
         }
@@ -89,9 +83,48 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             context.OutboxMessages.Add(message);
             await context.SaveChangesAsync();
 
-            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10));
+            var claimed = await context.ClaimOutboxMessagesAsync(batchSize: 50, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
 
             claimed.Should().ContainSingle(m => m.Id == message.Id);
+        }
+
+        [Fact]
+        public async Task Claim_CountsAsAnAttempt_SoAMessageThatCrashesItsWorkerStillRunsOutOfAttempts()
+        {
+            var database = await _fixture.CreateIsolatedDatabaseAsync();
+            using (var seed = _fixture.CreateMessagingContext(database))
+            {
+                seed.InboxMessages.Add(InboxMessage.Create("crash-loop-source", "{}"));
+                await seed.SaveChangesAsync();
+            }
+
+            using var context = _fixture.CreateMessagingContext(database);
+            var claimed = await context.ClaimInboxMessagesAsync(batchSize: 10, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
+
+            claimed.Should().ContainSingle().Which.Attempts.Should().Be(1);
+        }
+
+        [Fact]
+        public async Task StaleClaim_WithNoAttemptsLeft_IsDeadLettered_NotReclaimedForever()
+        {
+            var database = await _fixture.CreateIsolatedDatabaseAsync();
+            using var context = _fixture.CreateMessagingContext(database);
+            var messageId = Guid.NewGuid();
+
+            // The worker died while processing this message on each of its five attempts.
+            await context.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO "messaging"."InboxMessages"
+                    ("Id", "SourceName", "Payload", "ReceivedAt", "Status", "Attempts", "ClaimedAt")
+                VALUES
+                    ({messageId}, 'crash-loop-source', {EmptyJsonPayload}::jsonb, now() - interval '2 hours', 1, 5, now() - interval '15 minutes')
+                """);
+
+            var claimed = await context.ClaimInboxMessagesAsync(batchSize: 10, claimTimeout: TimeSpan.FromMinutes(10), maxAttempts: 5);
+
+            claimed.Should().BeEmpty();
+            var stored = await context.InboxMessages.AsNoTracking().SingleAsync(m => m.Id == InboxMessageId.CreateFrom(messageId));
+            stored.Status.Should().Be(InboxMessageStatus.DeadLettered);
+            stored.LastError.Should().Be(MessagingDbContext.AbandonedClaimError);
         }
     }
 }

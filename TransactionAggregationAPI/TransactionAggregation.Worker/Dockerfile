@@ -25,23 +25,18 @@ COPY ["TransactionAggregation.Worker/TransactionAggregation.Worker.csproj", "Tra
 COPY ["TransactionAggregation.Hosting/TransactionAggregation.Hosting.csproj", "TransactionAggregation.Hosting/"]
 COPY ["TransactionAggregationAPI.ServiceDefaults/TransactionAggregationAPI.ServiceDefaults.csproj", "TransactionAggregationAPI.ServiceDefaults/"]
 COPY ["BuildingBlocks/SharedKernel/SharedKernel.csproj", "BuildingBlocks/SharedKernel/"]
+COPY ["BuildingBlocks/BuildingBlocks.Application/BuildingBlocks.Application.csproj", "BuildingBlocks/BuildingBlocks.Application/"]
+COPY ["BuildingBlocks/BuildingBlocks.Persistence/BuildingBlocks.Persistence.csproj", "BuildingBlocks/BuildingBlocks.Persistence/"]
 COPY ["BuildingBlocks/BuildingBlocks.Messaging/BuildingBlocks.Messaging.csproj", "BuildingBlocks/BuildingBlocks.Messaging/"]
 COPY ["BuildingBlocks/BuildingBlocks.Web/BuildingBlocks.Web.csproj", "BuildingBlocks/BuildingBlocks.Web/"]
 COPY ["Modules/Transactions/Transactions.Application/Transactions.Application.csproj", "Modules/Transactions/Transactions.Application/"]
 COPY ["Modules/Transactions/Transactions.Domain/Transactions.Domain.csproj", "Modules/Transactions/Transactions.Domain/"]
+COPY ["Modules/Transactions/Transactions.Contracts/Transactions.Contracts.csproj", "Modules/Transactions/Transactions.Contracts/"]
 COPY ["Modules/Transactions/Transactions.Infrastructure/Transactions.Infrastructure.csproj", "Modules/Transactions/Transactions.Infrastructure/"]
 COPY ["Modules/WebhookSources/WebhookSources.Domain/WebhookSources.Domain.csproj", "Modules/WebhookSources/WebhookSources.Domain/"]
 COPY ["Modules/WebhookSources/WebhookSources.Application/WebhookSources.Application.csproj", "Modules/WebhookSources/WebhookSources.Application/"]
 COPY ["Modules/WebhookSources/WebhookSources.Infrastructure/WebhookSources.Infrastructure.csproj", "Modules/WebhookSources/WebhookSources.Infrastructure/"]
 COPY ["Modules/WebhookSources/WebhookSources.Contracts/WebhookSources.Contracts.csproj", "Modules/WebhookSources/WebhookSources.Contracts/"]
-COPY ["Modules/BankLinks/BankLinks.Domain/BankLinks.Domain.csproj", "Modules/BankLinks/BankLinks.Domain/"]
-COPY ["Modules/BankLinks/BankLinks.Application/BankLinks.Application.csproj", "Modules/BankLinks/BankLinks.Application/"]
-COPY ["Modules/BankLinks/BankLinks.Infrastructure/BankLinks.Infrastructure.csproj", "Modules/BankLinks/BankLinks.Infrastructure/"]
-COPY ["Modules/BankLinks/BankLinks.Contracts/BankLinks.Contracts.csproj", "Modules/BankLinks/BankLinks.Contracts/"]
-COPY ["Modules/Customers/Customers.Domain/Customers.Domain.csproj", "Modules/Customers/Customers.Domain/"]
-COPY ["Modules/Customers/Customers.Application/Customers.Application.csproj", "Modules/Customers/Customers.Application/"]
-COPY ["Modules/Customers/Customers.Infrastructure/Customers.Infrastructure.csproj", "Modules/Customers/Customers.Infrastructure/"]
-COPY ["Modules/Customers/Customers.Contracts/Customers.Contracts.csproj", "Modules/Customers/Customers.Contracts/"]
 COPY ["Modules/Audit/Audit.Domain/Audit.Domain.csproj", "Modules/Audit/Audit.Domain/"]
 COPY ["Modules/Audit/Audit.Application/Audit.Application.csproj", "Modules/Audit/Audit.Application/"]
 COPY ["Modules/Audit/Audit.Infrastructure/Audit.Infrastructure.csproj", "Modules/Audit/Audit.Infrastructure/"]
@@ -59,4 +54,10 @@ RUN dotnet publish "./TransactionAggregation.Worker.csproj" -c $BUILD_CONFIGURAT
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+# The worker serves no traffic: 8080 answers health probes only, 9464 serves /metrics.
+ENV ASPNETCORE_HTTP_PORTS=8080;9464 \
+    Metrics__Port=9464
+EXPOSE 9464
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /liveness HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q 'Healthy' <&3"]
 ENTRYPOINT ["dotnet", "TransactionAggregation.Worker.dll"]

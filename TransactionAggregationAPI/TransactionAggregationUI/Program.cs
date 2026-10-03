@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Authentication;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using TransactionAggregationUI;
+using TransactionAggregationUI.Auth;
 using TransactionAggregationUI.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
@@ -20,23 +21,18 @@ builder.Services.AddOidcAuthentication(options =>
     options.ProviderOptions.DefaultScopes.Add("profile");
     options.ProviderOptions.DefaultScopes.Add("email");
 
-    options.UserOptions.RoleClaim = "roles";
-});
+    options.UserOptions.RoleClaim = RolesClaimsPrincipalFactory.RoleClaim;
+}).AddAccountClaimsPrincipalFactory<RolesClaimsPrincipalFactory>();
 
-builder.Services.AddHttpClient("api", client => client.BaseAddress = new Uri(apiBaseUrl))
+builder.Services.AddHttpClient(ApiClient.AuthorizedClient, client => client.BaseAddress = new Uri(apiBaseUrl))
     .AddHttpMessageHandler(sp => sp.GetRequiredService<AuthorizationMessageHandler>()
         .ConfigureHandler(authorizedUrls: [apiBaseUrl]));
+builder.Services.AddHttpClient(ApiClient.AnonymousClient, client => client.BaseAddress = new Uri(apiBaseUrl));
 
-// For the few anonymous endpoints the app calls where a signed-in session isn't guaranteed
-// (the bank-link callback, reached from the bank's consent page).
-builder.Services.AddHttpClient("api-anonymous", client => client.BaseAddress = new Uri(apiBaseUrl));
-
-builder.Services.AddScoped<AuthService>();
-builder.Services.AddScoped<CustomerService>();
-builder.Services.AddScoped<AccountService>();
-builder.Services.AddScoped<BankLinkService>();
+builder.Services.AddScoped<ApiClient>();
 builder.Services.AddScoped<TransactionService>();
-builder.Services.AddScoped<WebhookSourceService>();
+builder.Services.AddScoped<AggregateService>();
+builder.Services.AddScoped<BankService>();
 builder.Services.AddScoped<AuditService>();
 
 await builder.Build().RunAsync();

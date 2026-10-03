@@ -1,9 +1,11 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Abstractions.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Modules.Audit.Contracts;
+using Modules.WebhookSources.Application.Common;
 using Modules.WebhookSources.Application.Persistence;
 using Modules.WebhookSources.Domain;
-using SharedKernel.Abstractions;
-using SharedKernel.Abstractions.Authentication;
 using SharedKernel.Common.Models;
 
 namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
@@ -16,24 +18,26 @@ namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
     {
         public async Task<Result<CreateWebhookSourceResult>> Handle(CreateWebhookSourceCommand request, CancellationToken cancellationToken)
         {
-            var nameExists = await context.WebhookSources
-                .AnyAsync(s => s.Name == request.Name, cancellationToken);
+            var code = request.Code.Trim();
+            var codeExists = await context.WebhookSources
+                .AnyAsync(s => s.Name.ToLower() == code.ToLower(), cancellationToken);
 
-            if (nameExists)
+            if (codeExists)
                 return Result.Failure<CreateWebhookSourceResult>(
-                    Error.Conflict($"A webhook source named '{request.Name}' already exists."));
+                    Error.Conflict($"A bank with code '{code}' already exists."));
 
-            var (source, apiKey) = WebhookSource.Create(request.Name, request.AuthorizedInstitutions);
+            var (source, apiKey) = WebhookSource.Create(code, request.DisplayName, request.Color);
 
-            await context.WebhookSources.AddAsync(source, cancellationToken);
+            context.WebhookSources.Add(source);
+            context.StageAudit([AdminAudit.Of(AuditEventTypes.SourceCreated, source, userContext.UserId, $"Bank '{source.Name}' created with a new webhook API key")]);
             await context.SaveChangesAsync(cancellationToken);
 
             logger.LogInformation(
-                "Webhook source {SourceName} ({SourceId}) created by admin {AdminId} for institutions {Institutions}",
-                source.Name, source.Id.Value, userContext.UserId, source.AuthorizedInstitutions);
+                "Bank source {SourceName} ({SourceId}) created by admin {AdminId}",
+                source.Name, source.Id.Value, userContext.UserId);
 
             return Result.Success(new CreateWebhookSourceResult(
-                source.Id.Value, source.Name, apiKey, source.AuthorizedInstitutions));
+                source.Id.Value, source.Name, source.DisplayName, source.Color, apiKey));
         }
     }
 }

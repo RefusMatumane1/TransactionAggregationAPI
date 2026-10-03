@@ -33,6 +33,12 @@ namespace BuildingBlocks.Messaging.Persistence
             builder.Property(m => m.Channel)
                 .HasMaxLength(32);
 
+            builder.Property(m => m.CorrelationId)
+                .HasMaxLength(InboxMessage.MaxCorrelationIdLength);
+
+            builder.Property(m => m.TraceParent)
+                .HasMaxLength(InboxMessage.MaxTraceParentLength);
+
             builder.Property(m => m.PayloadHash)
                 .HasMaxLength(80);
 
@@ -53,6 +59,10 @@ namespace BuildingBlocks.Messaging.Persistence
 
             builder.HasIndex(m => new { m.Status, m.NextAttemptAt })
                             .HasDatabaseName("IX_InboxMessages_Status_NextAttemptAt");
+
+            builder.HasIndex(m => m.ProcessedAt)
+                .HasFilter("\"Status\" = 2")
+                .HasDatabaseName("IX_InboxMessages_Processed_ProcessedAt");
 
             builder.HasIndex(m => new { m.SourceName, m.IdempotencyKey })
                 .IsUnique()

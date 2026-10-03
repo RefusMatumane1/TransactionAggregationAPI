@@ -3,6 +3,7 @@ using SharedKernel.Common;
 using SharedKernel.Exceptions;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace Modules.WebhookSources.Domain
 {
@@ -11,87 +12,85 @@ namespace Modules.WebhookSources.Domain
         private WebhookSource() { }
 
         public WebhookSourceId Id { get; private set; } = null!;
+
+        // The bank's code (e.g. "FNB", "StandardBank"). It is the source's identity everywhere: the
+        // inbox and audit SourceName, the Kafka `source` header, and the institution on every
+        // transaction it delivers. Immutable once created.
         public string Name { get; private set; } = null!;
+
+        public string DisplayName { get; private set; } = null!;
+
+        // "#RRGGBB", used by the UI to tell banks apart.
+        public string Color { get; private set; } = null!;
         public string KeyHash { get; private set; } = null!;
         public bool IsActive { get; private set; }
 
         public DateTime? LastUsedAt { get; private set; }
 
-        /// <summary>
-        /// The institutions this source may deliver transactions for. A delivery is only ever
-        /// applied to bank links at one of these institutions, so a leaked or misbehaving key
-        /// can't write into accounts held at a bank the source doesn't serve. Empty means
-        /// authorized for nothing — the safe default for a source nobody has scoped yet.
-        /// </summary>
-        public List<string> AuthorizedInstitutions { get; private set; } = [];
+        public string? SigningPublicKey { get; private set; }
 
-        public const int MaximumInstitutionNameLength = 50;
+        public const int MaximumCodeLength = 50;
+        public const int MaximumDisplayNameLength = 100;
+        public const int MaximumSigningPublicKeyLength = 200;
+        public const string DefaultColor = "#6C757D";
 
-        public static (WebhookSource Source, string PlaintextKey) Create(string name, IEnumerable<string> authorizedInstitutions)
+        private static readonly Regex CodePattern = new("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.Compiled);
+        private static readonly Regex ColorPattern = new("^#[0-9A-Fa-f]{6}$", RegexOptions.Compiled);
+
+        private const string P256CurveOid = "1.2.840.10045.3.1.7";
+
+        public static bool IsValidCode(string? code) =>
+            !string.IsNullOrEmpty(code) && code.Length <= MaximumCodeLength && CodePattern.IsMatch(code);
+
+        public static bool IsValidColor(string? color) => color is not null && ColorPattern.IsMatch(color);
+
+        public static (WebhookSource Source, string PlaintextKey) Create(string code, string displayName, string color)
         {
             var plaintextKey = GenerateApiKey();
-
-            var source = new WebhookSource
-            {
-                Id = WebhookSourceId.Create(),
-                Name = name,
-                KeyHash = HashKey(plaintextKey),
-                IsActive = true,
-                AuthorizedInstitutions = NormalizeInstitutions(authorizedInstitutions)
-            };
-
+            var source = New(code, displayName, color);
+            source.KeyHash = HashKey(plaintextKey);
             return (source, plaintextKey);
         }
 
-        /// <summary>
-        /// Minimum length for a key issued outside this system — the generated keys are
-        /// 32 random bytes (~43 characters), so anything shorter would be the weak link.
-        /// </summary>
         public const int MinimumProvisionedKeyLength = 32;
 
-        /// <summary>
-        /// Registers a source whose key was issued out-of-band (e.g. shared with a sender's
-        /// deployment configuration) instead of generated here. Only the hash is kept.
-        /// </summary>
-        public static WebhookSource CreateWithProvisionedKey(
-            string name, string plaintextKey, IEnumerable<string> authorizedInstitutions)
+        public static WebhookSource CreateWithProvisionedKey(string code, string plaintextKey, string displayName, string color)
         {
             EnsureStrongEnough(plaintextKey);
-
-            return new WebhookSource
-            {
-                Id = WebhookSourceId.Create(),
-                Name = name,
-                KeyHash = HashKey(plaintextKey),
-                IsActive = true,
-                AuthorizedInstitutions = NormalizeInstitutions(authorizedInstitutions)
-            };
+            var source = New(code, displayName, color);
+            source.KeyHash = HashKey(plaintextKey);
+            return source;
         }
 
-        /// <summary>Replaces the set of institutions this source may deliver for.</summary>
-        public void AuthorizeInstitutions(IEnumerable<string> institutions)
+        private static WebhookSource New(string code, string displayName, string color)
         {
-            AuthorizedInstitutions = NormalizeInstitutions(institutions);
+            if (!IsValidCode(code))
+                throw new DomainException(
+                    $"A bank code must be 1-{MaximumCodeLength} letters, digits, '-' or '_', starting with a letter or digit.");
+
+            var source = new WebhookSource { Id = WebhookSourceId.Create(), Name = code, IsActive = true };
+            source.Describe(displayName, color);
+            return source;
+        }
+
+        public void UpdateDetails(string displayName, string color)
+        {
+            Describe(displayName, color);
             UpdatedAt = DateTime.UtcNow;
         }
 
-        public bool IsAuthorizedFor(string institution) =>
-            AuthorizedInstitutions.Contains(institution.Trim(), StringComparer.OrdinalIgnoreCase);
-
-        private static List<string> NormalizeInstitutions(IEnumerable<string> institutions)
+        private void Describe(string displayName, string color)
         {
-            var normalized = institutions
-                .Select(i => i?.Trim() ?? string.Empty)
-                .ToList();
+            var name = displayName?.Trim() ?? string.Empty;
+            if (name.Length == 0 || name.Length > MaximumDisplayNameLength)
+                throw new DomainException($"A display name must be 1-{MaximumDisplayNameLength} characters.");
+            if (!IsValidColor(color))
+                throw new DomainException("A colour must be a hex value like #0033A1.");
 
-            if (normalized.Count == 0 || normalized.Any(i => i.Length == 0 || i.Length > MaximumInstitutionNameLength))
-                throw new DomainException(
-                    $"A webhook source must be authorized for at least one institution, each named in 1-{MaximumInstitutionNameLength} characters.");
-
-            return normalized.Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.Ordinal).ToList();
+            DisplayName = name;
+            Color = color.ToUpperInvariant();
         }
 
-        /// <summary>Replaces the key with one issued out-of-band; the old key stops working immediately.</summary>
         public void UseProvisionedKey(string plaintextKey)
         {
             EnsureStrongEnough(plaintextKey);
@@ -130,10 +129,61 @@ namespace Modules.WebhookSources.Domain
             UpdatedAt = DateTime.UtcNow;
         }
 
-        public void RecordUsage()
+        public static readonly TimeSpan UsageRecordingInterval = TimeSpan.FromMinutes(1);
+
+        // LastUsedAt is accurate to UsageRecordingInterval: writing it on every delivery would make
+        // the source's row a write hot spot on the ingestion path.
+        public bool RecordUsage(DateTime now)
         {
-            LastUsedAt = DateTime.UtcNow;
+            if (LastUsedAt is { } last && now - last < UsageRecordingInterval)
+                return false;
+
+            LastUsedAt = now;
+            return true;
         }
+
+        public void RegisterSigningPublicKey(string subjectPublicKeyInfoBase64)
+        {
+            SigningPublicKey = NormalizeSigningPublicKey(subjectPublicKeyInfoBase64)
+                ?? throw new DomainException("The signing key must be a base64 SubjectPublicKeyInfo for an ECDSA P-256 public key.");
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        public static bool IsValidSigningPublicKey(string? subjectPublicKeyInfoBase64) =>
+            NormalizeSigningPublicKey(subjectPublicKeyInfoBase64) is not null;
+
+        public bool HasValidSignature(byte[] signedContent, byte[] signature)
+        {
+            if (SigningPublicKey is null)
+                return false;
+
+            using var key = ECDsa.Create();
+            key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(SigningPublicKey), out _);
+            return key.VerifyData(signedContent, signature, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
+        }
+
+        private static string? NormalizeSigningPublicKey(string? subjectPublicKeyInfoBase64)
+        {
+            if (string.IsNullOrWhiteSpace(subjectPublicKeyInfoBase64) || subjectPublicKeyInfoBase64.Length > MaximumSigningPublicKeyLength)
+                return null;
+
+            try
+            {
+                using var key = ECDsa.Create();
+                key.ImportSubjectPublicKeyInfo(Convert.FromBase64String(subjectPublicKeyInfoBase64.Trim()), out _);
+                return IsP256(key.ExportParameters(includePrivateParameters: false).Curve)
+                    ? Convert.ToBase64String(key.ExportSubjectPublicKeyInfo())
+                    : null;
+            }
+            catch (Exception ex) when (ex is FormatException or CryptographicException)
+            {
+                return null;
+            }
+        }
+
+        private static bool IsP256(ECCurve curve) =>
+            curve.IsNamed
+            && (curve.Oid.Value == P256CurveOid || curve.Oid.FriendlyName is "nistP256" or "ECDSA_P256" or "secp256r1");
 
         public static string HashKey(string rawKey) =>
     Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawKey)));

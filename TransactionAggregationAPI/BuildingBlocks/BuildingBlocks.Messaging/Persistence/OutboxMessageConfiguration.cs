@@ -44,10 +44,17 @@ namespace BuildingBlocks.Messaging.Persistence
             builder.Property(m => m.ProcessedAt);
 
             builder.Property(m => m.LastError)
-                .HasMaxLength(2000);
+                .HasMaxLength(OutboxMessage.MaxErrorLength);
+
+            builder.Property(m => m.TraceParent).HasMaxLength(OutboxMessage.MaxTraceContextLength);
+            builder.Property(m => m.CorrelationId).HasMaxLength(OutboxMessage.MaxTraceContextLength);
 
             builder.HasIndex(m => new { m.Status, m.NextAttemptAt })
-                            .HasDatabaseName("IX_OutboxMessages_Status_NextAttemptAt");
+                .HasDatabaseName("IX_OutboxMessages_Status_NextAttemptAt");
+
+            builder.HasIndex(m => m.ProcessedAt)
+                .HasFilter("\"Status\" = 2")
+                .HasDatabaseName("IX_OutboxMessages_Processed_ProcessedAt");
         }
     }
 }

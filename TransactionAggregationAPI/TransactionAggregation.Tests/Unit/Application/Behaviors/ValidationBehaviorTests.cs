@@ -1,48 +1,49 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Behaviors;
 using FluentAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
-using SharedKernel.Abstractions;
-using SharedKernel.Common.Behaviors;
 using SharedKernel.Common.Models;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Application.Behaviors;
-
-public class ValidationBehaviorTests
+namespace TransactionAggregation.Tests.Unit.Application.Behaviors
 {
-    public sealed record FakeCommand(string Value) : ICommand<Guid>;
-
-    [Fact]
-    public async Task Handle_ValidatorFails_ReturnsFailureResultInsteadOfThrowing()
+    public class ValidationBehaviorTests
     {
-        var failingValidator = Substitute.For<IValidator<FakeCommand>>();
-        failingValidator
-            .ValidateAsync(Arg.Any<ValidationContext<FakeCommand>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult([new ValidationFailure("Value", "must not be empty")]));
+        public sealed record FakeCommand(string Value) : ICommand<Guid>;
 
-        var behavior = new ValidationBehavior<FakeCommand, Result<Guid>>([failingValidator]);
+        [Fact]
+        public async Task Handle_ValidatorFails_ReturnsFailureResultInsteadOfThrowing()
+        {
+            var failingValidator = Substitute.For<IValidator<FakeCommand>>();
+            failingValidator
+                .ValidateAsync(Arg.Any<ValidationContext<FakeCommand>>(), Arg.Any<CancellationToken>())
+                .Returns(new ValidationResult([new ValidationFailure("Value", "must not be empty")]));
 
-        var act = () => behavior.Handle(new FakeCommand(""), _ => throw new Exception("should not reach handler"), CancellationToken.None);
+            var behavior = new ValidationBehavior<FakeCommand, Result<Guid>>([failingValidator]);
 
-        var result = await act.Should().NotThrowAsync();
-        result.Subject.IsFailure.Should().BeTrue();
-        result.Subject.Error.Description.Should().Contain("must not be empty");
-    }
+            var act = () => behavior.Handle(new FakeCommand(""), _ => throw new Exception("should not reach handler"), CancellationToken.None);
 
-    [Fact]
-    public async Task Handle_ValidatorPasses_InvokesNext()
-    {
-        var passingValidator = Substitute.For<IValidator<FakeCommand>>();
-        passingValidator
-            .ValidateAsync(Arg.Any<ValidationContext<FakeCommand>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
+            var result = await act.Should().NotThrowAsync();
+            result.Subject.IsFailure.Should().BeTrue();
+            result.Subject.Error.Description.Should().Contain("must not be empty");
+        }
 
-        var behavior = new ValidationBehavior<FakeCommand, Result<Guid>>([passingValidator]);
-        var expected = Result.Success(Guid.NewGuid());
+        [Fact]
+        public async Task Handle_ValidatorPasses_InvokesNext()
+        {
+            var passingValidator = Substitute.For<IValidator<FakeCommand>>();
+            passingValidator
+                .ValidateAsync(Arg.Any<ValidationContext<FakeCommand>>(), Arg.Any<CancellationToken>())
+                .Returns(new ValidationResult());
 
-        var result = await behavior.Handle(new FakeCommand("ok"), _ => Task.FromResult(expected), CancellationToken.None);
+            var behavior = new ValidationBehavior<FakeCommand, Result<Guid>>([passingValidator]);
+            var expected = Result.Success(Guid.NewGuid());
 
-        result.Should().Be(expected);
+            var result = await behavior.Handle(new FakeCommand("ok"), _ => Task.FromResult(expected), CancellationToken.None);
+
+            result.Should().Be(expected);
+        }
     }
 }

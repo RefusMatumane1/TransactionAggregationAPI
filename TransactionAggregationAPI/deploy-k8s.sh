@@ -64,6 +64,7 @@ OPT_DEV_TOOLS=false
 OPT_MONITORING=false
 OPT_SKIP_HOSTS=false
 OPT_TEARDOWN=false
+OPT_VAULT=false
 
 for arg in "$@"; do
   case "$arg" in
@@ -72,6 +73,7 @@ for arg in "$@"; do
     --monitoring)  OPT_MONITORING=true ;;
     --skip-hosts)  OPT_SKIP_HOSTS=true ;;
     --teardown)    OPT_TEARDOWN=true ;;
+    --vault)       OPT_VAULT=true ;;
     --help|-h)
       echo "Usage: $(basename "$0") [OPTIONS]"
       echo ""
@@ -81,6 +83,7 @@ for arg in "$@"; do
       echo "  --monitoring   Also deploy Prometheus and Grafana"
       echo "  --skip-hosts   Skip updating /etc/hosts"
       echo "  --teardown     Delete namespace '$NAMESPACE' and all its data"
+      echo "  --vault        Read the API and worker secrets from Vault (k8s/vault/README.md)"
       echo "  --help         Show this help"
       exit 0
       ;;
@@ -181,13 +184,13 @@ else
   fi
 fi
 
-if grep -q "CHANGE_ME_BASE64_ENCODED" "$K8S/secrets.yaml" 2>/dev/null; then
-  log_error "k8s/secrets.yaml still contains CHANGE_ME_BASE64_ENCODED placeholders."
+# base64("CHANGE_ME_BEFORE_DEPLOY") — the placeholder every value in k8s/secrets.yaml ships with.
+if grep -q "Q0hBTkdFX01FX0JFRk9SRV9ERVBMT1k=" "$K8S/secrets.yaml" 2>/dev/null; then
+  log_error "k8s/secrets.yaml still contains CHANGE_ME_BEFORE_DEPLOY placeholders."
   log_error ""
-  log_error "Generate real values and paste them into the file:"
-  log_error "  postgres-password:  echo -n 'YourPassword123!'  | base64"
-  log_error "  jwt-secret:         openssl rand -hex 32        | base64"
-  log_error "  pgadmin-password:   echo -n 'YourAdminPass!'    | base64"
+  log_error "Generate a real value for every key and paste it into the file, e.g.:"
+  log_error "  openssl rand -base64 32 | tr -d '\n' | base64"
+  log_error "(see the kubectl create secret command at the top of k8s/secrets.yaml)"
   exit 1
 fi
 log_ok "secrets.yaml has been populated"
@@ -202,18 +205,20 @@ step "Secrets and ConfigMaps"
 kubectl apply -f "$K8S/secrets.yaml"
 log_ok "Secrets applied"
 kubectl apply -f "$K8S/configmap.yaml"
-log_ok "API ConfigMap applied"
+kubectl apply -f "$K8S/worker/configmap.yaml"
+log_ok "API and worker ConfigMaps applied"
 if $OPT_UI; then
   kubectl apply -f "$K8S/ui/configmap.yaml"
   log_ok "UI  ConfigMap applied  (API_UPSTREAM → http://transaction-api)"
 fi
 
 # ── Step 3: Data stores ──────────────────────────────────────────────────────
-step "Data stores  (PostgreSQL · Redis · Seq · Kafka)"
+step "Data stores  (PostgreSQL · Redis · Seq · Kafka · Keycloak)"
 kubectl apply -f "$K8S/postgres/"
 kubectl apply -f "$K8S/redis/"
 kubectl apply -f "$K8S/seq/"
 kubectl apply -f "$K8S/kafka/"
+kubectl apply -f "$K8S/keycloak/"
 
 log_info "Waiting for PostgreSQL to be ready…"
 kubectl rollout status statefulset/postgres -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
@@ -228,6 +233,11 @@ log_ok "Redis is ready"
 log_info "Waiting for Kafka to be ready…"
 kubectl rollout status statefulset/kafka -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
 log_ok "Kafka is ready"
+
+# The API validates every token against the realm, so it is useless until Keycloak serves it.
+log_info "Waiting for Keycloak to be ready…"
+kubectl rollout status deployment/keycloak -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
+log_ok "Keycloak is ready"
 
 # ── Step 4: Migrations, then API ──────────────────────────────────────────────
 # The cluster runs as Production, where no pod self-migrates (Program.cs only does that in
@@ -244,23 +254,46 @@ if ! kubectl wait --for=condition=complete job/db-migrate -n "$NAMESPACE" --time
 fi
 log_ok "Migrations applied"
 
+step "PgBouncer  (deployment · service · PDB)"
+kubectl apply -f "$K8S/pgbouncer/"
+kubectl rollout status deployment/pgbouncer -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
+log_ok "PgBouncer is pooling connections to Postgres"
+
 step "API  (service · deployment · ingress · HPA · PDB)"
 kubectl apply -f "$K8S/api/service.yaml"
 apply_with_image_tag "$K8S/api/deployment.yaml"
 kubectl apply -f "$K8S/api/ingress.yaml"
 kubectl apply -f "$K8S/api/hpa.yaml"
 kubectl apply -f "$K8S/api/pdb.yaml"
+if $OPT_VAULT; then
+  kubectl patch deployment/transaction-api -n "$NAMESPACE" --type strategic --patch-file "$K8S/vault/api-patch.yaml"
+  log_info "API secrets are rendered by the Vault Agent (k8s/vault/api-patch.yaml)"
+fi
 
-log_info "Waiting for API replicas to pass the readiness probe (/health)…"
+log_info "Waiting for API replicas to pass the readiness probe (/readiness)…"
 kubectl rollout status deployment/transaction-api -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
 log_ok "API is running"
 
-# Background processing: Kafka consumer + inbox/outbox/pending-expiry dispatchers.
-step "Worker  (deployment · PDB)"
+# Background processing: Kafka consumer + inbox/outbox dispatchers + message archiving.
+step "Worker  (deployment · PDB · autoscaler)"
 apply_with_image_tag "$K8S/worker/deployment.yaml"
 kubectl apply -f "$K8S/worker/pdb.yaml"
+if $OPT_VAULT; then
+  kubectl patch deployment/transaction-worker -n "$NAMESPACE" --type strategic --patch-file "$K8S/vault/worker-patch.yaml"
+  log_info "Worker secrets are rendered by the Vault Agent (k8s/vault/worker-patch.yaml)"
+fi
 
-log_info "Waiting for worker replicas to start (/alive)…"
+if $OPT_MONITORING && kubectl get crd scaledobjects.keda.sh >/dev/null 2>&1; then
+  kubectl delete hpa transaction-worker -n "$NAMESPACE" --ignore-not-found
+  kubectl apply -f "$K8S/worker/scaledobject.yaml"
+  log_ok "Worker autoscaling: KEDA on inbox/outbox backlog"
+else
+  kubectl delete scaledobject transaction-worker -n "$NAMESPACE" --ignore-not-found 2>/dev/null || true
+  kubectl apply -f "$K8S/worker/hpa.yaml"
+  log_warn "Worker autoscaling: CPU HPA fallback (install KEDA and pass --monitoring to scale on backlog)"
+fi
+
+log_info "Waiting for worker replicas to start (/liveness)…"
 kubectl rollout status deployment/transaction-worker -n "$NAMESPACE" --timeout="$ROLLOUT_TIMEOUT"
 log_ok "Worker is running"
 
@@ -401,17 +434,17 @@ echo -e "${BOLD}───────────────────── 
 kubectl get ingress -n "$NAMESPACE" 2>/dev/null || true
 
 echo ""
-log_info "Running API health check…"
+log_info "Running API smoke test…"
 sleep 2
-if curl -sf --max-time 5 "http://api.transaction.local/health" > /dev/null 2>&1; then
-  log_ok "Health check passed  →  http://api.transaction.local/health"
+if "$SCRIPT_DIR/scripts/smoke-test.sh" "http://api.transaction.local"; then
+  log_ok "Smoke test passed  →  http://api.transaction.local"
 else
   log_warn "Health check via ingress did not respond yet."
   log_warn "Traefik may still be picking up the Ingress — wait ~10 s and try:"
-  log_warn "  curl http://api.transaction.local/health"
+  log_warn "  scripts/smoke-test.sh http://api.transaction.local"
   log_warn "Or bypass with port-forward:"
   log_warn "  kubectl port-forward svc/transaction-api 8080:80 -n $NAMESPACE"
-  log_warn "  curl http://localhost:8080/health"
+  log_warn "  scripts/smoke-test.sh http://localhost:8080"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
@@ -439,7 +472,7 @@ fi
 
 echo ""
 echo -e "${BOLD}  Seed credentials${NC}  (pre-loaded test accounts)"
-echo -e "  Email    thabo.mokoena@example.co.za  (or any seeded user)"
+echo -e "  Email    thabo.mokoena@test.com  (or any seeded user)"
 echo -e "  Password Test@12345"
 
 echo ""

@@ -3,16 +3,12 @@ using Microsoft.Extensions.Logging;
 using Modules.Audit.Application.Persistence;
 using Modules.Audit.Contracts;
 using Modules.Audit.Domain;
+using System.Data.Common;
 
 namespace Modules.Audit.Application.Contracts
 {
     internal sealed class AuditTrail(IAuditDbContext context, ILogger<AuditTrail> logger) : IAuditTrail
     {
-        /// <summary>
-        /// A conflict means a concurrent writer (e.g. two dispatcher replicas that both
-        /// reclaimed the same stale outbox message) stored some of these ids first; a
-        /// re-check turns those into no-ops.
-        /// </summary>
         private const int MaxConflictAttempts = 3;
 
         public async Task RecordAsync(IReadOnlyCollection<AuditEventRecord> events, CancellationToken cancellationToken = default)
@@ -59,6 +55,32 @@ namespace Modules.Audit.Application.Contracts
             }
         }
 
+        public async Task RecordWithinAsync(
+            IReadOnlyCollection<AuditEventRecord> events, DbTransaction transaction, CancellationToken cancellationToken = default)
+        {
+            var toAdd = events
+                .GroupBy(e => e.EventId)
+                .Select(g => ToEntity(g.First()))
+                .ToList();
+            if (toAdd.Count == 0)
+                return;
+
+            // No conflict retry here: a failed statement aborts the caller's Postgres transaction,
+            // so the caller retries the whole unit instead.
+            await context.Database.UseTransactionAsync(transaction, cancellationToken);
+            try
+            {
+                context.AuditEvents.AddRange(toAdd);
+                await context.SaveChangesAsync(cancellationToken);
+            }
+            finally
+            {
+                foreach (var entity in toAdd)
+                    context.AuditEvents.Entry(entity).State = EntityState.Detached;
+                await context.Database.UseTransactionAsync(null, CancellationToken.None);
+            }
+        }
+
         private static AuditEvent ToEntity(AuditEventRecord e) => AuditEvent.Create(
             e.EventId,
             e.EventType,
@@ -68,11 +90,11 @@ namespace Modules.Audit.Application.Contracts
             e.ExternalAccountId,
             e.InboxMessageId,
             e.IdempotencyKey,
-            e.CustomerId,
             e.TransactionId,
             e.ExternalTransactionId,
             e.Detail,
             e.Metadata,
-            e.TraceId);
+            e.TraceId,
+            e.Actor);
     }
 }

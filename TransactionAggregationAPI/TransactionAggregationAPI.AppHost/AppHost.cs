@@ -1,9 +1,19 @@
+using Microsoft.Extensions.Configuration;
+
 var builder = DistributedApplication.CreateBuilder(args);
 
+// Parameter values come from the git-ignored secrets.json next to this project (see secrets.template.json).
+builder.Configuration.AddJsonFile("secrets.json", optional: true, reloadOnChange: false);
+
 var pgPassword = builder.AddParameter("postgres-password", secret: true);
+var keycloakAdminPassword = builder.AddParameter("keycloak-admin-password", secret: true);
+var grafanaAdminPassword = builder.AddParameter("grafana-admin-password", secret: true);
+var appAdminPassword = builder.AddParameter("app-admin-password", secret: true);
+var appStaffPassword = builder.AddParameter("app-staff-password", secret: true);
 
 var postgres = builder
     .AddPostgres("transaction-db", password: pgPassword)
+    .WithImageTag("17.6") // the same major and minor as compose, Kubernetes and the tests
     .WithPgAdmin()
     .WithDataVolume("transaction-postgres-data")
     .WithLifetime(ContainerLifetime.Persistent);
@@ -19,8 +29,6 @@ var seq = builder.AddSeq("seq")
     .WithLifetime(ContainerLifetime.Persistent)
     .WithEnvironment("ACCEPT_EULA", "Y");
 
-// Second inbound channel for bank transactions (alongside the REST webhook). Kafka UI is
-// for inspecting/producing test records on the bank-transactions topic and its .dlq.
 var kafka = builder.AddKafka("kafka")
     .WithDataVolume("transaction-kafka-data")
     .WithKafkaUI(ui => ui.WithHostPort(8083))
@@ -33,9 +41,13 @@ var keycloak = builder
         "../keycloak/realm-export.json",
         "/opt/keycloak/data/import/realm-export.json",
         isReadOnly: true)
+        .WithVolume("transaction-keycloak-data", "/opt/keycloak/data")
     .WithArgs("start-dev", "--import-realm")
     .WithEnvironment("KEYCLOAK_ADMIN", "admin")
-    .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", "admin")
+    .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword)
+    // The realm import substitutes ${TRANSACTION_APP_*_PASSWORD} for its dev users.
+    .WithEnvironment("TRANSACTION_APP_ADMIN_PASSWORD", appAdminPassword)
+    .WithEnvironment("TRANSACTION_APP_STAFF_PASSWORD", appStaffPassword)
     .WithEnvironment("KC_HOSTNAME", "http://localhost:8081")
     .WithEnvironment("KC_HOSTNAME_STRICT", "false")
     .WithEnvironment("KC_HTTP_ENABLED", "true")
@@ -56,8 +68,6 @@ api.WithReference(transactionDb)
     .WaitForStart(redis)
     .WaitFor(keycloak);
 
-// Kafka consumer + inbox/outbox/pending-expiry dispatchers. Started after the API because
-// the API applies migrations in Development; the dispatchers retry until the tables exist.
 builder
     .AddProject<Projects.TransactionAggregation_Worker>("transactionaggregationworker")
     .WithReference(seq)
@@ -70,56 +80,38 @@ builder
     .WaitFor(kafka)
     .WaitForStart(api);
 
-// Development stand-in for the external account aggregator: the consent flow BankLinks
-// needs to link an account, and mock FNB/Absa/Capitec/Standard Bank feeds pushed through
-// the real webhook (or Kafka, with Feed__Channel=Kafka). The two apps share a client secret
-// and the webhook source's API key; the API registers that source at startup in Development.
 var mockAggregatorApiKey = builder.AddParameter("mock-aggregator-api-key", secret: true);
-var mockAggregatorClientSecret = builder.AddParameter("mock-aggregator-client-secret", secret: true);
 
 var mockAggregator = builder.AddProject<Projects.TransactionAggregation_MockAggregator>("mockaggregator");
 
-var apiHttp = api.GetEndpoint("http");
-var mockAggregatorHttp = mockAggregator.GetEndpoint("http");
-// The consent page returns the browser to the UI (which the API hosts here), and the UI
-// completes the link through the API's callback endpoint. It must be the https origin: that
-// is where the UI signs in (Keycloak only accepts https://localhost:5101), so it is where
-// the user's session lives when they come back.
-var bankLinkCallback = ReferenceExpression.Create($"{api.GetEndpoint("https")}/bank-links/callback");
-
-api.WithEnvironment("BankAggregator__ClientId", "transaction-aggregation-dev")
-    .WithEnvironment("BankAggregator__ClientSecret", mockAggregatorClientSecret)
-    .WithEnvironment("BankAggregator__AuthorizeEndpoint", ReferenceExpression.Create($"{mockAggregatorHttp}/oauth/authorize"))
-    .WithEnvironment("BankAggregator__TokenEndpoint", ReferenceExpression.Create($"{mockAggregatorHttp}/oauth/token"))
-    .WithEnvironment("BankAggregator__AccountEndpoint", ReferenceExpression.Create($"{mockAggregatorHttp}/accounts/me"))
-    .WithEnvironment("BankAggregator__RedirectUri", bankLinkCallback)
-    .WithEnvironment("MockAggregator__WebhookApiKey", mockAggregatorApiKey);
+var apiHttps = api.GetEndpoint("https");
+api.WithEnvironment("MockAggregator__WebhookApiKey", mockAggregatorApiKey);
 
 mockAggregator
     .WithReference(seq)
     .WithReference(kafka)
-    .WithEnvironment("MockAggregator__ClientSecret", mockAggregatorClientSecret)
-    .WithEnvironment("MockAggregator__AllowedRedirectUris__0", bankLinkCallback)
-    .WithEnvironment("Feed__ApiBaseUrl", apiHttp)
+    .WithEnvironment("Feed__ApiBaseUrl", apiHttps)
     .WithEnvironment("Feed__ApiKey", mockAggregatorApiKey)
     .WaitForStart(api);
 
 var prometheus = builder
     .AddContainer("prometheus", "prom/prometheus")
+    .WithImageTag("v2.55.1")
     .WithBindMount("monitoring/prometheus-aspire.yml", "/etc/prometheus/prometheus.yml", isReadOnly: true)
-    .WithEnvironment("API_METRICS_TARGET",
-        ReferenceExpression.Create($"host.docker.internal:5100"))
-    .WithEnvironment("WORKER_METRICS_TARGET",
-        ReferenceExpression.Create($"host.docker.internal:5110"))
-    .WithHttpEndpoint(targetPort: 9090, name: "web");
+    .WithBindMount("../monitoring/prometheus-rules.yml", "/etc/prometheus/rules.yml", isReadOnly: true)
+    .WithContainerRuntimeArgs("--add-host=host.docker.internal:host-gateway")
+    .WithArgs("--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--web.enable-lifecycle")
+    .WithHttpEndpoint(port: 9090, targetPort: 9090, name: "web");
 
 builder
     .AddContainer("grafana", "grafana/grafana")
+    .WithImageTag("11.3.0")
     .WithBindMount("../monitoring/grafana/provisioning", "/etc/grafana/provisioning", isReadOnly: true)
     .WithBindMount("../monitoring/grafana/dashboards", "/var/lib/grafana/dashboards", isReadOnly: true)
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ENABLED", "true")
-    .WithEnvironment("GF_AUTH_ANONYMOUS_ORG_ROLE", "Admin")
-    .WithHttpEndpoint(targetPort: 3000, name: "web")
+    .WithEnvironment("GF_SECURITY_ADMIN_USER", "admin")
+    .WithEnvironment("GF_SECURITY_ADMIN_PASSWORD", grafanaAdminPassword)
+    .WithEnvironment("GF_USERS_ALLOW_SIGN_UP", "false")
+    .WithHttpEndpoint(port: 3000, targetPort: 3000, name: "web")
     .WaitFor(prometheus);
 
 builder.Build().Run();

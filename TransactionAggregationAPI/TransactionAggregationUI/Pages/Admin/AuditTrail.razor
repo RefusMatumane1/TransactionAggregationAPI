@@ -3,18 +3,20 @@
 @inject AuditService AuditService
 @inject NavigationManager Nav
 
-<PageTitle>Audit Trail</PageTitle>
+<PageTitle>Audit trail · Transaction Aggregation</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-2">
-    <h4 class="mb-0">Audit Trail</h4>
-    <form class="d-flex gap-2" @onsubmit="FindLineage">
-        <input class="form-control form-control-sm font-monospace" style="width:22rem"
-               placeholder="Transaction id: where did it come from?" @bind="_lineageLookup" />
-        <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">
-            <i class="bi bi-signpost-split me-1"></i>Trace origin
-        </button>
-    </form>
-</div>
+<PageHeader Title="Audit trail">
+    <Actions>
+        <form class="d-flex gap-2" role="search" @onsubmit="FindLineage">
+            <label class="visually-hidden" for="lineage-id">Transaction id</label>
+            <input id="lineage-id" class="form-control form-control-sm font-monospace" style="width:min(22rem, 60vw)"
+                   placeholder="Transaction id: where did it come from?" @bind="_lineageLookup" />
+            <button type="submit" class="btn btn-sm btn-outline-primary text-nowrap">
+                <i class="bi bi-signpost-split me-1" aria-hidden="true"></i>Trace origin
+            </button>
+        </form>
+    </Actions>
+</PageHeader>
 
 <p class="text-muted small">
     Every inbound delivery (webhook or Kafka) and everything that happened to it afterwards: receipt,
@@ -265,15 +267,22 @@ else
 
             <div class="d-flex justify-content-between align-items-center small">
                 <span class="text-muted">
-                    @results.TotalCount event@(results.TotalCount == 1 ? "" : "s") · page @results.PageNumber of @Math.Max(results.TotalPages, 1)
+                    @if (results.TotalCount is { } total)
+                    {
+                        @($"{total:N0}{(results.TotalCountCapped ? "+" : "")} event{(total == 1 && !results.TotalCountCapped ? "" : "s")}")
+                    }
+                    else
+                    {
+                        @("Showing older events")
+                    }
                 </span>
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-secondary" disabled="@(results.PageNumber <= 1)"
-                            @onclick="() => GoToPage(results.PageNumber - 1)">
-                        <i class="bi bi-chevron-left"></i> Newer
+                    <button class="btn btn-outline-secondary" disabled="@(_filter.Cursor is null)"
+                            @onclick="FirstPage">
+                        <i class="bi bi-chevron-double-left"></i> Newest
                     </button>
-                    <button class="btn btn-outline-secondary" disabled="@(results.PageNumber >= results.TotalPages)"
-                            @onclick="() => GoToPage(results.PageNumber + 1)">
+                    <button class="btn btn-outline-secondary" disabled="@(!results.HasMore)"
+                            @onclick="() => GoToCursor(results.NextCursor)">
                         Older <i class="bi bi-chevron-right"></i>
                     </button>
                 </div>
@@ -294,7 +303,7 @@ else
     [SupplyParameterFromQuery(Name = "transaction")] public Guid? TransactionId { get; set; }
     [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
     [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
-    [SupplyParameterFromQuery(Name = "page")] public int? PageNumber { get; set; }
+    [SupplyParameterFromQuery(Name = "cursor")] public string? Cursor { get; set; }
     [SupplyParameterFromQuery(Name = "lineage")] public Guid? Lineage { get; set; }
 
     private const string LocalFormat = "yyyy-MM-ddTHH:mm";
@@ -341,7 +350,7 @@ else
         TransactionId = TransactionId,
         From = ParseLocal(From),
         To = ParseLocal(To),
-        PageNumber = Math.Max(PageNumber ?? 1, 1)
+        Cursor = string.IsNullOrWhiteSpace(Cursor) ? null : Cursor
     };
 
     private static AuditFilter Copy(AuditFilter f) => new()
@@ -355,7 +364,7 @@ else
         TransactionId = f.TransactionId,
         From = f.From,
         To = f.To,
-        PageNumber = f.PageNumber
+        Cursor = f.Cursor
     };
 
     private static DateTime? ParseLocal(string? value) =>
@@ -373,7 +382,7 @@ else
         ["transaction"] = f.TransactionId,
         ["from"] = f.From?.ToString(LocalFormat),
         ["to"] = f.To?.ToString(LocalFormat),
-        ["page"] = f.PageNumber > 1 ? f.PageNumber : null
+        ["cursor"] = f.Cursor
     });
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -386,7 +395,7 @@ else
     private void Search()
     {
         var next = Copy(_draft);
-        next.PageNumber = 1;
+        next.Cursor = null;
         Nav.NavigateTo(SearchUrl(next));
     }
 
@@ -406,16 +415,18 @@ else
             next.InboxMessageId = null;
         else
             next.TransactionId = null;
-        next.PageNumber = 1;
+        next.Cursor = null;
         Nav.NavigateTo(SearchUrl(next));
     }
 
-    private void GoToPage(int pageNumber)
+    private void GoToCursor(string? cursor)
     {
         var next = Copy(_filter);
-        next.PageNumber = pageNumber;
+        next.Cursor = cursor;
         Nav.NavigateTo(SearchUrl(next));
     }
+
+    private void FirstPage() => GoToCursor(null);
 
     private void BackToSearch() => Nav.NavigateTo("/admin/audit");
 

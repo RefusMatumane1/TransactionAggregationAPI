@@ -1,4 +1,4 @@
-using SharedKernel.Abstractions;
+using BuildingBlocks.Application.Abstractions;
 
 namespace Modules.WebhookSources.Application.Features.RotateWebhookSourceKey
 {

@@ -1,3 +1,4 @@
+using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Modules.Audit.Contracts;
@@ -6,26 +7,17 @@ using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBan
 
 namespace Modules.Transactions.Presentation.Endpoints.Webhooks
 {
-    /// <summary>
-    /// Channel metadata for webhook deliveries, and direct audit writes for the webhook
-    /// outcomes that never reach the inbox (bad key, failed validation).
-    /// </summary>
     internal static class WebhookDeliveryAudit
     {
-        public const string UnauthenticatedSource = "unauthenticated";
+        public const string UnauthenticatedSource = AuditSources.Unauthenticated;
 
         public static InboundDelivery Describe(HttpContext httpContext, bool idempotencyKeyProvided)
         {
             var metadata = BaseMetadata(httpContext);
             metadata["idempotencyKeyProvided"] = idempotencyKeyProvided ? "true" : "false";
-            return new InboundDelivery(AuditChannels.Webhook, metadata);
+            return new InboundDelivery(AuditChannels.Webhook, metadata, CorrelationContext.Get(httpContext));
         }
 
-        /// <summary>
-        /// Best effort: the caller is already getting a 4xx, and turning that into a 500
-        /// because the audit write failed would only make a legitimate sender retry.
-        /// The failure is logged at Error so it can be alerted on.
-        /// </summary>
         public static async Task TryRecordAsync(
             IAuditTrail auditTrail,
             ILogger logger,
@@ -68,7 +60,6 @@ namespace Modules.Transactions.Presentation.Endpoints.Webhooks
 
         private static Dictionary<string, string> BaseMetadata(HttpContext httpContext)
         {
-            // RemoteIpAddress is the real client once UseForwardedHeaders has run (Program.cs).
             var metadata = new Dictionary<string, string>
             {
                 ["httpMethod"] = httpContext.Request.Method,

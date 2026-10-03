@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Net;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
@@ -12,20 +13,15 @@ namespace TransactionAggregation.Tests.Integration
             _client = factory.CreateClient();
         }
 
-        [Fact]
-        public async Task Health_Endpoint_Returns200()
+        [Theory]
+        [InlineData("/liveness")]
+        [InlineData("/readiness")]
+        [InlineData("/health")]
+        public async Task HealthEndpoints_AreServed_WithoutAuthentication(string path)
         {
-            var response = await _client.GetAsync("/health");
+            var response = await _client.GetAsync(path);
 
-            response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
-        }
-
-        [Fact]
-        public async Task Alive_Endpoint_Returns200()
-        {
-            var response = await _client.GetAsync("/alive");
-
-            response.StatusCode.Should().Be(System.Net.HttpStatusCode.OK);
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
         }
     }
 }

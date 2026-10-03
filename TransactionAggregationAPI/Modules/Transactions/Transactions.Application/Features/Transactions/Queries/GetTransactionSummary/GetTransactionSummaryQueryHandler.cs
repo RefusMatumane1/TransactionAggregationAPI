@@ -1,91 +1,76 @@
+using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Domain.Services;
-using SharedKernel.Abstractions;
 using SharedKernel.Common.Models;
-using SharedKernel.Common.ValueObjects;
+using System.Globalization;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
 {
-    internal sealed class GetTransactionSummaryQueryHandler(
-        ITransactionsDbContext _context,
-        ILogger<GetTransactionSummaryQueryHandler> _logger)
+    internal sealed class GetTransactionSummaryQueryHandler(ITransactionsDbContext context)
         : IQueryHandler<GetTransactionSummaryQuery, TransactionSummaryDto>
     {
         public async Task<Result<TransactionSummaryDto>> Handle(
             GetTransactionSummaryQuery request,
             CancellationToken cancellationToken)
         {
-            var customerId = CustomerId.CreateFrom(request.CustomerId);
-            var startDate = DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc);
-            var endDate = DateTime.SpecifyKind(request.EndDate, DateTimeKind.Utc);
+            // The read model is daily, so the bounds are the South African days they fall on (both inclusive).
+            var from = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc));
+            var to = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.EndDate, DateTimeKind.Utc));
 
-            var transactions = await _context.Transactions
-                .Where(t =>
-                    t.CustomerId == customerId &&
-                    t.Date >= startDate &&
-                    t.Date <= endDate)
-                .AsNoTracking()
+            var buckets = await context.DailyTotals
+                .Within(from, to, request.Filter, request.Currency)
+                .GroupBy(d => new { d.Day.Year, d.Day.Month, d.Category })
+                .Select(g => new
+                {
+                    g.Key.Year,
+                    g.Key.Month,
+                    g.Key.Category,
+                    Income = g.Sum(d => d.Income),
+                    Expenses = g.Sum(d => d.Expenses),
+                    ExpenseCount = g.Sum(d => d.ExpenseCount),
+                    Count = g.Sum(d => d.IncomeCount + d.ExpenseCount)
+                })
                 .ToListAsync(cancellationToken);
+            var asOf = await context.AggregationCheckpoints.AsOfAsync(cancellationToken);
 
-            // Money figures come from booked transactions only; pending is reported alongside.
-            var booked = transactions.Where(t => TransactionTotals.CountsAsBooked(t.Status)).ToList();
-            var pending = transactions.Where(t => TransactionTotals.CountsAsPending(t.Status)).ToList();
-
-            var totalIncome = booked
-                .Where(t => t.Amount.Amount > 0)
-                .Sum(t => t.Amount.Amount);
-
-            var totalExpenses = booked
-                .Where(t => t.Amount.Amount < 0)
-                .Sum(t => Math.Abs(t.Amount.Amount));
-
-            var spendingByCategory = booked
-                .Where(t => t.Amount.Amount < 0)
-                .GroupBy(t => t.Category)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.Sum(t => Math.Abs(t.Amount.Amount)));
-
-            var monthlySummaries = booked
-                .GroupBy(t => new { t.Date.Year, t.Date.Month })
+            var monthlySummaries = buckets
+                .GroupBy(b => (b.Year, b.Month))
                 .OrderBy(g => g.Key.Year)
                 .ThenBy(g => g.Key.Month)
                 .Select(g =>
                 {
-                    var income = g.Where(t => t.Amount.Amount > 0).Sum(t => t.Amount.Amount);
-                    var expenses = g.Where(t => t.Amount.Amount < 0).Sum(t => Math.Abs(t.Amount.Amount));
+                    var income = g.Sum(b => b.Income);
+                    var expenses = g.Sum(b => b.Expenses);
                     return new MonthlySummaryDto(
                         Year: g.Key.Year,
                         Month: g.Key.Month,
-                        MonthName: new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMMM yyyy"),
+                        MonthName: new DateTime(g.Key.Year, g.Key.Month, 1).ToString("MMMM yyyy", CultureInfo.InvariantCulture),
                         TotalIncome: income,
                         TotalExpenses: expenses,
                         NetBalance: income - expenses,
-                        TransactionCount: g.Count());
+                        TransactionCount: g.Sum(b => b.Count));
                 })
                 .ToList();
 
-            var pendingIncome = pending.Where(t => t.Amount.Amount > 0).Sum(t => t.Amount.Amount);
-            var pendingExpenses = pending.Where(t => t.Amount.Amount < 0).Sum(t => Math.Abs(t.Amount.Amount));
+            var spendingByCategory = buckets
+                .Where(b => b.ExpenseCount > 0)
+                .GroupBy(b => b.Category)
+                .ToDictionary(g => g.Key, g => g.Sum(b => b.Expenses));
 
-            _logger.LogInformation(
-                "Summary for customer {CustomerId}: {TransactionCount} transactions ({BookedCount} booked, {PendingCount} pending), income {Income}, expenses {Expenses}",
-                request.CustomerId, transactions.Count, booked.Count, pending.Count, totalIncome, totalExpenses);
+            var totalIncome = monthlySummaries.Sum(m => m.TotalIncome);
+            var totalExpenses = monthlySummaries.Sum(m => m.TotalExpenses);
 
             return Result.Success(new TransactionSummaryDto(
                 TotalIncome: totalIncome,
                 TotalExpenses: totalExpenses,
                 NetBalance: totalIncome - totalExpenses,
                 SpendingByCategory: spendingByCategory,
-                TotalTransactions: transactions.Count,
+                TotalTransactions: monthlySummaries.Sum(m => m.TransactionCount),
                 MonthlySummaries: monthlySummaries,
-                CompletedTransactions: booked.Count,
-                PendingTransactions: pending.Count,
-                PendingIncome: pendingIncome,
-                PendingExpenses: pendingExpenses));
+                Currency: request.Currency,
+                AsOf: asOf));
         }
     }
 }

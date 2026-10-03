@@ -1,0 +1,118 @@
+@using System.Globalization
+@* Monthly income vs expenses as paired columns. Two series, so the legend is always shown; the
+   tooltip carries exact values and the table view (in the parent card) is the accessible fallback.
+   Mark specs: bars <= 24px, 4px rounded data-end, square at the baseline, 2px gap between a pair. *@
+
+<div class="chart-legend mb-2" aria-hidden="true">
+    <span><span class="kpi-swatch" style="background:var(--series-income)"></span>Income</span>
+    <span><span class="kpi-swatch" style="background:var(--series-expense)"></span>Expenses</span>
+</div>
+
+<div class="chart" @onmouseleave="() => _active = null">
+    <svg viewBox="0 0 @F(Width) @F(Height)" role="img" aria-label="@Summary">
+        <g class="grid">
+            @foreach (var tick in _ticks)
+            {
+                <g>
+                    <line x1="@F(Left)" x2="@F(Width - Right)" y1="@F(Y(tick))" y2="@F(Y(tick))" />
+                    <text class="tick" x="@F(Left - 8)" y="@F(Y(tick) + 4)" text-anchor="end">@Format.CompactMoney(tick)</text>
+                </g>
+            }
+        </g>
+
+        @for (var i = 0; i < Points.Count; i++)
+        {
+            var index = i;
+            var point = Points[i];
+            var band = BandWidth;
+            var x0 = Left + band * i;
+            var center = x0 + band / 2;
+            <rect class="band @(_active == index ? "active" : "")" x="@F(x0)" y="@F(Top)" width="@F(band)" height="@F(PlotHeight)"
+                  @onmouseenter="() => _active = index" />
+            <path class="bar-income" d="@Column(center - BarGap / 2 - BarWidth, point.Income)" pointer-events="none" />
+            <path class="bar-expense" d="@Column(center + BarGap / 2, point.Expenses)" pointer-events="none" />
+            @if (ShowLabel(i))
+            {
+                <g><text class="tick" x="@F(center)" y="@F(Height - 8)" text-anchor="middle">@Format.ShortMonth(point.PeriodStart)</text></g>
+            }
+        }
+
+        <line class="baseline" x1="@F(Left)" x2="@F(Width - Right)" y1="@F(Y(0))" y2="@F(Y(0))" />
+    </svg>
+
+    @if (_active is { } a && a < Points.Count)
+    {
+        var p = Points[a];
+        <div class="chart-tooltip" style="left:@F(Math.Clamp((Left + BandWidth * (a + 0.5)) / Width * 100, 15, 85))%">
+            <div class="fw-semibold mb-1">@Format.Month(p.PeriodStart)</div>
+            <div class="d-flex justify-content-between gap-3"><span><span class="kpi-swatch me-1" style="background:var(--series-income)"></span>Income</span><span class="num">@Format.Money(p.Income)</span></div>
+            <div class="d-flex justify-content-between gap-3"><span><span class="kpi-swatch me-1" style="background:var(--series-expense)"></span>Expenses</span><span class="num">@Format.Money(p.Expenses)</span></div>
+            <div class="d-flex justify-content-between gap-3 border-top mt-1 pt-1"><span>Net</span><span class="num fw-semibold">@Format.Money(p.Net)</span></div>
+            <div class="text-muted">@Format.Count(p.TransactionCount) transactions</div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CashFlowPointModel> Points { get; set; } = [];
+
+    private const double Width = 720;
+    private const double Height = 240;
+    private const double Left = 56;
+    private const double Right = 8;
+    private const double Top = 8;
+    private const double Bottom = 26;
+    private const double BarGap = 2;
+    private const double Radius = 4;
+
+    private int? _active;
+    private decimal _max = 1;
+    private List<decimal> _ticks = [];
+
+    private static double PlotHeight => Height - Top - Bottom;
+    private double BandWidth => (Width - Left - Right) / Math.Max(1, Points.Count);
+    private double BarWidth => Math.Min(24, Math.Max(2, (BandWidth * 0.7 - BarGap) / 2));
+
+    private string Summary =>
+        $"Monthly income and expenses, {Points.Count} months. Income {Format.Money(Points.Sum(p => p.Income))}, expenses {Format.Money(Points.Sum(p => p.Expenses))}.";
+
+    protected override void OnParametersSet()
+    {
+        var peak = Points.Count == 0 ? 0 : Points.Max(p => Math.Max(p.Income, p.Expenses));
+        var step = NiceStep(peak / 4);
+        _max = Math.Max(step * Math.Ceiling(peak / step), step);
+        _ticks = Enumerable.Range(0, (int)(_max / step) + 1).Select(i => step * i).ToList();
+        if (_active >= Points.Count)
+            _active = null;
+    }
+
+    // 1, 2, 2.5 or 5 times a power of ten: ticks read as round numbers.
+    private static decimal NiceStep(decimal rough)
+    {
+        if (rough <= 0)
+            return 1;
+        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
+        var fraction = rough / magnitude;
+        var nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 2.5m ? 2.5m : fraction <= 5 ? 5 : 10;
+        return nice * magnitude;
+    }
+
+    private double Y(decimal value) => Top + PlotHeight * (1 - (double)(value / _max));
+
+    // A column from the baseline up, rounded only at the data end.
+    private string Column(double x, decimal value)
+    {
+        if (value <= 0)
+            return string.Empty;
+        var top = Y(value);
+        var bottom = Y(0);
+        var w = BarWidth;
+        var r = Math.Min(Radius, Math.Min(w / 2, bottom - top));
+        return $"M{F(x)},{F(bottom)}V{F(top + r)}Q{F(x)},{F(top)} {F(x + r)},{F(top)}H{F(x + w - r)}Q{F(x + w)},{F(top)} {F(x + w)},{F(top + r)}V{F(bottom)}Z";
+    }
+
+    // At most ~12 month labels, so they never collide on long ranges.
+    private bool ShowLabel(int index) => index % Math.Max(1, (int)Math.Ceiling(Points.Count / 12.0)) == 0;
+
+    private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+}

@@ -3,16 +3,25 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using SharedKernel.Common.ValueObjects;
+using Modules.Transactions.Domain.Enums;
 using System.Text.Json;
 
 namespace Modules.Transactions.Infrastructure.Persistence.Configurations
 {
     public class TransactionConfiguration : IEntityTypeConfiguration<Transaction>
     {
+        public const string CurrencyConstraintName = "CK_Transactions_Currency_Iso4217";
+        public const string CurrencyConstraintSql = "\"Currency\" ~ '^[A-Z]{3}$'";
+
         public void Configure(EntityTypeBuilder<Transaction> builder)
         {
-            builder.ToTable("Transactions");
+            builder.ToTable("Transactions", table =>
+            {
+                table.HasCheckConstraint("CK_Transactions_Amount_NonZero", "\"Amount\" <> 0");
+                table.HasCheckConstraint(CurrencyConstraintName, CurrencyConstraintSql);
+                table.HasCheckConstraint("CK_Transactions_Status_Defined", EnumRange<TransactionStatus>("Status"));
+                table.HasCheckConstraint("CK_Transactions_Category_Defined", EnumRange<TransactionCategory>("Category"));
+            });
 
             builder.HasKey(t => t.Id);
             builder.Property(t => t.Id)
@@ -20,26 +29,15 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                     id => id.Value,
                     value => TransactionId.CreateFrom(value));
 
-            builder.Property(t => t.CustomerId)
-                            .HasConversion(
-                                id => id.Value,
-                                value => CustomerId.CreateFrom(value))
-                            .IsRequired();
-
-            builder.Property(t => t.AccountId)
-                .HasConversion(
-                    id => id != null ? (Guid?)id.Value : null,
-                    value => value.HasValue ? AccountId.CreateFrom(value.Value) : null)
-                .HasColumnName("AccountId");
-
-            builder.HasIndex(t => t.AccountId)
-                .HasDatabaseName("IX_Transactions_AccountId");
+            builder.Property(t => t.ExternalAccountId)
+                .HasMaxLength(Transaction.MaxExternalAccountIdLength)
+                .IsRequired();
 
             builder.OwnsOne(t => t.Amount, money =>
             {
                 money.Property(m => m.Amount)
                     .HasColumnName("Amount")
-                    .HasPrecision(19, 4)
+                    .HasPrecision(19, Money.MaxScale)
                     .IsRequired();
 
                 money.Property(m => m.Currency)
@@ -49,29 +47,21 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
             });
 
             builder.OwnsOne(t => t.Source, source =>
-                        {
-                            source.Property(s => s.Name)
-                                .HasColumnName("SourceName")
-                                .HasMaxLength(50)
-                                .IsRequired();
+            {
+                source.Property(s => s.Name)
+                    .HasColumnName("SourceName")
+                    .HasMaxLength(TransactionSource.MaxNameLength)
+                    .IsRequired();
 
-                            source.Property(s => s.ExternalId)
-                                .HasColumnName("SourceExternalId")
-                                .HasMaxLength(100)
-                                .IsRequired();
-
-                            source.HasIndex(s => s.ExternalId)
-                                .HasDatabaseName("IX_Transactions_SourceExternalId");
-
-                            // The ingestion idempotency key — UNIQUE (CustomerId, SourceName,
-                            // SourceExternalId) — can't be expressed here (it spans the owner and
-                            // this owned type), so it lives in raw SQL in the
-                            // ScopeTransactionDedupToInstitutionAndWidenAmount migration.
-                        });
+                source.Property(s => s.ExternalId)
+                    .HasColumnName("SourceExternalId")
+                    .HasMaxLength(TransactionSource.MaxExternalIdLength)
+                    .IsRequired();
+            });
 
             builder.Property(t => t.Description)
-                            .HasMaxLength(500)
-                            .IsRequired();
+                .HasMaxLength(Transaction.MaxDescriptionLength)
+                .IsRequired();
 
             builder.Property(t => t.Category)
                 .HasConversion<int>()
@@ -85,47 +75,39 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                 .IsRequired();
 
             builder.Property(t => t.CreatedAt)
-                            .IsRequired();
+                .IsRequired();
 
-            builder.Property(t => t.UpdatedAt);
+            // Set only on rows changed by the lifecycle that preceded the insert-only ledger; kept so
+            // those values survive, never written now.
+            builder.Property<DateTime?>("UpdatedAt");
 
-            // uint + IsRowVersion maps to Postgres' xmin system column (Npgsql convention) —
-            // a concurrency token with no column to add. See Transaction.Version.
-            builder.Property(t => t.Version)
-                .IsRowVersion();
+            builder.Ignore(t => t.Metadata);
+            builder.Property<Dictionary<string, string>>("_metadata")
+                .HasColumnName("Metadata")
+                .UsePropertyAccessMode(PropertyAccessMode.Field)
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, new JsonSerializerOptions()),
+                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, new JsonSerializerOptions()) ?? new(),
 
-            builder.Ignore(t => t.PendingSince);
+                    new ValueComparer<Dictionary<string, string>>(
+                        (c1, c2) => (c1 ?? new()).SequenceEqual(c2 ?? new()),
+                        c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
+                        c => c == null ? new() : new Dictionary<string, string>(c)))
+                .HasColumnType("jsonb");
 
-            builder.Property(t => t.Metadata)
-                            .HasConversion(
-                                v => JsonSerializer.Serialize(v, new JsonSerializerOptions()),
-                                v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, new JsonSerializerOptions()) ?? new(),
-                                // Null-tolerant: a raw jsonb `null` can reach the comparer, and a throw here would abort
-                                // an unrelated SaveChanges.
-                                new ValueComparer<Dictionary<string, string>>(
-                                    (c1, c2) => (c1 ?? new()).SequenceEqual(c2 ?? new()),
-                                    c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
-                                    c => c == null ? new() : new Dictionary<string, string>(c)))
-                            .HasColumnType("jsonb");
+            // The unique ledger key, the date/amount keyset indexes and the description trigram index
+            // are created by raw SQL in migrations (CONCURRENTLY, partial, INCLUDE, GIN); EF cannot
+            // express them on owned-type columns. SchemaContractTests pins their exact definitions.
+        }
 
-            builder.HasIndex(t => t.CustomerId)
-                            .HasDatabaseName("IX_Transactions_CustomerId");
-
-            builder.HasIndex(t => t.Date)
-                .HasDatabaseName("IX_Transactions_Date");
-
-            builder.HasIndex(t => t.Category)
-                .HasDatabaseName("IX_Transactions_Category");
-
-            builder.HasIndex(t => t.Status)
-                .HasDatabaseName("IX_Transactions_Status");
-
-            builder.HasIndex(t => new { t.CustomerId, t.Date, t.Category })
-                .HasDatabaseName("IX_Transactions_Customer_Date_Category");
-
-            builder.HasIndex(t => new { t.CustomerId, t.Status })
-                .HasDatabaseName("IX_Transactions_Customer_Status");
-
+        // Contiguous values stay a BETWEEN; values with gaps (retired statuses) must be listed, or the
+        // constraint would still admit the retired ones.
+        private static string EnumRange<TEnum>(string column) where TEnum : struct, Enum
+        {
+            var values = Enum.GetValues<TEnum>().Select(v => Convert.ToInt32(v)).Order().ToList();
+            return values[^1] - values[0] == values.Count - 1
+                ? $"\"{column}\" BETWEEN {values[0]} AND {values[^1]}"
+                : $"\"{column}\" IN ({string.Join(", ", values)})";
         }
     }
 }

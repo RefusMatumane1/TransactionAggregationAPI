@@ -1,0 +1,16 @@
+@* A failed load says what failed and offers the fix, instead of looking like "no data". *@
+<div class="alert alert-danger d-flex flex-wrap align-items-center gap-2 py-2" role="alert">
+    <i class="bi bi-exclamation-triangle-fill" aria-hidden="true"></i>
+    <span class="me-auto">@Message</span>
+    @if (OnRetry.HasDelegate)
+    {
+        <button type="button" class="btn btn-sm btn-outline-danger" @onclick="OnRetry">
+            <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Try again
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Message { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnRetry { get; set; }
+}

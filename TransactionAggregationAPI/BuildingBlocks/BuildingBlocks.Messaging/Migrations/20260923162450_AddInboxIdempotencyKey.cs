@@ -4,10 +4,8 @@
 
 namespace BuildingBlocks.Messaging.Migrations
 {
-    /// <inheritdoc />
     public partial class AddInboxIdempotencyKey : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -27,7 +25,6 @@ namespace BuildingBlocks.Messaging.Migrations
                 filter: "\"IdempotencyKey\" IS NOT NULL");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropIndex(

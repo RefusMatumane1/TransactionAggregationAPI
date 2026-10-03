@@ -7,13 +7,15 @@ namespace Modules.Transactions.Application.Common.Inbox
     {
         public const string IdempotencyKeyReusedCode = "Inbox.IdempotencyKeyReused";
 
-        /// <summary>
-        /// 422, following the IETF Idempotency-Key draft: the request is well-formed but can
-        /// never be accepted under this key, so a retry won't help (Kafka dead-letters it).
-        /// </summary>
         public static Error IdempotencyKeyReused(string idempotencyKey) =>
             new(IdempotencyKeyReusedCode,
                 $"Idempotency key '{idempotencyKey}' was already used for a different payload. Use a new key for new content.",
                 ErrorType.Problem);
+
+        public static Error InstitutionNotTheSourcesBank(string sourceName, string institution) =>
+            new FieldValidationError(new Dictionary<string, string[]>
+            {
+                ["institution"] = [$"This key belongs to bank '{sourceName}', but the delivery names '{institution}'. Omit institution or send '{sourceName}'."]
+            });
     }
 }

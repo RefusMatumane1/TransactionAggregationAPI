@@ -5,7 +5,7 @@
 # need enforcement.
 # ────────────────────────────────────────────────────────────────────────────
 
-# Allow API + worker → Postgres
+# Allow PgBouncer → Postgres. The API and worker reach Postgres only through PgBouncer.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,10 +19,7 @@ spec:
     - from:
         - podSelector:
             matchLabels:
-              app.kubernetes.io/name: transaction-api
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: transaction-worker
+              app.kubernetes.io/name: pgbouncer
       ports:
         - protocol: TCP
           port: 5432
@@ -34,6 +31,49 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
+
+---
+# Allow API + worker → PgBouncer
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-pgbouncer
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: pgbouncer
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-api
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: transaction-worker
+      ports:
+        - protocol: TCP
+          port: 5432
+
+---
+# Allow the KEDA operator → Prometheus, to read the worker backlog it scales on
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-keda-to-prometheus
+  namespace: transaction-aggregation
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: prometheus
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: keda
+      ports:
+        - protocol: TCP
+          port: 9090
 
 ---
 # Allow API + worker → Redis
@@ -194,7 +234,7 @@ spec:
           port: 80
 
 ---
-# Allow Prometheus → API (scraping /metrics on port 8080)
+# Allow Prometheus → API (scraping /metrics on the private metrics port 9464 only)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -211,10 +251,10 @@ spec:
               app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
-          port: 8080
+          port: 9464
 
 ---
-# Allow Prometheus → worker (scraping /metrics on port 8080)
+# Allow Prometheus → worker (scraping /metrics on the private metrics port 9464 only)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -231,7 +271,7 @@ spec:
               app.kubernetes.io/name: prometheus
       ports:
         - protocol: TCP
-          port: 8080
+          port: 9464
 
 ---
 # Allow Grafana → Prometheus (datasource queries on port 9090)

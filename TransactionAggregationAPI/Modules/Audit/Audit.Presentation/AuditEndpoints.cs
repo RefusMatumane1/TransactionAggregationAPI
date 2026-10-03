@@ -9,7 +9,6 @@ namespace Modules.Audit
     {
         public static IEndpointRouteBuilder MapAuditEndpoints(this IEndpointRouteBuilder app)
         {
-            // Read-only by design: there is no endpoint that edits or deletes audit history.
             var group = app.MapApiGroup("admin/audit", "Admin")
                            .RequireAuthorization(AuthorizationPolicies.Admin);
 

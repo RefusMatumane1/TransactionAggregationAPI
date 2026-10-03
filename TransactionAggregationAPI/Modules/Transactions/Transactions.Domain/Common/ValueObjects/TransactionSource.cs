@@ -8,13 +8,16 @@ namespace Modules.Transactions.Domain.Common.ValueObjects
         public string Name { get; }
         public string ExternalId { get; }
 
+        public const int MaxNameLength = 50;
+        public const int MaxExternalIdLength = 100;
+
         private TransactionSource(string name, string externalId)
         {
-            if (string.IsNullOrWhiteSpace(name))
-                throw new DomainException("Transaction source name cannot be empty");
+            if (string.IsNullOrWhiteSpace(name) || name.Length > MaxNameLength)
+                throw new DomainException($"Transaction source name must be 1-{MaxNameLength} characters");
 
-            if (string.IsNullOrWhiteSpace(externalId))
-                throw new DomainException("External ID cannot be empty");
+            if (string.IsNullOrWhiteSpace(externalId) || externalId.Length > MaxExternalIdLength)
+                throw new DomainException($"External ID must be 1-{MaxExternalIdLength} characters");
 
             Name = name;
             ExternalId = externalId;

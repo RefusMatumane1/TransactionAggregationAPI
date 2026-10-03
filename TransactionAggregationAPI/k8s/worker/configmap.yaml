@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: transaction-worker-config
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-aggregation
+    app.kubernetes.io/component: worker-config
+data:
+  # Read only by the worker (TransactionAggregation.Worker), which runs all background processing:
+  # the Kafka consumer, the inbox/outbox dispatchers and message archiving. The API never sees
+  # these; settings both hosts need stay in ../configmap.yaml.
+
+  # ── Kafka (second inbound channel for bank transactions) ──────────────
+  # Bootstrap servers for ConnectionStrings__kafka (mapped in deployment.yaml), required: the
+  # outbox publishes integration events (TransactionRecorded) to IntegrationEventsTopic. The
+  # inbound consumer stores each record in the inbox exactly like the REST webhook does;
+  # Kafka__Enabled "false" switches only that consumer off. The group id keeps its historical
+  # "-api" name so offsets committed before the worker split still apply.
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9093"
+  Kafka__IntegrationEventsTopic: "transaction-events"
+  Kafka__Enabled: "true"
+  Kafka__BankTransactionsTopic: "bank-transactions"
+  Kafka__DeadLetterTopic: "bank-transactions.dlq"
+  # One consumer group across all worker replicas: partitions are split between pods, so
+  # TopicPartitions caps how many replicas actually consume in parallel.
+  Kafka__GroupId: "transaction-aggregation-api"
+  # Every record must carry a "source" header naming an active WebhookSource and a
+  # "signature" header that verifies against that source's registered public key
+  # (PUT /api/v1/admin/webhook-sources/{id}/signing-key); anything else is dead-lettered.
+  Kafka__CreateTopics: "true"
+  Kafka__TopicPartitions: "6"
+  Kafka__TopicReplicationFactor: "1"
+  Kafka__MaxRetryBackoffSeconds: "60"
+
+  # ── Notification options ───────────────────────────────────────────────
+  # Where DuplicateInboundDetected alerts are POSTed; empty = log + metric only.
+  NotificationOptions__DuplicateAlertWebhookUrl: ""
+
+  # ── Transactional outbox dispatcher ────────────────────────────────────
+  # Polls OutboxMessages for cache-invalidation/notification/audit side effects queued by
+  # the ingestion path — see OutboxDispatcherBackgroundService. Safe to run multiple replicas;
+  # claiming uses Postgres FOR UPDATE SKIP LOCKED so they drain the queue in parallel.
+  Outbox__PollIntervalSeconds: "5"
+  Outbox__BatchSize: "200"
+  Outbox__MaxConcurrency: "16"
+  Outbox__MaxAttempts: "5"
+
+  # ── Inbound webhook inbox dispatcher ────────────────────────────────────
+  # Polls InboxMessages for raw webhook payloads queued by ReceiveBankTransactionsCommandHandler
+  # — see InboxDispatcherBackgroundService. Same multi-replica-safe claim as the outbox.
+  Inbox__PollIntervalSeconds: "5"
+  Inbox__BatchSize: "50"
+  Inbox__MaxAttempts: "5"
+
+  # ── Message archive ─────────────────────────────────────────────────────
+  # Processed inbox/outbox rows older than RetainDays move to messaging.*Archive tables.
+  # Nothing is deleted; duplicate-delivery detection also checks the archive.
+  MessageArchive__RetainDays: "30"
+  MessageArchive__BatchSize: "1000"
+  MessageArchive__MaxBatchesPerRun: "50"
+
+  # ── Aggregates ──────────────────────────────────────────────────────────
+  # The daily read model behind every aggregate endpoint is rebuilt every IntervalMinutes (one
+  # replica at a time); aggregate reads are at most that stale. OverlapMinutes re-reads rows
+  # whose transaction committed late.
+  Aggregation__IntervalMinutes: "60"
+  Aggregation__OverlapMinutes: "10"

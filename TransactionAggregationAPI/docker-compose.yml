@@ -1,3 +1,5 @@
+# Credentials are read from .env next to this file (git-ignored; copy .env.template). A missing
+# value stops `docker compose` with a message naming it.
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -5,11 +7,13 @@ services:
     command: start-dev --import-realm
     environment:
       KEYCLOAK_ADMIN: admin
-      # Local-dev-only credential — override via `KEYCLOAK_ADMIN_PASSWORD=... docker compose up`.
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env (copy .env.template)}
+      # Passwords of the realm's dev users, substituted into the realm import.
+      TRANSACTION_APP_ADMIN_PASSWORD: ${TRANSACTION_APP_ADMIN_PASSWORD:?Set TRANSACTION_APP_ADMIN_PASSWORD in .env (copy .env.template)}
+      TRANSACTION_APP_STAFF_PASSWORD: ${TRANSACTION_APP_STAFF_PASSWORD:?Set TRANSACTION_APP_STAFF_PASSWORD in .env (copy .env.template)}
       # Keeps the `iss` claim on every issued token fixed to this address regardless of which
       # hostname/port a request physically arrived on, so it matches Keycloak__PublicIssuer
-      # below (the value the API's JwtBearer issuer check validates against). See Program.cs.
+      # below (the value the API's JwtBearer issuer check validates against). See TransactionAggregationAPI/Authentication/AuthenticationSetup.cs.
       # Keycloak 25+ (hostname v2) requires a full URL here — "localhost:8081" made it refuse
       # to start ("neither a plain hostname nor a valid URL"), which the old service_started
       # dependency hid. BACKCHANNEL_DYNAMIC keeps the API's in-network metadata/JWKS calls on
@@ -22,6 +26,9 @@ services:
     ports:
       - "8081:8080"
     volumes:
+      # Staff and admin users (and their roles) survive a recreate. The realm import is
+      # skipped once the realm exists.
+      - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     # The image has no curl/wget; bash's /dev/tcp is enough for a readiness probe. "Ready"
     # means the realm import has finished, which is what the API needs to validate tokens.
@@ -42,31 +49,23 @@ services:
     container_name: transactionaggregation-api-1
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      # 8080 = traffic, 9464 = /metrics only (scraped by Prometheus, never published to the host).
+      - ASPNETCORE_HTTP_PORTS=8080;9464
+      - Metrics__Port=9464
+      - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.template)}
       - ConnectionStrings__redis=redis:6379
       - ConnectionStrings__seq=http://seq:80
       # Reached from inside the compose network — reliable, no dependency on host DNS.
       - Keycloak__Authority=http://keycloak:8080
       # Reached by the browser — must match KC_HOSTNAME above, since it becomes the `iss` claim
       # on every token. Deliberately a different address than Keycloak__Authority — see
-      # Program.cs for why the API doesn't need these to be the same URL.
+      # TransactionAggregationAPI/Authentication/AuthenticationSetup.cs for why the API doesn't need these to be the same URL.
       - Keycloak__PublicIssuer=http://localhost:8081/realms/transaction-aggregation
       - Keycloak__Realm=transaction-aggregation
       - Keycloak__Audience=transaction-ui
-      - Keycloak__AdminClientId=transaction-admin
-      - Keycloak__AdminClientSecret=dev-only-admin-client-secret
-      # Bank linking against the mock aggregator. The authorize endpoint and the redirect
-      # URI are followed by the browser (host ports); token/account are server-to-server.
-      - BankAggregator__ClientId=transaction-aggregation-dev
-      - BankAggregator__ClientSecret=dev-only-mock-aggregator-client-secret
-      - BankAggregator__AuthorizeEndpoint=http://localhost:5090/oauth/authorize
-      - BankAggregator__TokenEndpoint=http://mock-aggregator:8080/oauth/token
-      - BankAggregator__AccountEndpoint=http://mock-aggregator:8080/accounts/me
-      # The UI's page, which completes the link through the API's callback endpoint.
-      - BankAggregator__RedirectUri=http://localhost:7200/bank-links/callback
-      # Registered as a webhook source at startup (Development only) — the mock sends as it.
-      - MockAggregator__WebhookApiKey=dev-only-mock-aggregator-webhook-key-not-a-secret
+      # Development only: base of the mock banks' keys. FNB, StandardBank, Absa and Capitec are each
+      # registered as their own source at startup, keyed <base>-<code in lower case>.
+      - MockAggregator__WebhookApiKey=${MOCK_AGGREGATOR_API_KEY:?Set MOCK_AGGREGATOR_API_KEY in .env (copy .env.template)}
     ports:
       - "5001:8080"
     depends_on:
@@ -79,7 +78,7 @@ services:
       keycloak:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy|Degraded' <&3"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy|Degraded' <&3"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -97,10 +96,12 @@ services:
       dockerfile: TransactionAggregation.Worker/Dockerfile
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_HTTP_PORTS=8080
-      - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=${POSTGRES_PASSWORD:-postgres}
+      - ASPNETCORE_HTTP_PORTS=8080;9464
+      - Metrics__Port=9464
+      - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.template)}
       - ConnectionStrings__redis=redis:6379
       - ConnectionStrings__seq=http://seq:80
+      - NotificationOptions__DuplicateAlertWebhookUrl=${DUPLICATE_ALERT_WEBHOOK_URL:-}
       # The broker's in-network listener (see the kafka service below), not the host-mapped 9092.
       - ConnectionStrings__kafka=kafka:9093
     depends_on:
@@ -116,7 +117,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /alive HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /liveness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -125,9 +126,9 @@ services:
       - transaction-network
     restart: unless-stopped
 
-  # Development stand-in for the external account aggregator: the consent page that links
-  # a bank account (http://localhost:5090) and mock FNB/Absa/Capitec/Standard Bank feeds
-  # pushed through the API's webhook. Set Feed__Channel=Kafka to push to the topic instead.
+  # Development stand-in for the external account aggregator: mock FNB/Absa/Capitec/Standard
+  # Bank feeds for a fixed set of accounts, pushed through the API's webhook. Set Feed__Channel=Kafka to push to the topic instead;
+  # Kafka records are signed: register GET :5090/kafka/signing-key first.
   mock-aggregator:
     build:
       context: .
@@ -136,10 +137,9 @@ services:
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTP_PORTS=8080
-      - MockAggregator__ClientSecret=dev-only-mock-aggregator-client-secret
-      - MockAggregator__AllowedRedirectUris__0=http://localhost:7200/bank-links/callback
       - Feed__ApiBaseUrl=http://api:8080
-      - Feed__ApiKey=dev-only-mock-aggregator-webhook-key-not-a-secret
+      # Same base key as the API's; the mock sends each bank's feed with that bank's own key.
+      - Feed__ApiKey=${MOCK_AGGREGATOR_API_KEY:?Set MOCK_AGGREGATOR_API_KEY in .env (copy .env.template)}
       - ConnectionStrings__kafka=kafka:9093
       - ConnectionStrings__seq=http://seq:80
     volumes:
@@ -147,7 +147,7 @@ services:
     ports:
       - "5090:8080"
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /alive HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /liveness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
       interval: 10s
       timeout: 5s
       retries: 30
@@ -186,7 +186,11 @@ services:
       - transaction-network
     restart: unless-stopped
 
+  # ── Optional tooling ─────────────────────────────────────────────────────────
+  # Not needed to run the system; start with `docker compose --profile tools up`
+  # (kafka-ui, pgadmin, redis-commander) and/or `--profile monitoring` (prometheus, grafana).
   kafka-ui:
+    profiles: ["tools"]
     image: kafbat/kafka-ui:v1.4.2
     container_name: transactionaggregation-kafka-ui-1
     environment:
@@ -228,7 +232,7 @@ services:
     container_name: transactionaggregation-postgres-1
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.template)}
       POSTGRES_DB: transactiondb
     ports:
       - "5432:5432"
@@ -279,11 +283,12 @@ services:
       - transaction-network
 
   pgadmin:
+    profiles: ["tools"]
     image: dpage/pgadmin4:9.12.0
     container_name: transactionaggregation-pgadmin-1
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin
-      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_DEFAULT_EMAIL: admin@test.com
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:?Set PGADMIN_PASSWORD in .env (copy .env.template)}
     ports:
       - "5050:80"
     depends_on:
@@ -293,6 +298,7 @@ services:
       - transaction-network
 
   redis-commander:
+    profiles: ["tools"]
     image: rediscommander/redis-commander:latest@sha256:19cd0c49f418779fa2822a0496c5e6516d0c792effc39ed20089e6268477e40a
     container_name: transactionaggregation-redis-commander-1
     environment:
@@ -306,6 +312,7 @@ services:
       - transaction-network
 
   prometheus:
+    profiles: ["monitoring"]
     image: prom/prometheus:v2.55.1
     container_name: transactionaggregation-prometheus-1
     command:
@@ -316,6 +323,7 @@ services:
       - "--web.enable-lifecycle"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus-rules.yml:/etc/prometheus/rules.yml:ro
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
@@ -329,11 +337,12 @@ services:
     restart: unless-stopped
 
   grafana:
+    profiles: ["monitoring"]
     image: grafana/grafana:11.3.0
     container_name: transactionaggregation-grafana-1
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?Set GRAFANA_ADMIN_PASSWORD in .env (copy .env.template)}
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_HTTP_PORT=3000
     volumes:
@@ -363,6 +372,8 @@ volumes:
     name: transactionaggregation_kafka_data
   mock_aggregator_data:
     name: transactionaggregation_mock_aggregator_data
+  keycloak_data:
+    name: transactionaggregation_keycloak_data
 
 networks:
   transaction-network:

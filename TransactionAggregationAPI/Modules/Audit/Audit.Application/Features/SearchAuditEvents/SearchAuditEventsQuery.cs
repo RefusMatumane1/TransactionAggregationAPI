@@ -1,44 +1,56 @@
+using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Pagination;
 using FluentValidation;
 using Microsoft.EntityFrameworkCore;
 using Modules.Audit.Application.DTOs;
 using Modules.Audit.Application.Persistence;
-using SharedKernel.Abstractions;
+using Modules.Audit.Domain;
 using SharedKernel.Common.Models;
 
 namespace Modules.Audit.Application.Features.SearchAuditEvents
 {
-    public sealed record SearchAuditEventsQuery : IQuery<AuditEventPage>
+    public sealed record SearchAuditEventsQuery : IQuery<CursorPage<AuditEventDto>>
     {
         public string? Channel { get; init; }
         public string? SourceName { get; init; }
         public string? EventType { get; init; }
         public string? ExternalAccountId { get; init; }
         public Guid? InboxMessageId { get; init; }
-        public Guid? CustomerId { get; init; }
         public Guid? TransactionId { get; init; }
         public string? ExternalTransactionId { get; init; }
+        public string? Actor { get; init; }
         public DateTime? From { get; init; }
         public DateTime? To { get; init; }
-        public int PageNumber { get; init; } = 1;
+        public string? Cursor { get; init; }
         public int PageSize { get; init; } = 50;
+        public bool IncludeTotal { get; init; }
+    }
+
+    public static class AuditEventSort
+    {
+        public static readonly KeysetSort<AuditEvent> NewestFirst =
+            new KeysetSort<AuditEvent, DateTime, Guid>(
+                "occurredAt", e => e.OccurredAt, e => e.Id, id => id, id => id, KeyCodecs.UtcDateTime);
     }
 
     public sealed class SearchAuditEventsQueryValidator : AbstractValidator<SearchAuditEventsQuery>
     {
+        public const int MaxPageSize = 200;
+
         public SearchAuditEventsQueryValidator()
         {
-            RuleFor(x => x.PageNumber).GreaterThanOrEqualTo(1);
-            RuleFor(x => x.PageSize).InclusiveBetween(1, 200);
+            RuleFor(x => x.PageSize).InclusiveBetween(1, MaxPageSize);
+            RuleFor(x => x.Cursor).MustBeACursorFor(AuditEventSort.NewestFirst, descending: true);
             RuleFor(x => x)
                 .Must(x => x.From is null || x.To is null || x.From <= x.To)
                 .WithMessage("'From' must be on or before 'To'.");
         }
     }
 
-    internal sealed class SearchAuditEventsQueryHandler(IAuditDbContext context)
-        : IQueryHandler<SearchAuditEventsQuery, AuditEventPage>
+    internal sealed class SearchAuditEventsQueryHandler(IAuditDbContext context, IKeysetPaginator paginator)
+        : IQueryHandler<SearchAuditEventsQuery, CursorPage<AuditEventDto>>
     {
-        public async Task<Result<AuditEventPage>> Handle(SearchAuditEventsQuery request, CancellationToken cancellationToken)
+        public async Task<Result<CursorPage<AuditEventDto>>> Handle(SearchAuditEventsQuery request, CancellationToken cancellationToken)
         {
             var query = context.AuditEvents.AsNoTracking();
 
@@ -52,28 +64,31 @@ namespace Modules.Audit.Application.Features.SearchAuditEvents
                 query = query.Where(e => e.ExternalAccountId == request.ExternalAccountId);
             if (request.InboxMessageId is { } inboxMessageId)
                 query = query.Where(e => e.InboxMessageId == inboxMessageId);
-            if (request.CustomerId is { } customerId)
-                query = query.Where(e => e.CustomerId == customerId);
             if (request.TransactionId is { } transactionId)
                 query = query.Where(e => e.TransactionId == transactionId);
             if (!string.IsNullOrWhiteSpace(request.ExternalTransactionId))
                 query = query.Where(e => e.ExternalTransactionId == request.ExternalTransactionId);
+            if (!string.IsNullOrWhiteSpace(request.Actor))
+                query = query.Where(e => e.Actor == request.Actor);
             if (request.From is { } from)
                 query = query.Where(e => e.OccurredAt >= from);
             if (request.To is { } to)
                 query = query.Where(e => e.OccurredAt <= to);
 
-            var totalCount = await query.CountAsync(cancellationToken);
+            BoundedCount? total = request.IncludeTotal
+                ? await BoundedCount.OfAsync(query, (q, ct) => q.CountAsync(ct), cancellationToken)
+                : null;
 
-            var events = await query
-                .OrderByDescending(e => e.OccurredAt)
-                .ThenBy(e => e.Id)
-                .Skip((request.PageNumber - 1) * request.PageSize)
-                .Take(request.PageSize)
+            var sort = AuditEventSort.NewestFirst;
+            var window = PageCursor.TryDecode(request.Cursor, out var cursor)
+                ? sort.After(query, paginator, cursor!)
+                : query;
+
+            var events = await sort.Order(window, descending: true)
+                .Take(request.PageSize + 1)
                 .ToListAsync(cancellationToken);
 
-            return Result.Success(new AuditEventPage(
-                events.Select(AuditEventDto.From).ToList(), request.PageNumber, request.PageSize, totalCount));
+            return Result.Success(sort.ToPage(events, request.PageSize, descending: true, AuditEventDto.From, total));
         }
     }
 }

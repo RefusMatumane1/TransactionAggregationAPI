@@ -4,72 +4,79 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.WebhookSources.Domain;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregationAPI;
+using TransactionAggregationAPI.Development;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Application.Commands;
-
-/// <summary>The Development-only registration of the webhook source the mock aggregator sends as.</summary>
-public class MockAggregatorSourceTests
+namespace TransactionAggregation.Tests.Unit.Application.Commands
 {
-    private const string Key = "dev-only-mock-aggregator-webhook-key-not-a-secret";
-
-    private readonly string _dbName = Guid.NewGuid().ToString();
-
-    private IServiceProvider Services()
+    public class MockAggregatorSourceTests
     {
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddScoped(_ => InMemoryWebhookSourcesDbContextFactory.Create(_dbName));
-        return services.BuildServiceProvider();
-    }
+        private const string Key = "dev-only-mock-aggregator-webhook-key-not-a-secret";
 
-    private static IConfiguration Config(string? key) => new ConfigurationBuilder()
-        .AddInMemoryCollection(new Dictionary<string, string?> { ["MockAggregator:WebhookApiKey"] = key })
-        .Build();
+        private readonly string _dbName = Guid.NewGuid().ToString();
 
-    private async Task<WebhookSource?> StoredSourceAsync()
-    {
-        using var db = InMemoryWebhookSourcesDbContextFactory.Create(_dbName);
-        return await db.WebhookSources.SingleOrDefaultAsync(s => s.Name == "mock-aggregator");
-    }
-
-    [Fact]
-    public async Task RegistersTheSourceWithTheConfiguredKey()
-    {
-        await MockAggregatorSource.EnsureRegisteredAsync(Services(), Config(Key));
-
-        var source = await StoredSourceAsync();
-        source!.IsActive.Should().BeTrue();
-        source.HasKey(Key).Should().BeTrue();
-        source.KeyHash.Should().NotContain(Key, "only the hash is stored");
-    }
-
-    [Fact]
-    public async Task ChangedKeyOrDeactivatedSource_IsPutRightOnTheNextStartup()
-    {
-        var services = Services();
-        await MockAggregatorSource.EnsureRegisteredAsync(services, Config(Key));
-        await using (var db = InMemoryWebhookSourcesDbContextFactory.Create(_dbName))
+        private IServiceProvider Services()
         {
-            (await db.WebhookSources.SingleAsync()).Deactivate();
-            await db.SaveChangesAsync();
+            var services = new ServiceCollection();
+            services.AddLogging();
+            services.AddScoped(_ => InMemoryWebhookSourcesDbContextFactory.Create(_dbName));
+            return services.BuildServiceProvider();
         }
 
-        const string newKey = "dev-only-mock-aggregator-webhook-key-rotated-0001";
-        await MockAggregatorSource.EnsureRegisteredAsync(services, Config(newKey));
+        private static IConfiguration Config(string? key) => new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["MockAggregator:WebhookApiKey"] = key })
+            .Build();
 
-        var source = await StoredSourceAsync();
-        source!.IsActive.Should().BeTrue();
-        source.HasKey(newKey).Should().BeTrue();
-        source.HasKey(Key).Should().BeFalse();
-    }
+        private async Task<List<WebhookSource>> StoredSourcesAsync()
+        {
+            using var db = InMemoryWebhookSourcesDbContextFactory.Create(_dbName);
+            return await db.WebhookSources.ToListAsync();
+        }
 
-    [Fact]
-    public async Task NoConfiguredKey_RegistersNothing()
-    {
-        await MockAggregatorSource.EnsureRegisteredAsync(Services(), Config(null));
+        [Fact]
+        public async Task RegistersEveryMockBank_EachWithItsOwnKey()
+        {
+            await MockAggregatorSource.EnsureRegisteredAsync(Services(), Config(Key));
 
-        (await StoredSourceAsync()).Should().BeNull();
+            var sources = await StoredSourcesAsync();
+            sources.Select(s => s.Name).Should().BeEquivalentTo(MockAggregatorSource.Banks.Select(b => b.Code));
+            foreach (var bank in MockAggregatorSource.Banks)
+            {
+                var source = sources.Single(s => s.Name == bank.Code);
+                source.IsActive.Should().BeTrue();
+                source.DisplayName.Should().Be(bank.DisplayName);
+                source.HasKey(MockAggregatorSource.KeyFor(Key, bank.Code)).Should().BeTrue();
+                source.KeyHash.Should().NotContain(Key, "only the hash is stored");
+            }
+            sources.Select(s => s.KeyHash).Should().OnlyHaveUniqueItems("one bank's key must not work for another");
+        }
+
+        [Fact]
+        public async Task ChangedKeyOrDeactivatedBank_IsPutRightOnTheNextStartup()
+        {
+            var services = Services();
+            await MockAggregatorSource.EnsureRegisteredAsync(services, Config(Key));
+            await using (var db = InMemoryWebhookSourcesDbContextFactory.Create(_dbName))
+            {
+                (await db.WebhookSources.SingleAsync(s => s.Name == "FNB")).Deactivate();
+                await db.SaveChangesAsync();
+            }
+
+            const string newKey = "dev-only-mock-aggregator-webhook-key-rotated-0001";
+            await MockAggregatorSource.EnsureRegisteredAsync(services, Config(newKey));
+
+            var fnb = (await StoredSourcesAsync()).Single(s => s.Name == "FNB");
+            fnb.IsActive.Should().BeTrue();
+            fnb.HasKey(MockAggregatorSource.KeyFor(newKey, "FNB")).Should().BeTrue();
+            fnb.HasKey(MockAggregatorSource.KeyFor(Key, "FNB")).Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task NoConfiguredKey_RegistersNothing()
+        {
+            await MockAggregatorSource.EnsureRegisteredAsync(Services(), Config(null));
+
+            (await StoredSourcesAsync()).Should().BeEmpty();
+        }
     }
 }

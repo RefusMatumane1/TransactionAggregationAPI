@@ -1,4 +1,4 @@
-using BuildingBlocks.Messaging.Persistence;
+using BuildingBlocks.Web;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Modules.Audit.Application.DTOs;
@@ -9,18 +9,10 @@ using Modules.WebhookSources.Application.Persistence;
 using Modules.WebhookSources.Domain;
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json;
-using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
 {
-    /// <summary>
-    /// End to end through the real HTTP pipeline: what the webhook endpoint writes to the
-    /// audit trail for each outcome, and that the admin audit API is admin-only and serves it.
-    /// Background dispatchers don't run in this host, so accepted deliveries are asserted as
-    /// queued audit outbox messages; refused ones are written directly and asserted as rows.
-    /// </summary>
     public class AuditApiIntegrationTests : IClassFixture<IntegrationTestWebAppFactory>
     {
         private const string WebhookPath = "/api/v1/webhooks/bank-aggregator/transactions";
@@ -37,7 +29,7 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var scope = _factory.Services.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<IWebhookSourcesDbContext>();
-            var (source, apiKey) = WebhookSource.Create(name, TestInstitutions.All);
+            var (source, apiKey) = WebhookSource.Create(name, name, "#123456");
             context.WebhookSources.Add(source);
             await context.SaveChangesAsync();
             return apiKey;
@@ -70,16 +62,6 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var scope = _factory.Services.CreateScope();
             return scope.ServiceProvider.GetRequiredService<IAuditDbContext>().AuditEvents.ToList();
-        }
-
-        private List<AuditEventRecord> QueuedAuditEvents()
-        {
-            using var scope = _factory.Services.CreateScope();
-            return scope.ServiceProvider.GetRequiredService<IMessagingDbContext>().OutboxMessages
-                .Where(m => m.Type == AuditOutbox.MessageType)
-                .AsEnumerable()
-                .SelectMany(m => JsonSerializer.Deserialize<AuditOutboxPayload>(m.Payload)!.Events)
-                .ToList();
         }
 
         private HttpClient Client(string? roles = null)
@@ -140,7 +122,7 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         [Fact]
-        public async Task Webhook_Accepted_QueuesAReceivedAuditEventWithWebhookMetadata()
+        public async Task Webhook_Accepted_StoresAReceivedAuditEventWithWebhookMetadata()
         {
             var source = $"audit-accept-{Guid.NewGuid():N}";
             var apiKey = await SeedActiveWebhookSourceAsync(source);
@@ -151,7 +133,7 @@ namespace TransactionAggregation.Tests.Integration
             var response = await client.SendAsync(request);
 
             response.StatusCode.Should().Be(HttpStatusCode.Accepted);
-            var audit = QueuedAuditEvents().Should().ContainSingle(e => e.SourceName == source).Subject;
+            var audit = StoredAuditEvents().Should().ContainSingle(e => e.SourceName == source).Subject;
             audit.EventType.Should().Be(AuditEventTypes.InboundReceived);
             audit.Channel.Should().Be(AuditChannels.Webhook);
             audit.IdempotencyKey.Should().Be("delivery-42");
@@ -165,10 +147,10 @@ namespace TransactionAggregation.Tests.Integration
         public async Task AuditApi_Anonymous_Returns401_NonAdmin_Returns403()
         {
             using var anonymous = Client();
-            using var customer = Client(roles: "");
+            using var noRole = Client(roles: "");
 
             (await anonymous.GetAsync(AuditEventsPath)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-            (await customer.GetAsync(AuditEventsPath)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+            (await noRole.GetAsync(AuditEventsPath)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
 
         [Fact]
@@ -180,10 +162,10 @@ namespace TransactionAggregation.Tests.Integration
                 await client.SendAsync(Webhook(Payload("ext-search", count: 501), apiKey, "aggregator/1.0"));
 
             using var admin = Client(roles: "admin");
-            var response = await admin.GetAsync($"{AuditEventsPath}?channel=webhook&sourceName={source}");
+            var response = await admin.GetAsync($"{AuditEventsPath}?channel=webhook&sourceName={source}&includeTotal=true");
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
-            var page = await response.Content.ReadFromJsonAsync<AuditEventPage>();
+            var page = await response.Content.ReadFromJsonAsync<CursorPagedResponse<AuditEventDto>>();
             page!.TotalCount.Should().Be(1);
             page.Items.Single().EventType.Should().Be(AuditEventTypes.InboundRejected);
         }

@@ -1,78 +1,56 @@
+using BuildingBlocks.Application.Abstractions.Authentication;
 using FluentAssertions;
-using Microsoft.Extensions.Logging.Abstractions;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransaction;
-using Modules.Transactions.Domain.Common.ValueObjects;
-using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using SharedKernel.Common.Enums;
-using SharedKernel.Common.ValueObjects;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Application.Queries;
-
-public class GetTransactionQueryHandlerTests
+namespace TransactionAggregation.Tests.Unit.Application.Queries
 {
-    private static Transaction MakeTransaction(decimal amount = -100m, string description = "test")
+    public class GetTransactionQueryHandlerTests
     {
-        return Transaction.Create(
-            CustomerId.Create(),
-            Money.Create(amount, "ZAR"),
-            description,
-            TransactionCategory.Uncategorized,
-            TransactionSource.Create("BogusBank", Guid.NewGuid().ToString()));
-    }
+        [Fact]
+        public async Task Handle_ExistingTransaction_ReturnsMappedDto()
+        {
+            var context = InMemoryDbContextFactory.Create();
+            var tx = TestTransactions.Create(-250m, "uber ride", institution: "BogusBank");
+            context.Transactions.Add(tx);
+            await context.SaveChangesAsync();
 
-    [Fact]
-    public async Task Handle_ExistingTransaction_ReturnsMappedDto()
-    {
-        var context = InMemoryDbContextFactory.Create();
-        var tx = MakeTransaction(-250m, "uber ride");
-        context.Transactions.Add(tx);
-        await context.SaveChangesAsync();
+            var result = await new GetTransactionQueryHandler(context).Handle(
+                new GetTransactionQuery(tx.Id.Value, InstitutionAccess.All), CancellationToken.None);
 
-        var handler = new GetTransactionQueryHandler(
-            context, NullLogger<GetTransactionQueryHandler>.Instance);
+            result.IsSuccess.Should().BeTrue();
+            result.Value.Id.Should().Be(tx.Id.Value);
+            result.Value.Amount.Should().Be(-250m);
+            result.Value.Description.Should().Be("uber ride");
+            result.Value.Institution.Should().Be("BogusBank");
+            result.Value.ExternalAccountId.Should().Be(tx.ExternalAccountId);
+        }
 
-        var result = await handler.Handle(
-            new GetTransactionQuery(tx.Id.Value, tx.CustomerId.Value), CancellationToken.None);
+        [Fact]
+        public async Task Handle_NonExistentTransaction_ReturnsNotFound()
+        {
+            var context = InMemoryDbContextFactory.Create();
 
-        result.IsSuccess.Should().BeTrue();
-        result.Value.Id.Should().Be(tx.Id.Value);
-        result.Value.Amount.Should().Be(-250m);
-        result.Value.Description.Should().Be("uber ride");
-        result.Value.SourceSystem.Should().Be("BogusBank");
-    }
+            var result = await new GetTransactionQueryHandler(context).Handle(
+                new GetTransactionQuery(Guid.NewGuid(), InstitutionAccess.All), CancellationToken.None);
 
-    [Fact]
-    public async Task Handle_NonExistentTransaction_ReturnsNotFound()
-    {
-        var context = InMemoryDbContextFactory.Create();
-        var handler = new GetTransactionQueryHandler(
-            context, NullLogger<GetTransactionQueryHandler>.Instance);
+            result.Error.Type.Should().Be(ErrorType.NotFound);
+        }
 
-        var result = await handler.Handle(
-            new GetTransactionQuery(Guid.NewGuid(), Guid.NewGuid()), CancellationToken.None);
+        [Fact]
+        public async Task Handle_TransactionOfAnInstitutionTheCallerMayNotRead_IsNotFound_NotForbidden()
+        {
+            var context = InMemoryDbContextFactory.Create();
+            var tx = TestTransactions.Create(-250m, institution: TestInstitutions.Capitec);
+            context.Transactions.Add(tx);
+            await context.SaveChangesAsync();
 
-        result.IsFailure.Should().BeTrue();
-        result.Error.Type.Should().Be(ErrorType.NotFound);
-    }
+            var result = await new GetTransactionQueryHandler(context).Handle(
+                new GetTransactionQuery(tx.Id.Value, InstitutionAccess.Only([TestInstitutions.FNB])), CancellationToken.None);
 
-    [Fact]
-    public async Task Handle_AnotherCustomersTransaction_ReturnsTheSameNotFoundAsAMissingOne()
-    {
-        var context = InMemoryDbContextFactory.Create();
-        var tx = MakeTransaction();
-        context.Transactions.Add(tx);
-        await context.SaveChangesAsync();
-
-        var handler = new GetTransactionQueryHandler(
-            context, NullLogger<GetTransactionQueryHandler>.Instance);
-
-        var result = await handler.Handle(
-            new GetTransactionQuery(tx.Id.Value, Guid.NewGuid()), CancellationToken.None);
-
-        result.IsFailure.Should().BeTrue();
-        result.Error.Should().Be(Modules.Transactions.Application.Common.Errors.TransactionErrors.NotFound(tx.Id.Value));
+            result.Error.Type.Should().Be(ErrorType.NotFound, "a 403 would confirm the id exists");
+        }
     }
 }

@@ -24,7 +24,11 @@ data:
         "realm": [
           {
             "name": "admin",
-            "description": "Staff/operator access to admin-only areas of the app (e.g. managing webhook sources) -- not a customer role."
+            "description": "Manages the banks (webhook sources) and the audit trail, on top of everything staff can see."
+          },
+          {
+            "name": "staff",
+            "description": "Read-only access to aggregated transactions: dashboards, breakdowns and the transaction list."
           }
         ]
       },
@@ -74,52 +78,62 @@ data:
                 "claim.name": "roles",
                 "jsonType.label": "String",
                 "multivalued": "true",
-                "id.token.claim": "false",
+                "id.token.claim": "true",
                 "access.token.claim": "true",
                 "userinfo.token.claim": "false"
               }
+            },
+            {
+              "name": "institutions",
+              "protocol": "openid-connect",
+              "protocolMapper": "oidc-usermodel-attribute-mapper",
+              "consentRequired": false,
+              "config": {
+                "user.attribute": "institutions",
+                "claim.name": "institutions",
+                "jsonType.label": "String",
+                "multivalued": "true",
+                "aggregate.attrs": "false",
+                "access.token.claim": "true",
+                "id.token.claim": "false",
+                "userinfo.token.claim": "false",
+                "introspection.token.claim": "true"
+              }
             }
           ]
-        },
-        {
-          "clientId": "transaction-admin",
-          "name": "Transaction Aggregation Admin",
-          "description": "Confidential service-account client the backend uses (client-credentials grant) to provision customers via Keycloak's Admin REST API -- see IKeycloakAdminClient. Never used by a browser.",
-          "enabled": true,
-          "publicClient": false,
-          "protocol": "openid-connect",
-          "standardFlowEnabled": false,
-          "implicitFlowEnabled": false,
-          "directAccessGrantsEnabled": false,
-          "serviceAccountsEnabled": true,
-          "clientAuthenticatorType": "client-secret",
-          "secret": "dev-only-admin-client-secret"
         }
       ],
       "users": [
         {
-          "username": "service-account-transaction-admin",
-          "enabled": true,
-          "serviceAccountClientId": "transaction-admin",
-          "clientRoles": {
-            "realm-management": ["manage-users", "view-users"]
-          }
-        },
-        {
-          "username": "admin@transaction.local",
-          "email": "admin@transaction.local",
+          "username": "admin@test.com",
+          "email": "admin@test.com",
           "enabled": true,
           "emailVerified": true,
-          "firstName": "Staff",
+          "firstName": "Platform",
           "lastName": "Admin",
           "credentials": [
             {
               "type": "password",
-              "value": "Admin@12345",
+              "value": "${TRANSACTION_APP_ADMIN_PASSWORD}",
               "temporary": false
             }
           ],
-          "realmRoles": ["admin"]
+          "realmRoles": [
+            "admin"
+          ]
         }
-      ]
+      ],
+      "components": {
+        "org.keycloak.userprofile.UserProfileProvider": [
+          {
+            "providerId": "declarative-user-profile",
+            "subComponents": {},
+            "config": {
+              "kc.user.profile.config": [
+                "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"validations\": {\"length\": {\"min\": 3, \"max\": 255}, \"username-prohibited-characters\": {}, \"up-username-not-idn-homograph\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"email\", \"displayName\": \"${email}\", \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"validations\": {\"length\": {\"max\": 255}, \"person-name-prohibited-characters\": {}}, \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false}, {\"name\": \"institutions\", \"displayName\": \"Institutions (bank codes this staff member may read)\", \"validations\": {\"length\": {\"max\": 50}}, \"permissions\": {\"view\": [\"admin\"], \"edit\": [\"admin\"]}, \"multivalued\": true}], \"groups\": [{\"name\": \"user-metadata\", \"displayHeader\": \"User metadata\", \"displayDescription\": \"Attributes, which refer to user metadata\"}]}"
+              ]
+            }
+          }
+        ]
+      }
     }

@@ -1,60 +1,43 @@
-namespace TransactionAggregation.MockAggregator;
-
-/// <summary>The consent (OAuth) side: who may link accounts, and where consents are kept.</summary>
-public sealed class MockAggregatorOptions
+namespace TransactionAggregation.MockAggregator
 {
-    public const string SectionName = "MockAggregator";
+    public sealed class MockAggregatorOptions
+    {
+        public const string SectionName = "MockAggregator";
 
-    /// <summary>Must match the application's BankAggregator:ClientId.</summary>
-    public string ClientId { get; set; } = "transaction-aggregation-dev";
+        // Where the Kafka record-signing key is persisted between runs.
+        public string DataDirectory { get; set; } = "App_Data";
+    }
 
-    /// <summary>Must match the application's BankAggregator:ClientSecret.</summary>
-    public string ClientSecret { get; set; } = string.Empty;
+    public sealed class FeedOptions
+    {
+        public const string SectionName = "Feed";
 
-    /// <summary>
-    /// Exact redirect URIs the consent page may send the browser back to. Checked even in a
-    /// mock: an unchecked redirect_uri is an open redirect.
-    /// </summary>
-    public List<string> AllowedRedirectUris { get; set; } = new();
+        public bool Enabled { get; set; } = true;
 
-    /// <summary>Where granted consents are persisted, so the feed survives a restart.</summary>
-    public string DataDirectory { get; set; } = "App_Data";
-}
+        public DeliveryChannel Channel { get; set; } = DeliveryChannel.Webhook;
 
-/// <summary>The push side: how often, how much, and over which channel.</summary>
-public sealed class FeedOptions
-{
-    public const string SectionName = "Feed";
+        public int IntervalSeconds { get; set; } = 30;
 
-    public bool Enabled { get; set; } = true;
+        public int MaxTransactionsPerAccount { get; set; } = 3;
 
-    public DeliveryChannel Channel { get; set; } = DeliveryChannel.Webhook;
+        public double PendingShare { get; set; } = 0.3;
 
-    public int IntervalSeconds { get; set; } = 30;
+        public double RedeliveryShare { get; set; } = 0.05;
 
-    /// <summary>Upper bound on new transactions per consented account per tick (0..N).</summary>
-    public int MaxTransactionsPerAccount { get; set; } = 3;
+        public string ApiBaseUrl { get; set; } = string.Empty;
 
-    /// <summary>Share of card purchases first sent as pending and posted on a later tick.</summary>
-    public double PendingShare { get; set; } = 0.3;
+        public string ApiKey { get; set; } = string.Empty;
 
-    /// <summary>Share of ticks that re-send an account's previous batch unchanged, as a flaky sender would.</summary>
-    public double RedeliveryShare { get; set; } = 0.05;
+        // Each bank is its own source with its own key: the key for a bank is ApiKey + "-" + the
+        // bank's code in lower case, the convention the API's Development registration uses too.
+        public string KeyFor(string bankCode) => $"{ApiKey}-{bankCode.ToLowerInvariant()}";
 
-    /// <summary>Base URL of the application API, for the webhook channel.</summary>
-    public string ApiBaseUrl { get; set; } = string.Empty;
+        public string KafkaTopic { get; set; } = "bank-transactions";
+    }
 
-    /// <summary>The webhook source's API key (X-Api-Key).</summary>
-    public string ApiKey { get; set; } = string.Empty;
-
-    /// <summary>The webhook source name; also sent as the Kafka "source" header.</summary>
-    public string SourceName { get; set; } = "mock-aggregator";
-
-    public string KafkaTopic { get; set; } = "bank-transactions";
-}
-
-public enum DeliveryChannel
-{
-    Webhook,
-    Kafka
+    public enum DeliveryChannel
+    {
+        Webhook,
+        Kafka
+    }
 }

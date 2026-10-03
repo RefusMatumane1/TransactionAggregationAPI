@@ -61,9 +61,10 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards/dashboard-provider.yml
               subPath: dashboard-provider.yml
               readOnly: true
+            # Whole ConfigMap as a directory (no subPath), so every dashboard key is loaded
+            # and ConfigMap updates reach the pod without a restart.
             - name: dashboards
-              mountPath: /var/lib/grafana/dashboards/transaction-api.json
-              subPath: transaction-api.json
+              mountPath: /var/lib/grafana/dashboards
               readOnly: true
 
           resources:

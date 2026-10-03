@@ -2,24 +2,16 @@ using SharedKernel.Exceptions;
 
 namespace Modules.Audit.Domain
 {
-    /// <summary>
-    /// An immutable, append-only record of something that happened to inbound data: every
-    /// property has a private setter and there are no mutating methods. The database backs
-    /// this up with a trigger that rejects UPDATE and DELETE on the table.
-    /// </summary>
     public sealed class AuditEvent
     {
         private AuditEvent() { }
 
-        /// <summary>Supplied by the producer (not generated here) — it's the idempotency key.</summary>
         public Guid Id { get; private set; }
 
         public string EventType { get; private set; } = null!;
 
-        /// <summary>When it happened (producer's clock).</summary>
         public DateTime OccurredAt { get; private set; }
 
-        /// <summary>When the audit row was written — may lag OccurredAt by the outbox poll interval.</summary>
         public DateTime RecordedAt { get; private set; }
 
         public string Channel { get; private set; } = null!;
@@ -27,12 +19,14 @@ namespace Modules.Audit.Domain
         public string? ExternalAccountId { get; private set; }
         public Guid? InboxMessageId { get; private set; }
         public string? IdempotencyKey { get; private set; }
-        public Guid? CustomerId { get; private set; }
         public Guid? TransactionId { get; private set; }
         public string? ExternalTransactionId { get; private set; }
         public string? Detail { get; private set; }
         public Dictionary<string, string> Metadata { get; private set; } = new();
         public string? TraceId { get; private set; }
+
+        // The signed-in user (identity-provider subject id) behind an administrative change.
+        public string? Actor { get; private set; }
 
         public static AuditEvent Create(
             Guid id,
@@ -43,12 +37,12 @@ namespace Modules.Audit.Domain
             string? externalAccountId = null,
             Guid? inboxMessageId = null,
             string? idempotencyKey = null,
-            Guid? customerId = null,
             Guid? transactionId = null,
             string? externalTransactionId = null,
             string? detail = null,
             IReadOnlyDictionary<string, string>? metadata = null,
-            string? traceId = null)
+            string? traceId = null,
+            string? actor = null)
         {
             if (id == Guid.Empty)
                 throw new DomainException("Audit event id is required");
@@ -66,22 +60,36 @@ namespace Modules.Audit.Domain
                 OccurredAt = DateTime.SpecifyKind(occurredAt, DateTimeKind.Utc),
                 RecordedAt = DateTime.UtcNow,
                 Channel = channel,
-                SourceName = sourceName,
-                ExternalAccountId = externalAccountId,
+                SourceName = Clean(sourceName, MaxIdentifierLength)!,
+                ExternalAccountId = Clean(externalAccountId, MaxIdentifierLength),
                 InboxMessageId = inboxMessageId,
-                IdempotencyKey = idempotencyKey,
-                CustomerId = customerId,
+                IdempotencyKey = Clean(idempotencyKey, MaxIdentifierLength),
                 TransactionId = transactionId,
-                ExternalTransactionId = externalTransactionId,
-                Detail = Truncate(detail, MaxDetailLength),
-                Metadata = metadata is null ? new() : new Dictionary<string, string>(metadata),
-                TraceId = traceId
+                ExternalTransactionId = Clean(externalTransactionId, MaxExternalTransactionIdLength),
+                Detail = Clean(detail, MaxDetailLength),
+                Metadata = metadata is null
+                    ? new()
+                    : metadata.ToDictionary(kv => Clean(kv.Key, MaxDetailLength)!, kv => Clean(kv.Value, MaxDetailLength)!),
+                TraceId = Clean(traceId, MaxTraceIdLength),
+                Actor = Clean(actor, MaxActorLength)
             };
         }
 
         public const int MaxDetailLength = 2000;
+        public const int MaxIdentifierLength = 200;
+        public const int MaxExternalTransactionIdLength = 100;
+        public const int MaxTraceIdLength = 64;
+        public const int MaxActorLength = 64;
 
-        private static string? Truncate(string? value, int maxLength) =>
-            value is null || value.Length <= maxLength ? value : value[..maxLength];
+        private static string? Clean(string? value, int maxLength)
+        {
+            if (value is null)
+                return null;
+
+            if (value.Contains('\0'))
+                value = value.Replace("\0", string.Empty);
+
+            return value.Length <= maxLength ? value : value[..maxLength];
+        }
     }
 }

@@ -2,72 +2,84 @@ using FluentAssertions;
 using System.Text.RegularExpressions;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Architecture;
-
-/// <summary>
-/// Guards against personal data and secrets reaching log sinks. Serilog message-template
-/// arguments are scalars, so the [Sensitive] destructuring policy can't redact them — the only
-/// reliable control is to never name such a value in a template, and to never push whole
-/// request objects into the log context.
-/// </summary>
-public partial class LoggingHygieneTests
+namespace TransactionAggregation.Tests.Architecture
 {
-    private static readonly string[] ProductionRoots =
-    [
-        "Modules", "BuildingBlocks", "TransactionAggregationAPI", "TransactionAggregation.Hosting",
-        "TransactionAggregation.Worker"
-    ];
-
-    [GeneratedRegex(@"\{@?(Email|EmailAddress|Phone|PhoneNumber|FirstName|LastName|FullName|Password|ApiKey|Token|AccessToken|RefreshToken|ClientSecret|Iban|CardNumber)\}", RegexOptions.IgnoreCase)]
-    private static partial Regex PiiPlaceholder();
-
-    [GeneratedRegex(@"LogContext\.PushProperty\(\s*""Request""")]
-    private static partial Regex WholeRequestInLogContext();
-
-    private static IEnumerable<(string Path, int Line, string Text)> ProductionSourceLines()
+    public partial class LoggingHygieneTests
     {
-        var root = FindRepositoryRoot();
-        foreach (var dir in ProductionRoots)
-            foreach (var file in Directory.EnumerateFiles(Path.Combine(root, dir), "*.cs", SearchOption.AllDirectories))
-            {
-                var normalized = file.Replace('\\', '/');
-                if (normalized.Contains("/obj/") || normalized.Contains("/bin/") || normalized.Contains("/Migrations/"))
-                    continue;
+        private static readonly string[] ProductionRoots =
+        [
+            "Modules", "BuildingBlocks", "TransactionAggregationAPI", "TransactionAggregation.Hosting",
+            "TransactionAggregation.Worker"
+        ];
 
-                var lines = File.ReadAllLines(file);
-                for (var i = 0; i < lines.Length; i++)
-                    yield return (Path.GetRelativePath(root, file), i + 1, lines[i]);
-            }
-    }
+        [GeneratedRegex(@"\{@?(Email|EmailAddress|Phone|PhoneNumber|FirstName|LastName|FullName|Password|ApiKey|Token|AccessToken|RefreshToken|ClientSecret|Iban|CardNumber)\}", RegexOptions.IgnoreCase)]
+        private static partial Regex PiiPlaceholder();
 
-    [Fact]
-    public void NoLogTemplate_NamesPersonalDataOrSecrets()
-    {
-        var offenders = ProductionSourceLines()
-            .Where(l => l.Text.Contains("Log") && PiiPlaceholder().IsMatch(l.Text))
-            .Select(l => $"{l.Path}:{l.Line}")
-            .ToList();
+        [GeneratedRegex(@"LogContext\.PushProperty\(\s*""Request""|\{@Request\}")]
+        private static partial Regex WholeRequestInLogContext();
 
-        offenders.Should().BeEmpty("log templates must identify people by id, never by email/name/phone or credentials");
-    }
+        // A message-template placeholder (not an interpolation hole, which names an expression such as
+        // {request.ExternalAccountId}). Templates often continue on the line after the Log call, so
+        // every line is checked.
+        [GeneratedRegex(@"(?<![.\w])\{@?ExternalAccountId\}")]
+        private static partial Regex AccountIdPlaceholder();
 
-    [Fact]
-    public void NoCode_PushesWholeRequestObjectsIntoTheLogContext()
-    {
-        var offenders = ProductionSourceLines()
-            .Where(l => WholeRequestInLogContext().IsMatch(l.Text))
-            .Select(l => $"{l.Path}:{l.Line}")
-            .ToList();
+        private static IEnumerable<(string Path, int Line, string Text)> ProductionSourceLines()
+        {
+            var root = FindRepositoryRoot();
+            foreach (var dir in ProductionRoots)
+                foreach (var file in Directory.EnumerateFiles(Path.Combine(root, dir), "*.cs", SearchOption.AllDirectories))
+                {
+                    var normalized = file.Replace('\\', '/');
+                    if (normalized.Contains("/obj/") || normalized.Contains("/bin/") || normalized.Contains("/Migrations/"))
+                        continue;
 
-        offenders.Should().BeEmpty("a pushed request is stamped on every event in scope, carrying PII and transaction data with it");
-    }
+                    var lines = File.ReadAllLines(file);
+                    for (var i = 0; i < lines.Length; i++)
+                        yield return (Path.GetRelativePath(root, file), i + 1, lines[i]);
+                }
+        }
 
-    private static string FindRepositoryRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransactionAggregationAPI.slnx")))
-            dir = dir.Parent;
+        [Fact]
+        public void NoLogTemplate_NamesPersonalDataOrSecrets()
+        {
+            var offenders = ProductionSourceLines()
+                .Where(l => l.Text.Contains("Log") && PiiPlaceholder().IsMatch(l.Text))
+                .Select(l => $"{l.Path}:{l.Line}")
+                .ToList();
 
-        return dir?.FullName ?? throw new InvalidOperationException("Could not locate TransactionAggregationAPI.slnx above the test output directory.");
+            offenders.Should().BeEmpty("log templates must identify people by id, never by email/name/phone or credentials");
+        }
+
+        [Fact]
+        public void NoLogTemplate_CarriesAnUnmaskedBankAccountId()
+        {
+            var offenders = ProductionSourceLines()
+                .Where(l => AccountIdPlaceholder().IsMatch(l.Text))
+                .Select(l => $"{l.Path}:{l.Line}")
+                .ToList();
+
+            offenders.Should().BeEmpty("account ids are logged through LogRedaction.Account as {AccountRef}; the audit trail keeps the full value");
+        }
+
+        [Fact]
+        public void NoCode_PushesWholeRequestObjectsIntoTheLogContext()
+        {
+            var offenders = ProductionSourceLines()
+                .Where(l => WholeRequestInLogContext().IsMatch(l.Text))
+                .Select(l => $"{l.Path}:{l.Line}")
+                .ToList();
+
+            offenders.Should().BeEmpty("a pushed request is stamped on every event in scope, carrying PII and transaction data with it");
+        }
+
+        private static string FindRepositoryRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "TransactionAggregationAPI.slnx")))
+                dir = dir.Parent;
+
+            return dir?.FullName ?? throw new InvalidOperationException("Could not locate TransactionAggregationAPI.slnx above the test output directory.");
+        }
     }
 }

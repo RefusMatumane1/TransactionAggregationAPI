@@ -4,10 +4,8 @@
 
 namespace Modules.Transactions.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class RemovePasswordHashFromCustomer : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
@@ -15,7 +13,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                 table: "Customers");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(

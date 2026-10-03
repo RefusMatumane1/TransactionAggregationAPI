@@ -2,111 +2,87 @@ using FluentAssertions;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
-using SharedKernel.Common.ValueObjects;
 using SharedKernel.Exceptions;
+using System.Reflection;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Domain;
-
-public class TransactionEntityTests
+namespace TransactionAggregation.Tests.Unit.Domain
 {
-    private static Transaction CreatePending(decimal amount = -100m) =>
-        Transaction.Create(
-            CustomerId.Create(),
-            Money.Create(amount, "ZAR"),
-            "test transaction",
-            TransactionCategory.Uncategorized,
-            TransactionSource.Create("TestSource", Guid.NewGuid().ToString()));
-
-    [Fact]
-    public void Categorize_ChangesCategory_AndRaisesEvent()
+    public class TransactionEntityTests
     {
-        var tx = CreatePending();
-        tx.Categorize(TransactionCategory.Groceries);
+        private static readonly DateTime BookedAt = new(2026, 9, 3, 8, 30, 0, DateTimeKind.Utc);
 
-        tx.Category.Should().Be(TransactionCategory.Groceries);
-        tx.DomainEvents.Should().Contain(e => e.GetType().Name == "TransactionCategorizedDomainEvent");
-    }
+        [Fact]
+        public void Record_CreatesABookedLedgerEntry_WithEveryFactAsGiven()
+        {
+            var tx = Transaction.Record("acc-9", Money.Create(-112.50m, "ZAR"), "Woolworths Sandton",
+                TransactionCategory.Groceries, TransactionSource.Create("FNB", "bank-tx-1"), BookedAt,
+                new Dictionary<string, string> { ["bankCategory"] = "Food" });
 
-    [Fact]
-    public void Categorize_ToSameCategory_IsNoOp()
-    {
-        var tx = CreatePending();
-        tx.Categorize(TransactionCategory.Uncategorized);
+            tx.Status.Should().Be(TransactionStatus.Booked);
+            tx.ExternalAccountId.Should().Be("acc-9");
+            tx.Amount.Should().Be(Money.Create(-112.50m, "ZAR"));
+            tx.Description.Should().Be("Woolworths Sandton");
+            tx.Category.Should().Be(TransactionCategory.Groceries);
+            tx.Source.Name.Should().Be("FNB");
+            tx.Source.ExternalId.Should().Be("bank-tx-1");
+            tx.Date.Should().Be(BookedAt);
+            tx.Metadata.Should().ContainKey("bankCategory").WhoseValue.Should().Be("Food");
+        }
 
-        tx.DomainEvents.Should().NotContain(e => e.GetType().Name == "TransactionCategorizedDomainEvent");
-    }
+        [Fact]
+        public void Record_CopiesTheMetadata_SoTheCallersDictionaryCannotChangeTheEntry()
+        {
+            var metadata = new Dictionary<string, string> { ["k"] = "v" };
+            var tx = TestTransactions.Create(-10m, metadata: metadata);
 
-    [Fact]
-    public void AddMetadata_StoresKeyValue()
-    {
-        var tx = CreatePending();
-        tx.AddMetadata("invoiceId", "INV-001");
+            metadata["k"] = "changed";
 
-        tx.Metadata.Should().ContainKey("invoiceId").WhoseValue.Should().Be("INV-001");
-    }
+            tx.Metadata["k"].Should().Be("v");
+        }
 
-    [Fact]
-    public void IsExpense_ForNegativeAmount_IsTrue()
-    {
-        var tx = CreatePending(-100m);
-        tx.IsExpense.Should().BeTrue();
-        tx.IsIncome.Should().BeFalse();
-    }
+        [Fact]
+        public void Record_RejectsANonUtcBookingDate()
+        {
+            var act = () => TestTransactions.Create(-10m, date: DateTime.SpecifyKind(BookedAt, DateTimeKind.Unspecified));
 
-    [Fact]
-    public void IsIncome_ForPositiveAmount_IsTrue()
-    {
-        var tx = CreatePending(500m);
-        tx.IsIncome.Should().BeTrue();
-        tx.IsExpense.Should().BeFalse();
-    }
+            act.Should().Throw<DomainException>().WithMessage("*UTC*");
+        }
 
-    [Fact]
-    public void Settle_Pending_BecomesSettled()
-    {
-        var tx = CreatePending();
+        [Theory]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void Record_RejectsAnEmptyDescription(string description)
+        {
+            var act = () => TestTransactions.Create(-10m, description);
 
-        tx.Settle();
+            act.Should().Throw<DomainException>();
+        }
 
-        tx.Status.Should().Be(TransactionStatus.Settled);
-        tx.Amount.Amount.Should().Be(-100m);
-    }
+        [Fact]
+        public void IsExpense_And_IsIncome_FollowTheSignOfTheAmount()
+        {
+            TestTransactions.Create(-100m).IsExpense.Should().BeTrue();
+            TestTransactions.Create(500m).IsIncome.Should().BeTrue();
+        }
 
-    [Fact]
-    public void Settle_WithPostedAmountAndDate_TakesTheBanksFigures()
-    {
-        var tx = CreatePending(-100m);
-        var postedDate = new DateTime(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
+        [Fact]
+        public void ALedgerEntry_ExposesNoWayToChangeItAfterRecording()
+        {
+            var publicSetters = typeof(Transaction)
+                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.SetMethod is { IsPublic: true })
+                .Select(p => p.Name);
+            var mutators = typeof(Transaction)
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
+                .Where(m => !m.IsSpecialName && m.ReturnType == typeof(void))
+                .Select(m => m.Name);
 
-        tx.Settle(Money.Create(-112.50m, "ZAR"), postedDate);
-
-        tx.Amount.Amount.Should().Be(-112.50m);
-        tx.Date.Should().Be(postedDate);
-    }
-
-    [Fact]
-    public void Settle_AlreadySettled_IsANoOp()
-    {
-        var tx = CreatePending(-100m);
-        tx.Settle();
-
-        tx.Settle(Money.Create(-999m, "ZAR"));
-
-        tx.Amount.Amount.Should().Be(-100m, "a settled transaction's booked amount must not be overwritten by a replay");
-    }
-
-    [Theory]
-    [InlineData(TransactionStatus.Rejected)]
-    [InlineData(TransactionStatus.Cancelled)]
-    [InlineData(TransactionStatus.Refunded)]
-    public void Settle_VoidedTransaction_Throws(TransactionStatus status)
-    {
-        var tx = CreatePending();
-        tx.UpdateStatus(status);
-
-        var act = () => tx.Settle();
-
-        act.Should().Throw<DomainException>();
+            publicSetters.Should().BeEmpty();
+            mutators.Should().BeEmpty("a recorded transaction is never edited");
+            typeof(Transaction).GetProperty(nameof(Transaction.Metadata))!.PropertyType
+                .Should().Be<IReadOnlyDictionary<string, string>>();
+        }
     }
 }

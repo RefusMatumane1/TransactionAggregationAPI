@@ -8,11 +8,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    /// <summary>
-    /// What only a real Postgres can prove: the append-only trigger actually rejects
-    /// UPDATE/DELETE/TRUNCATE, the jsonb metadata round-trips, and concurrent writers of
-    /// the same EventId (two dispatcher replicas reclaiming one outbox message) store it once.
-    /// </summary>
     [Collection(PostgresCollection.Name)]
     public class AuditTrailPostgresTests
     {

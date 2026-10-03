@@ -1,16 +1,14 @@
 using FluentAssertions;
-using Modules.Customers.Domain.ValueObjects;
+using Microsoft.Extensions.DependencyInjection;
+using Modules.Transactions.Infrastructure.Persistence;
 using System.Net.Http.Json;
 using System.Text.Json;
+using TransactionAggregation.Tests.Helpers;
 using TransactionAggregation.Tests.Integration;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Contract
 {
-    /// <summary>
-    /// Pins the JSON shape API consumers depend on. Deliberately shallow (property names and
-    /// shapes), so a rename or dropped field fails CI instead of silently breaking a consumer.
-    /// </summary>
     public class ApiResponseContractTests : IClassFixture<IntegrationTestWebAppFactory>
     {
         private readonly IntegrationTestWebAppFactory _factory;
@@ -20,21 +18,15 @@ namespace TransactionAggregation.Tests.Contract
             _factory = factory;
         }
 
-        private record CreateAccountRequestBody(string AccountNumber, string AccountName, AccountType AccountType, string Currency = "ZAR");
-
         [Fact]
         public async Task NotFoundResponse_MatchesProblemDetailsContractIncludingTraceId()
         {
-            using var client = _factory.CreateClient();
-            var customerId = Guid.NewGuid();
-            client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeaderName, customerId.ToString());
+            using var client = _factory.CreateClient().SignedInAs("staff");
 
-            var response = await client.GetAsync($"/api/v1/customers/{customerId}");
+            var response = await client.GetAsync($"/api/v1/transactions/{Guid.NewGuid()}");
 
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-            // RFC 7807 ProblemDetails contract, plus the traceId extension every error
-            // response must carry so a client-visible failure can be correlated to logs.
             json.TryGetProperty("title", out _).Should().BeTrue();
             json.TryGetProperty("status", out var status).Should().BeTrue();
             status.GetInt32().Should().Be(404);
@@ -46,12 +38,9 @@ namespace TransactionAggregation.Tests.Contract
         [Fact]
         public async Task ValidationFailureResponse_Returns400WithDetailAndTraceId()
         {
-            using var anonymous = _factory.CreateClient();
+            using var client = _factory.CreateClient().SignedInAs("staff");
 
-            // Missing required Email/Name/password triggers FluentValidation. The response is
-            // RFC 9457 ProblemDetails with per-field messages under "errors", keyed by the
-            // JSON property name the client sent; "detail" keeps a joined summary.
-            var response = await anonymous.PostAsJsonAsync("/api/v1/customers", new { });
+            var response = await client.GetAsync("/api/v1/transactions/aggregates/categories?from=2026-02-01&to=2026-01-01");
 
             response.StatusCode.Should().Be(System.Net.HttpStatusCode.BadRequest);
             var json = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -61,43 +50,37 @@ namespace TransactionAggregation.Tests.Contract
             json.TryGetProperty("traceId", out _).Should().BeTrue();
 
             json.TryGetProperty("errors", out var errors).Should().BeTrue("validation failures are reported per field");
-            errors.TryGetProperty("email", out var emailErrors).Should().BeTrue();
-            emailErrors.GetArrayLength().Should().BeGreaterThan(0);
+            errors.TryGetProperty("from", out var fromErrors).Should().BeTrue();
+            fromErrors.GetArrayLength().Should().BeGreaterThan(0);
         }
 
         [Fact]
-        public async Task AccountResponse_ContractIncludesAllFieldsApiConsumersDependOn()
+        public async Task TransactionListItem_ContractIncludesAllFieldsApiConsumersDependOn()
         {
-            using var client = _factory.CreateClient();
-            var createCustomerResponse = await client.PostAsJsonAsync(
-                "/api/v1/customers",
-                new { Email = $"{Guid.NewGuid()}@example.com", Name = "Contract Test User", Password = "Password1" });
-            createCustomerResponse.EnsureSuccessStatusCode();
-            var customerId = await createCustomerResponse.Content.ReadFromJsonAsync<Guid>();
-            client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeaderName, customerId.ToString());
+            var account = $"contract-{Guid.NewGuid():N}";
+            using (var scope = _factory.Services.CreateScope())
+            {
+                var context = scope.ServiceProvider.GetRequiredService<TransactionsDbContext>();
+                context.Transactions.Add(TestTransactions.Create(-42m, "Contract test", account: account));
+                await context.SaveChangesAsync();
+            }
+            using var client = _factory.CreateClient().SignedInAsStaffFor(TestInstitutions.FNB);
 
-            var createAccountResponse = await client.PostAsJsonAsync(
-                $"/api/v1/customers/{customerId}/accounts",
-                new CreateAccountRequestBody($"acc-{Guid.NewGuid():N}", "Contract Account", AccountType.Checking));
-            createAccountResponse.EnsureSuccessStatusCode();
-            var accountId = await createAccountResponse.Content.ReadFromJsonAsync<Guid>();
+            var json = await client.GetFromJsonAsync<JsonElement>($"/api/v1/transactions?institution={TestInstitutions.FNB}&externalAccountId={account}");
 
-            var getResponse = await client.GetAsync($"/api/v1/customers/{customerId}/accounts/{accountId}");
-            var json = await getResponse.Content.ReadFromJsonAsync<JsonElement>();
-
+            var item = json.GetProperty("items").EnumerateArray().Single();
             string[] expectedFields =
             [
-                "id", "customerId", "accountNumber", "accountName",
-                "accountType", "balance", "currency", "isActive", "createdAt"
+                "id", "externalAccountId", "amount", "currency", "description",
+                "category", "source", "date"
             ];
             foreach (var field in expectedFields)
-                json.TryGetProperty(field, out _).Should().BeTrue($"AccountResponse must keep exposing '{field}' — API consumers depend on it");
+                item.TryGetProperty(field, out _).Should().BeTrue($"TransactionListItemResponse must keep exposing '{field}' — the UI depends on it");
         }
 
         [Fact]
         public void ExternalTransactionDto_AcceptsTheProviderPayloadShapeProvidersActuallySend()
         {
-            // Pins the inbound provider contract: renaming these properties must be a deliberate change.
             const string providerPayload = """
                 {
                   "Id": "ext-txn-123",

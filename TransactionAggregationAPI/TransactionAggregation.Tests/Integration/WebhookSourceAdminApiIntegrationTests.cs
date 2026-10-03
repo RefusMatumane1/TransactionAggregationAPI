@@ -9,6 +9,7 @@ namespace TransactionAggregation.Tests.Integration
     public class WebhookSourceAdminApiIntegrationTests : IClassFixture<IntegrationTestWebAppFactory>
     {
         private const string BasePath = "/api/v1/admin/webhook-sources";
+        private const string BanksPath = "/api/v1/banks";
         private const string WebhookPath = "/api/v1/webhooks/bank-aggregator/transactions";
 
         private readonly IntegrationTestWebAppFactory _factory;
@@ -20,18 +21,30 @@ namespace TransactionAggregation.Tests.Integration
             _client = factory.CreateClient();
         }
 
-        private static readonly string[] Institutions = ["FNB", "Absa"];
-
-        private record CreateResponse(Guid Id, string Name, string ApiKey, string[] AuthorizedInstitutions);
+        private record CreateResponse(Guid Id, string Code, string DisplayName, string Color, string ApiKey);
         private record RotateResponse(string ApiKey);
 
-        private HttpClient AsAdmin()
-        {
+        // Bank codes are letters, digits, '-' or '_' and at most 50 characters.
+        private static string NewCode(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 
+        private static object Bank(string code, string? displayName = null, string color = "#0033A1") =>
+            new { Code = code, DisplayName = displayName ?? code, Color = color };
+
+        private HttpClient AsAdmin() => AsRole("admin");
+
+        private HttpClient AsRole(string role)
+        {
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeaderName, Guid.NewGuid().ToString());
-            client.DefaultRequestHeaders.Add(TestAuthHandler.RolesHeaderName, "admin");
+            client.DefaultRequestHeaders.Add(TestAuthHandler.RolesHeaderName, role);
             return client;
+        }
+
+        private static async Task<CreateResponse> CreateAsync(HttpClient admin, string code, string? displayName = null, string color = "#0033A1")
+        {
+            var response = await admin.PostAsJsonAsync(BasePath, Bank(code, displayName, color));
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+            return (await response.Content.ReadFromJsonAsync<CreateResponse>())!;
         }
 
         [Fact]
@@ -58,14 +71,10 @@ namespace TransactionAggregation.Tests.Integration
         {
             using var admin = AsAdmin();
 
-            var createResponse = await admin.PostAsJsonAsync(BasePath, new { Name = $"lifecycle-{Guid.NewGuid()}", AuthorizedInstitutions = Institutions });
-            createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
-            var created = await createResponse.Content.ReadFromJsonAsync<CreateResponse>();
-            created.Should().NotBeNull();
-            created!.ApiKey.Should().NotBeNullOrWhiteSpace();
+            var created = await CreateAsync(admin, NewCode("lifecycle"));
+            created.ApiKey.Should().NotBeNullOrWhiteSpace();
 
-            var firstWebhookCall = await PostWebhookAsync(created.ApiKey);
-            firstWebhookCall.StatusCode.Should().Be(HttpStatusCode.Accepted);
+            (await PostWebhookAsync(created.ApiKey)).StatusCode.Should().Be(HttpStatusCode.Accepted);
 
             var rotateResponse = await admin.PostAsync($"{BasePath}/{created.Id}/rotate", null);
             rotateResponse.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -87,13 +96,29 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         [Fact]
-        public async Task CreateSource_DuplicateName_Returns409()
+        public async Task Webhook_NamingAnotherBankThanTheKeys_Returns400_AndNamingItsOwnIsAccepted()
         {
             using var admin = AsAdmin();
-            var name = $"dup-{Guid.NewGuid()}";
+            var code = NewCode("own");
+            var created = await CreateAsync(admin, code);
 
-            await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
-            var response = await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
+            var other = await PostWebhookAsync(created.ApiKey, institution: "Absa");
+            other.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await other.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors")
+                .TryGetProperty("institution", out _).Should().BeTrue("the refusal names the offending field");
+
+            (await PostWebhookAsync(created.ApiKey, institution: code.ToUpperInvariant())).StatusCode
+                .Should().Be(HttpStatusCode.Accepted, "a bank naming itself is fine, in any case");
+        }
+
+        [Fact]
+        public async Task CreateSource_DuplicateCode_Returns409_EvenInAnotherCase()
+        {
+            using var admin = AsAdmin();
+            var code = NewCode("dup");
+
+            await CreateAsync(admin, code);
+            var response = await admin.PostAsJsonAsync(BasePath, Bank(code.ToUpperInvariant()));
 
             response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         }
@@ -109,75 +134,176 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         [Fact]
-        public async Task GetSources_ListsCreatedSourceWithoutKeyMaterial()
+        public async Task GetSources_ListsCreatedBankWithoutKeyMaterial()
         {
             using var admin = AsAdmin();
-            var name = $"listed-{Guid.NewGuid()}";
-            await admin.PostAsJsonAsync(BasePath, new { Name = name, AuthorizedInstitutions = Institutions });
+            var code = NewCode("listed");
+            var created = await CreateAsync(admin, code, "Listed Bank", "#dc0032");
 
-            var response = await admin.GetAsync(BasePath);
-            var body = await response.Content.ReadAsStringAsync();
-
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-            body.Should().Contain(name);
-            body.Should().NotContain("KeyHash", "the list response must never surface key material");
+            var listed = (await ListAllSourcesAsync(admin)).Single(s => s.GetProperty("id").GetGuid() == created.Id);
+            listed.GetProperty("code").GetString().Should().Be(code);
+            listed.GetProperty("displayName").GetString().Should().Be("Listed Bank");
+            listed.GetProperty("color").GetString().Should().Be("#DC0032", "colours are stored upper-case");
+            listed.TryGetProperty("keyHash", out _).Should().BeFalse("the list response must never surface key material");
         }
 
-        [Fact]
-        public async Task CreateSource_WithoutAuthorizedInstitutions_Returns400WithFieldLevelErrors()
+        [Theory]
+        [InlineData("has space", "Bank", "#0033A1", "code")]
+        [InlineData("dotted.code", "Bank", "#0033A1", "code")]
+        [InlineData("Valid", "", "#0033A1", "displayName")]
+        [InlineData("Valid", "Bank", "blue", "color")]
+        public async Task CreateSource_InvalidField_Returns400WithFieldLevelErrors(string code, string displayName, string color, string field)
         {
             using var admin = AsAdmin();
 
-            var response = await admin.PostAsJsonAsync(BasePath, new { Name = $"unscoped-{Guid.NewGuid()}" });
+            var response = await admin.PostAsJsonAsync(BasePath, new { Code = code, DisplayName = displayName, Color = color });
 
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
-            problem.GetProperty("errors").TryGetProperty("authorizedInstitutions", out var messages)
+            problem.GetProperty("errors").TryGetProperty(field, out var messages)
                 .Should().BeTrue("validation errors are reported per field, keyed by the JSON property name");
             messages.GetArrayLength().Should().BeGreaterThan(0);
         }
 
         [Fact]
-        public async Task UpdateInstitutions_ReplacesTheScope_AndIsListed()
+        public async Task UpdateSource_ChangesDisplayNameAndColour_ButNotTheCode()
         {
             using var admin = AsAdmin();
-            var created = await (await admin.PostAsJsonAsync(BasePath,
-                    new { Name = $"rescoped-{Guid.NewGuid()}", AuthorizedInstitutions = Institutions }))
-                .Content.ReadFromJsonAsync<CreateResponse>();
-            created!.AuthorizedInstitutions.Should().BeEquivalentTo(Institutions);
+            var code = NewCode("renamed");
+            var created = await CreateAsync(admin, code);
 
-            var update = await admin.PutAsJsonAsync($"{BasePath}/{created.Id}/institutions",
-                new { AuthorizedInstitutions = new[] { "Capitec", "capitec", " StandardBank " } });
+            var update = await admin.PutAsJsonAsync($"{BasePath}/{created.Id}", new { DisplayName = "Renamed Bank", Color = "#1c3a70" });
             update.StatusCode.Should().Be(HttpStatusCode.NoContent);
 
-            var listed = await admin.GetFromJsonAsync<JsonElement>(BasePath);
-            var source = listed.EnumerateArray().Single(s => s.GetProperty("id").GetGuid() == created.Id);
-            source.GetProperty("authorizedInstitutions").EnumerateArray().Select(i => i.GetString())
-                .Should().BeEquivalentTo(["Capitec", "StandardBank"], "names are trimmed and de-duplicated case-insensitively");
+            var listed = (await ListAllSourcesAsync(admin)).Single(s => s.GetProperty("id").GetGuid() == created.Id);
+            listed.GetProperty("code").GetString().Should().Be(code);
+            listed.GetProperty("displayName").GetString().Should().Be("Renamed Bank");
+            listed.GetProperty("color").GetString().Should().Be("#1C3A70");
         }
 
         [Fact]
-        public async Task UpdateInstitutions_EmptyList_Returns400_NotA500()
+        public async Task UpdateSource_InvalidColour_Returns400_NotA500()
         {
             using var admin = AsAdmin();
 
-            var response = await admin.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}/institutions",
-                new { AuthorizedInstitutions = Array.Empty<string>() });
+            var response = await admin.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}", new { DisplayName = "Bank", Color = "red" });
 
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
                 "a non-generic Result command failing validation must map to 400, not throw into the 500 handler");
         }
 
-        private Task<HttpResponseMessage> PostWebhookAsync(string apiKey)
+        [Fact]
+        public async Task UpdateUnknownSource_Returns404()
+        {
+            using var admin = AsAdmin();
+
+            var response = await admin.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}", new { DisplayName = "Bank", Color = "#0033A1" });
+
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        }
+
+        [Fact]
+        public async Task Banks_AreReadableByStaff_WithTheirLookAndState_ButNoKeys()
+        {
+            using var admin = AsAdmin();
+            var code = NewCode("staffview");
+            var created = await CreateAsync(admin, code, "Staff View Bank", "#00A3AD");
+            await admin.PostAsync($"{BasePath}/{created.Id}/deactivate", null);
+            using var staff = AsRole("staff");
+
+            var response = await staff.GetAsync(BanksPath);
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            var bank = (await response.Content.ReadFromJsonAsync<JsonElement>()).EnumerateArray()
+                .Single(b => b.GetProperty("code").GetString() == code);
+            bank.GetProperty("displayName").GetString().Should().Be("Staff View Bank");
+            bank.GetProperty("color").GetString().Should().Be("#00A3AD");
+            bank.GetProperty("isActive").GetBoolean().Should().BeFalse("inactive banks stay listed so their history still has a name");
+            bank.TryGetProperty("id", out _).Should().BeFalse("staff get the look of a bank, not handles to manage it");
+        }
+
+        [Fact]
+        public async Task Banks_Anonymous_Returns401() =>
+            (await _client.GetAsync(BanksPath)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+
+        [Fact]
+        public async Task RegisterSigningKey_P256Key_IsAcceptedAndListed()
+        {
+            using var admin = AsAdmin();
+            using var key = System.Security.Cryptography.ECDsa.Create(System.Security.Cryptography.ECCurve.NamedCurves.nistP256);
+            var created = await CreateAsync(admin, NewCode("signed"));
+
+            var register = await admin.PutAsJsonAsync($"{BasePath}/{created.Id}/signing-key",
+                new { PublicKey = Convert.ToBase64String(key.ExportSubjectPublicKeyInfo()) });
+            register.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+            (await ListAllSourcesAsync(admin)).Single(s => s.GetProperty("id").GetGuid() == created.Id)
+                .GetProperty("signingKeyRegistered").GetBoolean().Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task RegisterSigningKey_NotAP256Key_Returns400WithFieldLevelErrors()
+        {
+            using var admin = AsAdmin();
+            using var rsa = System.Security.Cryptography.RSA.Create(2048);
+
+            var response = await admin.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}/signing-key",
+                new { PublicKey = Convert.ToBase64String(rsa.ExportSubjectPublicKeyInfo()) });
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors")
+                .TryGetProperty("publicKey", out var messages).Should().BeTrue();
+            messages.GetArrayLength().Should().BeGreaterThan(0);
+        }
+
+        [Fact]
+        public async Task RegisterSigningKey_AuthenticatedNonAdmin_Returns403()
+        {
+            using var client = _factory.CreateClient();
+            client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeaderName, Guid.NewGuid().ToString());
+
+            var response = await client.PutAsJsonAsync($"{BasePath}/{Guid.NewGuid()}/signing-key", new { PublicKey = "x" });
+
+            response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        }
+
+        // Other tests add sources to the same host, so a given source may be on any page.
+        private static async Task<List<JsonElement>> ListAllSourcesAsync(HttpClient admin)
+        {
+            var sources = new List<JsonElement>();
+            string? cursor = null;
+            do
+            {
+                var page = await admin.GetFromJsonAsync<JsonElement>(
+                    cursor is null ? $"{BasePath}?pageSize=2" : $"{BasePath}?pageSize=2&cursor={Uri.EscapeDataString(cursor)}");
+                sources.AddRange(page.GetProperty("items").EnumerateArray());
+                cursor = page.GetProperty("hasMore").GetBoolean() ? page.GetProperty("nextCursor").GetString() : null;
+            }
+            while (cursor is not null);
+            return sources;
+        }
+
+        [Fact]
+        public async Task GetSources_InvalidCursor_Returns400()
+        {
+            using var admin = AsAdmin();
+
+            var response = await admin.GetAsync($"{BasePath}?cursor=not-a-cursor");
+
+            response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        }
+
+        private Task<HttpResponseMessage> PostWebhookAsync(string apiKey, string? institution = null)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, WebhookPath)
             {
                 Content = JsonContent.Create(new
                 {
                     ExternalAccountId = "never-linked",
+                    Institution = institution,
                     Transactions = new[]
                     {
-                        new { Id = "txn-1", Amount = -10.00m, Currency = "ZAR", Description = "test", Category = (string?)null, Date = DateTime.UtcNow }
+                        new { Id = $"txn-{Guid.NewGuid():N}", Amount = -10.00m, Currency = "ZAR", Description = "test", Category = (string?)null, Date = DateTime.UtcNow }
                     }
                 })
             };

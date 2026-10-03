@@ -24,17 +24,17 @@
 
         if (Event.InboxMessageId is { } inbox) yield return ("Delivery (inbox id)", inbox.ToString());
         if (!string.IsNullOrEmpty(Event.IdempotencyKey)) yield return ("Idempotency key", Event.IdempotencyKey);
-        if (Event.CustomerId is { } customer) yield return ("Customer id", customer.ToString());
         if (Event.TransactionId is { } transaction) yield return ("Transaction id", transaction.ToString());
         if (!string.IsNullOrEmpty(Event.ExternalTransactionId)) yield return ("Bank's transaction id", Event.ExternalTransactionId);
         if (!string.IsNullOrEmpty(Event.TraceId)) yield return ("Trace id (Seq)", Event.TraceId);
+        if (!string.IsNullOrEmpty(Event.Actor)) yield return ("Changed by (user id)", Event.Actor);
 
         foreach (var (key, value) in Event.Metadata.OrderBy(m => m.Key, StringComparer.OrdinalIgnoreCase))
             yield return (key, value);
     }
 
-    // Events that describe a database change travel through the outbox, so they're
-    // written a few seconds after they happened — showing the gap avoids confusion.
+    // OccurredAt is when it happened at the source; RecordedAt when the row was written. A gap means
+    // the write was retried, e.g. after a transient database failure.
     private string Lag()
     {
         var lag = Event.RecordedAt - Event.OccurredAt;

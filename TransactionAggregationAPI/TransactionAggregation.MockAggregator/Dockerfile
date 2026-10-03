@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0@sha256:6a94333d37514e385650a3c81a55e5350b67253dbe136e9cf17e499c35606a8c AS base
 ARG APP_UID=1654
 WORKDIR /app
-# Consents are written here. Created (as root) and handed to the app user before switching,
+# The Kafka record-signing key is persisted here. Created (as root) and handed to the app user before switching,
 # so a named volume mounted on it starts out writable instead of root-owned.
 RUN mkdir -p /app/App_Data && chown $APP_UID /app/App_Data
 USER $APP_UID

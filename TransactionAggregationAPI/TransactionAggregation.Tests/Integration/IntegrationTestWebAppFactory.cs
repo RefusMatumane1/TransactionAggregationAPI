@@ -1,3 +1,4 @@
+using BuildingBlocks.Application.Pagination;
 using BuildingBlocks.Messaging.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
@@ -10,10 +11,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
-using Modules.BankLinks.Infrastructure.Persistence;
-using Modules.Customers.Application.Ports;
-using Modules.Customers.Infrastructure.Persistence;
+using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
@@ -24,7 +24,6 @@ namespace TransactionAggregation.Tests.Integration
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-
             builder.UseEnvironment("Development");
 
             builder.UseSetting("ConnectionStrings:transactiondb", "Host=localhost;Database=test");
@@ -37,10 +36,13 @@ namespace TransactionAggregation.Tests.Integration
             builder.ConfigureServices(services =>
             {
                 ReplaceWithInMemory<TransactionsDbContext>(services);
+                services.RemoveAll<TransactionsDbContext>();
+                services.AddScoped<TransactionsDbContext>(sp => new InMemoryTransactionsDbContext(
+                    sp.GetRequiredService<DbContextOptions<TransactionsDbContext>>(),
+                    sp.GetRequiredService<MessagingDbContext>(),
+                    sp.GetRequiredService<IAuditTrail>()));
                 ReplaceWithInMemory<MessagingDbContext>(services);
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
-                ReplaceWithInMemory<BankLinksDbContext>(services);
-                ReplaceWithInMemory<CustomersDbContext>(services);
                 ReplaceWithInMemory<AuditDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
@@ -71,12 +73,14 @@ namespace TransactionAggregation.Tests.Integration
                                     options.DefaultChallengeScheme = TestAuthHandler.SchemeName;
                                 }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
 
-                services.RemoveAll<IKeycloakAdminClient>();
-                services.AddSingleton<IKeycloakAdminClient, FakeKeycloakAdminClient>();
+                services.RemoveAll<IKeysetPaginator>();
+                services.AddSingleton<IKeysetPaginator, InMemoryKeysetPaginator>();
+                services.RemoveAll<ITransactionSearch>();
+                services.AddSingleton<ITransactionSearch, InMemoryTransactionSearch>();
+
             });
         }
 
-        /// <summary>Swaps a module DbContext (unreachable from this host) for its own in-memory database.</summary>
         private static void ReplaceWithInMemory<TContext>(IServiceCollection services) where TContext : DbContext
         {
             services.RemoveAll<DbContextOptions<TContext>>();

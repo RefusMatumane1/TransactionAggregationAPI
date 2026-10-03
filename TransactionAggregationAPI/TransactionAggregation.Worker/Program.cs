@@ -1,43 +1,47 @@
-using Modules.Transactions;
-using Prometheus;
+using BuildingBlocks.Application.Abstractions.Authentication;
 using Serilog;
-using SharedKernel.Abstractions.Authentication;
 using TransactionAggregation.Hosting;
-using TransactionAggregation.Worker;
+using TransactionAggregation.Hosting.Observability;
 
-// Background processing for the Transactions module: the Kafka consumer and the inbox,
-// outbox and pending-expiry dispatchers. Runs as its own process so it scales
-// independently of the HTTP API; every dispatcher claims work through Postgres row
-// claims, so any number of replicas is safe. Migrations are not applied here — the API
-// (Development) or the db-migrate Job (k8s) owns them; until they exist the dispatchers
-// log the failure and retry on their next poll.
-try
+namespace TransactionAggregation.Worker
 {
-    var builder = WebApplication.CreateBuilder(args);
+    // An explicit, namespaced entry point: the tests reference both hosts, and two top-level-statement
+    // hosts would both define a global Program.
+    internal static class Program
+    {
+        private static async Task Main(string[] args)
+        {
+            try
+            {
+                var builder = WebApplication.CreateBuilder(args);
+                builder.AddSecretsFile();
 
-    builder.Logging.ClearProviders();
+                builder.Logging.ClearProviders();
 
-    builder.AddServiceDefaults();
-    builder.AddSerilogLogging();
+                builder.AddServiceDefaults();
+                builder.AddSerilogLogging();
 
-    builder.AddApplicationModules();
-    builder.Services.AddScoped<IUserContext, BackgroundUserContext>();
+                builder.AddApplicationModules();
+                builder.Services.AddScoped<IUserContext, BackgroundUserContext>();
 
-    builder.Services.AddTransactionsBackgroundProcessing(builder.Configuration);
+                builder.Services.AddBackgroundProcessing(builder.Configuration);
 
-    var app = builder.Build();
+                var app = builder.Build();
 
-    app.MapDefaultEndpoints();
-    app.UseMetricServer();
+                app.MapDefaultEndpoints();
+                app.UsePrivateMetricsEndpoint();
 
-    await app.RunAsync();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Worker start-up failed");
-    throw;
-}
-finally
-{
-    Log.CloseAndFlush();
+                await app.RunAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "Worker start-up failed");
+                throw;
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        }
+    }
 }

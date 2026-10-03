@@ -2,32 +2,20 @@ using Modules.Transactions.Application.Common.DTOs;
 
 namespace Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions
 {
-    /// <summary>
-    /// The wire format of an inbound bank-transactions delivery, identical on every channel:
-    /// it is both the REST webhook's JSON body (Presentation) and the value of records on the
-    /// bank-transactions Kafka topic (Infrastructure). It lives here, beside the command both
-    /// channels translate it into, so neither adapter depends on the other and the two
-    /// shapes cannot drift apart.
-    /// </summary>
-    /// <param name="SchemaVersion">
-    /// Version of this wire contract (docs/event-contracts.md). Omitted means 1, so every
-    /// sender written before the field existed keeps working. Evolution is additive within a
-    /// version; a breaking change ships as a new version accepted alongside the old one.
-    /// </param>
     public sealed record BankTransactionsMessage(
         string ExternalAccountId,
+        string? Institution,
         IReadOnlyList<BankTransactionMessageItem> Transactions,
         int? SchemaVersion = null)
     {
-        public const int CurrentSchemaVersion = 1;
+        // The bank is the source the delivery authenticated as. v2 added an optional
+        // Institution field, which must then name that same bank; v1 has no such field.
+        public const int CurrentSchemaVersion = 2;
 
-        /// <summary>Every version the ingestion pipeline can still read.</summary>
-        public static readonly IReadOnlySet<int> SupportedSchemaVersions = new HashSet<int> { 1 };
+        public static readonly IReadOnlySet<int> SupportedSchemaVersions = new HashSet<int> { 1, 2 };
 
         public int EffectiveSchemaVersion => SchemaVersion ?? CurrentSchemaVersion;
 
-        // Transactions can be null when a body omits the array — validation reports that
-        // as "must not be empty" instead of this throwing.
         public IReadOnlyList<ExternalTransactionDTO> ToExternalTransactionDtos() =>
             (Transactions ?? [])
                 .Select(t => new ExternalTransactionDTO
@@ -43,8 +31,6 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
                 .ToList();
     }
 
-    /// <param name="Status">"pending" or "posted"; omitted means posted. A pending transaction is
-    /// settled when the same Id arrives again as posted.</param>
     public sealed record BankTransactionMessageItem(
         string Id,
         decimal Amount,

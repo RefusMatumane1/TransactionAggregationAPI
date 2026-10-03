@@ -14,7 +14,7 @@ namespace Modules.Audit.Presentation.Endpoints
             group.MapGet("/events", HandleAsync)
                  .WithName("SearchAuditEvents")
                  .WithSummary("Search the inbound audit trail by channel, source, event type, account, delivery, transaction or time range (newest first)")
-                 .Produces<AuditEventPageResponse>(StatusCodes.Status200OK)
+                 .Produces<CursorPagedResponse<AuditEventResponse>>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status400BadRequest);
 
         private static async Task<IResult> HandleAsync(
@@ -22,7 +22,7 @@ namespace Modules.Audit.Presentation.Endpoints
         {
             var result = await sender.Send(request.ToQuery(), cancellationToken);
 
-            return result.ToOk(AuditEventPageResponse.From);
+            return result.ToOk(page => CursorPagedResponse<AuditEventResponse>.From(page, AuditEventResponse.From));
         }
     }
 }

@@ -1,9 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-	<ItemGroup>
-		<PackageReference Include="MediatR" />
-		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-		<PackageReference Include="Serilog" />
-	</ItemGroup>
+	<!-- Domain primitives only. Domain projects reference this, so it must stay free of
+	     persistence, validation and logging frameworks (see Architecture/LayerDependencyTests). -->
 </Project>

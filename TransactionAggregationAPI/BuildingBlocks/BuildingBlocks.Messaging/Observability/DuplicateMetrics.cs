@@ -2,12 +2,6 @@ using Prometheus;
 
 namespace BuildingBlocks.Messaging.Observability
 {
-    /// <summary>
-    /// Duplicates are expected under at-least-once delivery (webhook retries, Kafka
-    /// redelivery after a rebalance) and are dropped silently by design — this counter is
-    /// what makes a sudden spike, e.g. a misbehaving producer replaying a whole topic,
-    /// visible to an alert.
-    /// </summary>
     public static class DuplicateMetrics
     {
         public const string MessageLevel = "message";

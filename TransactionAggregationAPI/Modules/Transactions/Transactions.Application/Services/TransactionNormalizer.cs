@@ -8,12 +8,6 @@ using System.Text.RegularExpressions;
 
 namespace Modules.Transactions.Application.Services
 {
-    /// <summary>
-    /// Rule-driven normalizer: every institution uses the default profile plus its own
-    /// additions from <see cref="NormalizationOptions"/>, so onboarding a bank is a config
-    /// change, not a new class. Profiles are resolved once, at construction, so a bad time
-    /// zone or category name fails at startup rather than on the first delivery.
-    /// </summary>
     public sealed partial class TransactionNormalizer : ITransactionNormalizer
     {
         private sealed record Profile(
@@ -54,12 +48,6 @@ namespace Modules.Transactions.Application.Services
                 OriginalCategory: rawCategory);
         }
 
-        /// <summary>
-        /// JSON gives Utc for a trailing "Z", Local for an explicit offset (already converted
-        /// to this machine's zone, so ToUniversalTime recovers the exact instant), and
-        /// Unspecified when there's no offset at all — that one is the bank's local time.
-        /// GetUtcOffset (rather than ConvertTimeToUtc) never throws on a DST-gap time.
-        /// </summary>
         private static DateTime ToUtc(DateTime date, TimeZoneInfo bankTimeZone) => date.Kind switch
         {
             DateTimeKind.Utc => date,
@@ -85,7 +73,6 @@ namespace Modules.Transactions.Application.Services
             return cleaned;
         }
 
-        // "POS" must not strip the start of "POSTNET": the prefix has to end at a word boundary.
         private static bool StartsWithWholeWord(string text, string prefix) =>
             text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
             && (text.Length == prefix.Length || !char.IsLetterOrDigit(text[prefix.Length]));
@@ -95,7 +82,6 @@ namespace Modules.Transactions.Application.Services
             if (profile.CategoryMap.TryGetValue(bankLabel, out var mapped))
                 return mapped;
 
-            // A bank (or aggregator) that already uses our category names needs no mapping.
             return TryParseCategoryName(bankLabel, out var category) && category != TransactionCategory.Uncategorized
                 ? category
                 : null;
@@ -104,7 +90,7 @@ namespace Modules.Transactions.Application.Services
         private static bool TryParseCategoryName(string name, out TransactionCategory category)
         {
             category = default;
-            // Enum.TryParse also accepts numbers ("5"); a bank's numeric code is not our enum value.
+
             return !int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)
                    && Enum.TryParse(name, ignoreCase: true, out category)
                    && Enum.IsDefined(category);
@@ -116,7 +102,6 @@ namespace Modules.Transactions.Application.Services
                 ? parent?.TimeZone ?? TimeZoneInfo.Utc
                 : FindTimeZone(name, settings.TimeZone);
 
-            // Longest first, so "POS PURCHASE" is tried before "POS".
             var prefixes = (parent?.DescriptionPrefixes ?? [])
                 .Concat(settings.DescriptionPrefixes)
                 .Where(p => !string.IsNullOrWhiteSpace(p))

@@ -74,21 +74,6 @@ namespace SharedKernel.Common.Models
 
         public ErrorType Type { get; }
 
-        public static readonly Error InvalidOperation =
-                    new("Error.InvalidOperation", "The operation is invalid.", ErrorType.Problem);
-
-        public static readonly Error Unauthorized =
-            new("Error.Unauthorized", "You are not authorized to perform this action.", ErrorType.Problem);
-
-        public static readonly Error Forbidden =
-            new("Error.Forbidden", "You do not have permission to access this resource.", ErrorType.Problem);
-
-        public static readonly Error Timeout =
-            new("Error.Timeout", "The operation has timed out.", ErrorType.Problem);
-
-        public static readonly Error Unexpected =
-            new("Error.Unexpected", "An unexpected error occurred.", ErrorType.Problem);
-
         public static Error Failure(string code, string message) =>
             new(code, message, ErrorType.Failure);
 
@@ -104,13 +89,5 @@ namespace SharedKernel.Common.Models
         public static Error Conflict(string message) =>
             new("Error.Conflict", message, ErrorType.Conflict);
 
-        public static Error Duplicate(string entityName, object value) =>
-            new("Error.Duplicate", $"'{entityName}' with value '{value}' already exists.", ErrorType.Conflict);
-
-        public static Error Required(string fieldName) =>
-            new("Error.Required", $"The field '{fieldName}' is required.", ErrorType.Validation);
-
-        public static Error Invalid(string fieldName) =>
-            new("Error.Invalid", $"The field '{fieldName}' is invalid.", ErrorType.Validation);
     }
 }

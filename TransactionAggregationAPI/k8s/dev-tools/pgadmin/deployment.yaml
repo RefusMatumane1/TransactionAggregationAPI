@@ -40,7 +40,7 @@ spec:
               containerPort: 80
           env:
             - name: PGADMIN_DEFAULT_EMAIL
-              value: "admin@transaction.com"
+              value: "admin@test.com"
             - name: PGADMIN_DEFAULT_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -38,8 +38,15 @@ namespace Modules.WebhookSources.Infrastructure.Persistence
 
             builder.Property(s => s.LastUsedAt);
 
-            builder.Property(s => s.AuthorizedInstitutions)
-                .HasColumnType("text[]")
+            builder.Property(s => s.SigningPublicKey)
+                .HasMaxLength(WebhookSource.MaximumSigningPublicKeyLength);
+
+            builder.Property(s => s.DisplayName)
+                .HasMaxLength(WebhookSource.MaximumDisplayNameLength)
+                .IsRequired();
+
+            builder.Property(s => s.Color)
+                .HasMaxLength(7)
                 .IsRequired();
 
             builder.Property(s => s.CreatedAt).IsRequired();

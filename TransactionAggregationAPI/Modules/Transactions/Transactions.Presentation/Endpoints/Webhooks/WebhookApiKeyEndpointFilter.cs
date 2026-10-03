@@ -5,12 +5,6 @@ using Modules.WebhookSources.Contracts;
 
 namespace Modules.Transactions.Presentation.Endpoints.Webhooks
 {
-    /// <summary>
-    /// Authenticates inbound bank-aggregator webhooks by the X-Api-Key header. Key lookup
-    /// and usage tracking belong to WebhookSources, reached only through its published
-    /// IWebhookSourceAuthenticator contract. Refused calls are audited (never with the
-    /// presented key) so probing with guessed keys leaves a trail.
-    /// </summary>
     internal sealed class WebhookApiKeyEndpointFilter(
         IWebhookSourceAuthenticator authenticator,
         IAuditTrail auditTrail,
@@ -19,7 +13,6 @@ namespace Modules.Transactions.Presentation.Endpoints.Webhooks
         private const string HeaderName = "X-Api-Key";
         private const string SourceNameItemKey = "WebhookSourceName";
 
-        /// <summary>The authenticated source's name; only valid behind this filter.</summary>
         public static string GetSourceName(HttpContext httpContext) =>
             (string)httpContext.Items[SourceNameItemKey]!;
 

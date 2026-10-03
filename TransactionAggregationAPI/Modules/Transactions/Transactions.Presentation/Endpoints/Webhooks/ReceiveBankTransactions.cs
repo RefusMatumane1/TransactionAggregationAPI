@@ -19,7 +19,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Webhooks
         public static RouteHandlerBuilder MapReceiveBankTransactions(this IEndpointRouteBuilder group) =>
             group.MapPost("/bank-aggregator/transactions", HandleAsync)
                  .WithName("ReceiveBankAggregatorTransactions")
-                 .WithSummary("Inbound webhook the account aggregator calls to push new transactions for a linked account")
+                 .WithSummary("Inbound webhook a bank calls to push new transactions for one of its accounts; the API key identifies the bank")
                  .AddEndpointFilter<WebhookApiKeyEndpointFilter>()
                  .Produces<WebhookReceiptResponse>(StatusCodes.Status202Accepted)
                  .Produces(StatusCodes.Status401Unauthorized)
@@ -40,15 +40,12 @@ namespace Modules.Transactions.Presentation.Endpoints.Webhooks
             var hasIdempotencyKey = !string.IsNullOrWhiteSpace(idempotencyKey);
 
             var command = new ReceiveBankTransactionsCommand(
-                sourceName, request.ExternalAccountId, transactions,
+                sourceName, request.ExternalAccountId, request.Institution, transactions,
                 hasIdempotencyKey ? idempotencyKey : null,
                 WebhookDeliveryAudit.Describe(httpContext, hasIdempotencyKey),
                 request.EffectiveSchemaVersion);
             var result = await sender.Send(command, cancellationToken);
 
-            // Validation failures never reach the handler, and a refused idempotency-key reuse
-            // never reaches the inbox — neither is covered by the inbox's transactional audit,
-            // so record the refusal here.
             if (result.IsFailure && result.Error.Type is ErrorType.Validation or ErrorType.Problem)
             {
                 await WebhookDeliveryAudit.TryRecordAsync(

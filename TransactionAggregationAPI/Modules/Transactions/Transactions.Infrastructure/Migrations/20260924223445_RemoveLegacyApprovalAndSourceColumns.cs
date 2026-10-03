@@ -4,10 +4,8 @@
 
 namespace Modules.Transactions.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class RemoveLegacyApprovalAndSourceColumns : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(
@@ -36,7 +34,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                 table: "Transactions");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<DateTime>(

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Modules.Audit.Contracts;
 using Modules.WebhookSources.Domain;
 
 namespace Modules.WebhookSources.Application.Persistence
@@ -8,5 +9,8 @@ namespace Modules.WebhookSources.Application.Persistence
         DbSet<WebhookSource> WebhookSources { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+        // Staged events are written inside the next SaveChangesAsync's database transaction.
+        void StageAudit(IEnumerable<AuditEventRecord> events);
     }
 }

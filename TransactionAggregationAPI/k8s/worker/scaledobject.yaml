@@ -1,0 +1,55 @@
+# ── Worker autoscaling on queue depth (KEDA) ────────────────────────────────
+# Scales on what the worker actually drains: pending inbox + outbox messages. Every
+# replica reports the same global backlog, so max() reads it once, and KEDA divides
+# by the threshold to get the desired replicas (1 replica per 250 pending messages,
+# within min/max). If Prometheus is unreachable for 3 polls, KEDA holds the fallback
+# replica count instead of scaling to the minimum.
+#
+# Scaling is safe at any replica count: dispatchers claim rows with FOR UPDATE
+# SKIP LOCKED, the archiver moves rows the same way, and each pod's database
+# connections are capped (Maximum Pool Size=20) behind PgBouncer. Kafka consumption
+# parallelism is still capped by Kafka__TopicPartitions.
+#
+# Requires KEDA (https://keda.sh) and the monitoring stack (./deploy-k8s.sh --monitoring).
+# Without KEDA, deploy-k8s.sh applies worker/hpa.yaml (CPU) instead.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: transaction-worker
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-worker
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  scaleTargetRef:
+    name: transaction-worker
+  minReplicaCount: 2
+  maxReplicaCount: 30
+  pollingInterval: 15
+  cooldownPeriod: 300
+  fallback:
+    failureThreshold: 3
+    replicas: 6
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 30
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 2
+              periodSeconds: 60
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: http://prometheus.transaction-aggregation.svc.cluster.local:9090
+        query: max(sum by (instance) (messaging_backlog_messages{job="transaction-worker",status="pending"}))
+        threshold: "250"
+        ignoreNullValues: "true"

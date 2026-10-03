@@ -1,22 +1,24 @@
+using BuildingBlocks.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Modules.Audit.Infrastructure.Persistence;
+using Modules.Transactions.Infrastructure.Persistence;
+using Modules.WebhookSources.Infrastructure.Persistence;
 using Npgsql;
 
 namespace TransactionAggregationAPI.Extensions
 {
     public static class MigrationExtensions
     {
+        public static async Task ApplyAllModuleMigrationsAsync(this IHost host)
+        {
+            await host.ApplyMigrationsAsync<TransactionsDbContext>();
+            await host.ApplyMigrationsAsync<MessagingDbContext>();
+            await host.ApplyMigrationsAsync<WebhookSourcesDbContext>();
+            await host.ApplyMigrationsAsync<AuditDbContext>();
+        }
 
         private const long MigrationLockId = 7_27_2024;
 
-        /// <summary>
-        /// Generic over TContext so every module's own DbContext (each with its own
-        /// schema/migration history — see docs/adr/0009-schema-per-module-database-strategy.md)
-        /// can apply its migrations the same way, called once per context from
-        /// Program.cs. The shared MigrationLockId is safe to reuse across contexts:
-        /// they migrate sequentially within one process, and the lock exists to guard
-        /// against multiple pod replicas racing to migrate concurrently, not against
-        /// these calls racing each other.
-        /// </summary>
         public static async Task ApplyMigrationsAsync<TContext>(this IHost host, CancellationToken cancellationToken = default)
             where TContext : DbContext
         {

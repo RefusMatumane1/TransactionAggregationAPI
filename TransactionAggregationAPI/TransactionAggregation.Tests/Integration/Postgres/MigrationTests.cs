@@ -4,10 +4,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    /// <summary>
-    /// Applies every module's migrations to a real Postgres and inspects the schema, so a migration
-    /// step that silently does nothing fails CI.
-    /// </summary>
     [Collection(PostgresCollection.Name)]
     public class MigrationTests
     {
@@ -27,7 +23,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             appliedMigrations.Should().NotBeEmpty("MigrateAsync() must actually run pending migrations, not just log that it did");
 
             string[] expectedTables =
-                ["Customers", "Accounts", "Transactions", "BankLinks", "WebhookSources", "InboxMessages", "OutboxMessages", "AuditEvents"];
+                ["Transactions", "WebhookSources", "InboxMessages", "OutboxMessages", "AuditEvents"];
 
             foreach (var table in expectedTables)
             {
@@ -38,12 +34,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             }
         }
 
-        /// <summary>Pins the schema-per-module split (ADR-0009): each table lives in its owning module's schema.</summary>
         [Theory]
-        [InlineData("Customers", "customers")]
-        [InlineData("Accounts", "customers")]
         [InlineData("Transactions", "transactions")]
-        [InlineData("BankLinks", "banklinks")]
         [InlineData("WebhookSources", "webhooksources")]
         [InlineData("InboxMessages", "messaging")]
         [InlineData("OutboxMessages", "messaging")]
@@ -59,12 +51,30 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             actualSchema.Should().Be(expectedSchema, $"table '{table}' must live in the \"{expectedSchema}\" schema, not wherever it happened to land");
         }
 
-        [Fact]
-        public async Task TransactionSourceExternalId_HasAUniqueConstraintScopedToCustomer()
+        [Theory]
+        [InlineData("Transactions", "CK_Transactions_Amount_NonZero")]
+        [InlineData("Transactions", "CK_Transactions_Category_Defined")]
+        [InlineData("Transactions", "CK_Transactions_Status_Defined")]
+        [InlineData("Transactions", "CK_Transactions_Currency_Iso4217")]
+        public async Task CheckConstraintsAddedWithoutBlockingWrites_EndUpValidated(string table, string constraint)
         {
-            // Confirms the idempotency guarantee ADR-0002 depends on is an actual
-            // database constraint, not just an EF Core model annotation that might
-            // not have made it into a migration.
+            using var context = _fixture.CreateContext();
+
+            var validated = await context.Database.SqlQuery<bool>(
+                $"""
+                SELECT c.convalidated AS "Value" FROM pg_constraint c
+                JOIN pg_class t ON t.oid = c.conrelid
+                WHERE t.relname = {table} AND c.conname = {constraint}
+                """)
+                .SingleOrDefaultAsync();
+
+            validated.Should().BeTrue(
+                $"{constraint} is added NOT VALID and validated in a separate step; if that step were skipped, existing rows would be unchecked");
+        }
+
+        [Fact]
+        public async Task TransactionSourceExternalId_HasAUniqueConstraintScopedToInstitutionAndAccount()
+        {
             using var context = _fixture.CreateContext();
 
             var indexExists = await context.Database.SqlQuery<int>(
@@ -75,7 +85,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .AnyAsync();
 
             indexExists.Should().BeTrue(
-                "a unique index on (CustomerId, Source.ExternalId) must exist at the database level for idempotent ingestion to hold under concurrency");
+                "a unique index on (institution, account, bank transaction id) must exist at the database level for idempotent ingestion to hold under concurrency");
         }
     }
 }

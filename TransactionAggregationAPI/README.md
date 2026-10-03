@@ -1,8 +1,11 @@
 # Transaction Aggregation API
 
-A production-grade .NET 10 system that aggregates customer financial transactions
-from multiple bank sources, categorises spending automatically, and exposes a
-comprehensive versioned REST API. Comes with a Blazor WASM frontend and ships
+A production-grade .NET 10 system that records the posted transactions banks push to it (each
+bank is a source with its own API key) in an insert-only ledger, categorises them automatically,
+and exposes aggregate views (by bank, account, category and period, in one currency at a time)
+through a versioned REST API. Nothing in the ledger is ever edited or deleted.
+There are no customer accounts: the people who sign in are staff, who see the banks they are
+assigned, and administrators. It comes with a Blazor WASM frontend and ships
 with Docker Compose, .NET Aspire, and Kubernetes manifests for three different
 ways to run it locally.
 
@@ -13,7 +16,7 @@ ways to run it locally.
 1. [What this project does](#what-this-project-does)
 2. [Tech stack](#tech-stack)
 3. [Project structure](#project-structure)
-4. [Seed data (test accounts)](#seed-data)
+4. [Seed data and logins](#seed-data)
    - [Mock bank feeds (development)](#mock-bank-feeds-development)
 5. [Option A — Docker Compose](#option-a--docker-compose-quickest)
 6. [Option B — .NET Aspire (debug)](#option-b--net-aspire-debug)
@@ -26,16 +29,21 @@ ways to run it locally.
 
 ## What this project does
 
-- Aggregates transactions from multiple banks (mock FNB, Absa, Capitec and Standard Bank feeds in development), received by REST webhook or Kafka, with idempotent ingestion
+- Records posted transactions from multiple banks (mock FNB, Absa, Capitec and Standard Bank feeds in development), received by REST webhook or signed Kafka records, with idempotent ingestion, in an **insert-only ledger** enforced by the database
+- Publishes a `TransactionRecorded` integration event to Kafka for every ledger entry
 - Categorises transactions automatically by keyword (Groceries, Dining, Transport …)
-- Exposes a versioned REST API (`/api/v1/…`) secured with Keycloak-issued JWT bearer tokens
+- Aggregates by bank, account, category and period (cash flow, breakdowns and period-over-period comparison) in any ISO 4217 currency, one currency per view
+- Admins manage the banks (each one a source with its own API key, display name and colour) from the UI
+- Exposes a versioned REST API (`/api/v1/…`) secured with Keycloak-issued JWT bearer tokens; users hold the `staff` (read-only, limited to their assigned banks) or `admin` realm role
+- Audits every delivery, every ledger entry and every admin change (with the admin who made it) in an append-only trail
+- Keeps secrets out of git: an untracked `secrets.json` locally, the same file rendered by Vault in clusters
 - Caches query results in Redis to reduce database round-trips
 - Enforces distributed rate limiting across all replicas via Redis
 - Emits structured logs to Seq and traces via OpenTelemetry
 - Exposes a Prometheus `/metrics` scrape endpoint via prometheus-net
 - Ships with Grafana dashboards pre-provisioned with HTTP, runtime, and GC panels
 - Ships with a Blazor WASM frontend served by nginx in production
-- Runs EF Core migrations automatically on startup
+- Applies EF Core migrations on startup in Development; elsewhere a gated migration Job applies them before the API rolls out
 
 ---
 
@@ -45,8 +53,9 @@ ways to run it locally.
 |---|---|
 | Runtime | .NET 10 / ASP.NET Core Minimal API |
 | Frontend | Blazor WebAssembly (.NET 10) |
-| Database | PostgreSQL 16 + Entity Framework Core 10 |
+| Database | PostgreSQL 17.6 + Entity Framework Core 10 |
 | Cache / Rate limiting | Redis 7 + StackExchange.Redis |
+| Messaging | Kafka (Confluent.Kafka): inbound bank records, outbound integration events |
 | Structured logging | Serilog → Seq |
 | Traces | OpenTelemetry (ASP.NET Core + EF Core + Redis + HttpClient) |
 | Metrics | prometheus-net.AspNetCore → Prometheus → Grafana |
@@ -64,110 +73,112 @@ TransactionAggregationAPI/              ← solution root
 ├── TransactionAggregationAPI/          ← Web API (entry point, also hosts Blazor in dev)
 │   ├── Middleware/                     ← Exception handling, request context logging
 │   ├── RateLimiting/                   ← Redis-backed custom RateLimiter
-│   ├── SeedData.cs                     ← 10 customers, 21 accounts, ~2 700 transactions
+│   ├── Development/SeedData.cs         ← 21 demo accounts at four banks, ~2 700 ledger entries
 │   ├── Program.cs                      ← App bootstrap
-│   └── appsettings.json
+│   ├── appsettings.json                ← Non-secret settings (tracked)
+│   ├── secrets.template.json           ← Shape of the secrets (tracked)
+│   └── secrets.json                    ← Your local secrets (git-ignored; Vault renders it in clusters)
 │
 ├── TransactionAggregationUI/           ← Blazor WASM frontend
-│   ├── Pages/                          ← Dashboard, Accounts, Transactions, Register, Authentication …
+│   ├── Pages/                          ← Dashboard (aggregates), Transactions, Admin (webhook sources, audit trail) …
 │   ├── Services/                       ← HTTP clients for each API resource
 │   ├── Auth/                           ← Claims helper for the OIDC-issued principal
 │   ├── wwwroot/appsettings.json        ← ApiBaseUrl, Keycloak:Authority (templated at container start)
 │   ├── nginx.conf                      ← Proxies /api/ to the API service
 │   └── Dockerfile                      ← nginx + published WASM static files
 │
-├── TransactionAggregation.MockAggregator/ ← Development only: stand-in account aggregator — bank-link consent (OAuth) and
-│                                         mock FNB/Absa/Capitec/Standard Bank feeds pushed through the real webhook or Kafka
-├── TransactionAggregation.Worker/      ← Background-processing host: Kafka consumer + inbox/outbox/pending-expiry dispatchers
-│   └── Dockerfile                      ← Scales independently of the API (serves only /alive, /health, /metrics)
+├── TransactionAggregation.MockAggregator/ ← Development only: stand-in account aggregator — mock FNB/Absa/Capitec/Standard Bank
+│                                         feeds for a fixed set of accounts, pushed through the real webhook or Kafka
+├── TransactionAggregation.Worker/      ← All background processing, and only here: Kafka consumer, inbox/outbox dispatchers,
+│                                         integration-event publishing, message archiving, duplicate alerts (the API runs none of it)
+│   └── Dockerfile                      ← Scales independently of the API (serves only /liveness, /readiness, /health; /metrics on :9464)
 │
 ├── TransactionAggregation.Hosting/     ← Composition shared by the API and the worker (modules, Postgres, Redis cache,
 │                                         Data Protection key ring, Serilog, categorization-rules.json)
 │
 ├── TransactionAggregationAPI.AppHost/  ← .NET Aspire orchestration
 │   ├── AppHost.cs                      ← Wires up API + worker + Postgres + Redis + Seq + Kafka
-│   └── appsettings.Development.json    ← Fixed postgres-password parameter
+│   └── secrets.json                    ← Local parameter values (git-ignored; copy secrets.template.json)
 │
 ├── Modules/Transactions/Transactions.Application/    ← Transaction use cases (CQRS / MediatR), categorization
-├── Modules/Transactions/Transactions.Domain/         ← Transaction entity, value objects, domain events
-├── Modules/Transactions/Transactions.Infrastructure/ ← TransactionsDbContext (`transactions` schema), migrations, inbox/outbox dispatchers (run by the worker)
+├── Modules/Transactions/Transactions.Domain/         ← Immutable Transaction (ledger entry), Money, TransactionSource
+├── Modules/Transactions/Transactions.Contracts/      ← TransactionRecorded v1 integration event (dependency-free)
+├── Modules/Transactions/Transactions.Infrastructure/ ← TransactionsDbContext (`transactions` schema), migrations
 ├── TransactionAggregationAPI.ServiceDefaults/ ← Health checks, OpenTelemetry, prometheus-net
 │
 ├── BuildingBlocks/                     ← Shared technical infrastructure; depends on no module
-│   ├── SharedKernel/                   ← Common building blocks every module depends on (Result, ICommand/IQuery, ValueObject, MediatR pipeline behaviors)
+│   ├── SharedKernel/                   ← Domain primitives only (BaseEntity, domain events, ValueObject, Result/Error) — no persistence/validation/logging framework
+│   ├── BuildingBlocks.Application/     ← ICommand/IQuery, IUserContext, the shared MediatR pipeline (validation, logging, caching) and module registration
+│   ├── BuildingBlocks.Persistence/     ← AppDbContextBase, module DbContext registration (retry policy, migrations assembly), design-time support
 │   ├── BuildingBlocks.Messaging/       ← Generic Inbox/Outbox reliability mechanism — own DbContext, `messaging` schema
 │   └── BuildingBlocks.Web/             ← HTTP helpers every module's Presentation reuses (Result → ProblemDetails, versioned route groups,
-│                                         customer-ownership filter, shared policy names)
+│                                         shared policy and role names)
 ├── Modules/                            ← Each module: Domain · Application · Infrastructure · Presentation (+ Contracts for other modules)
 │   │                                     Presentation = the module's HTTP surface: one file per endpoint under Endpoints/, wire shapes under
 │   │                                     Requests/ and Responses/. Application DTOs are always mapped to a response, never serialized
 │   │                                     directly. Referenced only by the API host — the worker runs every module without it.
 │   ├── WebhookSources/                 ← First fully-extracted module — own DbContext, `webhooksources` schema, depends only on SharedKernel
-│   ├── Audit/                          ← Append-only inbound audit trail — own DbContext, `audit` schema, depends on no other module (ADR-0011)
-│   └── BankLinks/                      ← Second extracted module — own DbContext, `banklinks` schema, depends only on SharedKernel; needs Account via a consumer-owned port (ADR-0010)
+│   └── Audit/                          ← Append-only inbound audit trail — own DbContext, `audit` schema, depends on no other module
 │
 ├── monitoring/                         ← Docker Compose monitoring stack
-│   ├── prometheus.yml                  ← Prometheus scrape config (api:8080 and every worker replica's /metrics)
+│   ├── prometheus.yml                  ← Prometheus scrape config (api:9464 and every worker replica's /metrics)
+│   ├── prometheus-rules.yml            ← Alert rules (compose + Aspire; k8s keeps the same groups inline)
 │   └── grafana/
+│       ├── generate_dashboards.py      ← Dashboards as code — writes dashboards/*.json and the k8s ConfigMap
 │       ├── provisioning/               ← Auto-provisioned datasource + dashboard provider
-│       └── dashboards/                 ← transaction-api.json Grafana dashboard
+│       └── dashboards/                 ← Overview, Transaction API, Ingestion Pipeline
 │
 ├── docker-compose.yml                  ← Full local stack including Prometheus + Grafana
-├── docker-compose.override.yml         ← Dev overrides (user secrets, ports)
+├── docker-compose.override.yml         ← Dev overrides (ports)
+├── .env.template                       ← Compose credentials to fill in; copy to .env (git-ignored)
 ├── deploy-k8s.sh                       ← One-command Kubernetes deployment script
 │
 └── k8s/                                ← Kubernetes manifests
     ├── namespace.yaml
-    ├── secrets.yaml                    ← Fill in before applying
+    ├── secrets.yaml                    ← Fill in before applying (or use --vault)
     ├── configmap.yaml                  ← API environment variables
     ├── network-policy.yaml             ← Pod-level traffic rules
     ├── postgres/ redis/ seq/ kafka/    ← StatefulSets + Services (persistent volumes)
+    ├── pgbouncer/                      ← Connection pooling between the pods and PostgreSQL
+    ├── keycloak/                       ← Realm import, Deployment, PVC, Ingress
     ├── api/                            ← Deployment, Service, Ingress, HPA, PDB, migration Job
+    ├── worker/                         ← Deployment, PDB, KEDA ScaledObject / CPU HPA
     ├── ui/                             ← Deployment, Service, Ingress, ConfigMap
     ├── dev-tools/                      ← pgAdmin, Redis Commander, Kafka UI (optional --dev-tools)
     ├── monitoring/                     ← Prometheus + Grafana (optional --monitoring)
     │   ├── prometheus/                 ← ServiceAccount, RBAC, ConfigMap, Deployment, Service, Ingress
     │   └── grafana/                    ← ConfigMaps (provisioning + dashboards), PVC, Deployment, Service, Ingress
-    └── helm/                           ← Helm chart + per-environment values
+    └── vault/                          ← Vault Agent patches and policy (--vault)
 ```
 
 ---
 
 ## Seed data
 
-On first start the API seeds the database with **10 realistic South African customers**,
-**21 bank accounts** (checking, savings, credit card, investment), and **~2 700 transactions**
-spread across January 2025 → April 2026 so all date filters return results out of the box.
+Every Development start seeds the database (`Development/SeedData.cs`), each demo account under
+its own bank:
 
-All seed accounts share the same password:
-
-| Field | Value |
-|---|---|
-| Password | `Test@12345` |
-
-Sample logins:
-
-| Name | Email |
-|---|---|
-| Thabo Mokoena | `thabo.mokoena@example.co.za` |
-| Lerato Dlamini | `lerato.dlamini@example.co.za` |
-| Pieter van der Merwe | `pieter.vandermerwe@example.co.za` |
-| Ayanda Zulu | `ayanda.zulu@example.co.za` |
-| Fatima Ismail | `fatima.ismail@example.co.za` |
+- **21 demo accounts** (checking, savings, credit card, investment) at FNB, Standard Bank, Absa
+  and Capitec, grouped into ten households with their own salary, rent and spending patterns.
+  An account is only an id (e.g. `ZA0010000001`); there are no owners.
+- An account with no transactions gets **15 months of history ending today**, so every
+  "last 12 months" view has data.
+- An account that already has data is **topped up** from its latest transaction to now, plus a
+  burst of recent activity, so each restart visibly adds new transactions.
+- Each run uses a **new random seed**, so amounts, descriptions and dates differ
+  every time. The seed and run id are logged; set `Seed__RandomSeed` to reproduce a run.
 
 ### Mock bank feeds (development)
 
 The seed data above is written straight into the database. To exercise the **real**
-pipeline — linking, ingestion, normalization, customer resolution, categorization —
+pipeline — ingestion, normalization, categorization, aggregation —
 `TransactionAggregation.MockAggregator` stands in for the external account aggregator in
-Docker Compose and Aspire (never in Kubernetes). It does two jobs:
-
-1. **Bank-link consent.** It implements the aggregator's OAuth endpoints, so the bank-link
-   flow works end to end. Without it, no account can be linked in development.
-2. **Bank feeds.** Every 30 s it pushes new transactions for each account a customer has
-   linked, through the API's webhook (`Feed__Channel=Kafka` sends to the topic instead).
-   Some card purchases arrive `pending` and post on a later tick (restaurants with a tip
-   added); now and then a whole batch is re-sent, to exercise duplicate detection.
+Docker Compose and Aspire (never in Kubernetes). Every 30 s it pushes new transactions for
+each account in its catalog (`Catalog/MockCatalog.cs`) through the API's webhook
+(`Feed__Channel=Kafka` sends to the topic instead), naming the institution in every delivery.
+Some card purchases arrive `pending` and post on a later tick (restaurants with a tip added).
+The pending notice is audited and skipped, and only the posting is recorded. Now and then a
+whole batch is re-sent, to exercise duplicate detection.
 
 Each mock bank writes transactions its own way. **These formats are invented for the mock**;
 their normalization rules live in `normalization-rules.Development.json`, which only
@@ -180,48 +191,45 @@ Development loads:
 | Capitec | `Woolworths Sandton` | UTC | our category names |
 | Standard Bank | `PURCHASE Woolworths` | local time, no offset | none — no profile, so only the default rules apply ("Other") |
 
-**Link an account and watch transactions arrive:**
+**Watch transactions arrive:** sign in as `staff@test.com` and open the **Dashboard**. Each
+bank's card grows every feed interval; click a bank (or an account) to open **Transactions**
+filtered to it, where each delivery lands.
 
-1. Sign in to the UI as a seed customer and open **Linked banks** in the sidebar.
-2. Choose **Link** on a bank. You're sent to the mock's consent page, which lists that
-   bank's accounts; choose one and **Allow**.
-3. You land back on the UI, which completes the link. Within one feed interval the
-   account's transactions appear under **Accounts**.
+The two apps share a base API key (`MockAggregator:WebhookApiKey` and `Feed:ApiKey` in their
+`secrets.json`, the AppHost's `mock-aggregator-api-key` parameter, or `MOCK_AGGREGATOR_API_KEY`
+in `.env`). In Development the API registers each mock bank
+(FNB, StandardBank, Absa, Capitec) as its own source at startup, keyed `<base>-<code in lower
+case>`, and the mock sends each bank's feed with that bank's key.
 
-**Deny** returns you to the UI with nothing linked; a bank whose linking was abandoned
-shows **Try again**.
+### Logins
 
-The whole flow — with sequence diagrams, the stage-by-stage pipeline, and the terminal
-commands to verify it — is in [docs/bank-feed-flow.md](docs/bank-feed-flow.md).
+Everyone who signs in is staff or an administrator; there is no self-registration. The realm
+import (`keycloak/realm-export.json`) creates one of each for local use:
 
-To see [joint accounts](#joint-accounts) work, link **FNB Joint Household Account** while
-signed in as two different customers: each receives every transaction. `GET http://localhost:5090/consents`
-lists the accounts being fed; `DELETE /consents/{accountId}` stops one.
+| User | Realm role | Can | Password |
+|---|---|---|---|
+| `staff@test.com` | `staff` | Dashboard, aggregates and transaction list for FNB and StandardBank (its `institutions` attribute) | `TRANSACTION_APP_STAFF_PASSWORD` in `.env` (compose) or `app-staff-password` in the AppHost's `secrets.json` (Aspire) |
+| `admin@test.com` | `admin` | Every bank, plus managing the banks and the audit trail | `TRANSACTION_APP_ADMIN_PASSWORD` / `app-admin-password` |
 
-The two apps share a client secret and the webhook source's API key (development values in
-`appsettings.Development.json`, the AppHost parameters and `docker-compose.yml`); in
-Development the API registers the `mock-aggregator` webhook source with that key at startup.
+No password is committed. Keycloak substitutes them into the realm when it first imports it into
+an empty volume, so after changing one, recreate the Keycloak volume (`docker compose down -v`, or
+delete `transaction-keycloak-data` under Aspire).
 
-### Admin login
-
-A staff account with the `admin` realm role is baked into the Keycloak realm import (both
-docker-compose and k8s), so `/admin/webhook-sources` is reachable without hand-editing Keycloak:
-
-| Field | Value |
-|---|---|
-| Email | `admin@transaction.local` |
-| Password | `Admin@12345` |
-
-Rotate/replace this before anything beyond a local/ephemeral cluster — see
-`keycloak/realm-export.json`.
+In Kubernetes (`k8s/keycloak/configmap.yaml`) only the admin user is imported, with the
+`app-admin-password` key of `transaction-api-secrets` (never committed; `deploy-k8s.sh` refuses
+to deploy while it is still the placeholder). Create staff users in the Keycloak admin console,
+give them the `staff` role, and list their banks in the `institutions` attribute (bank codes, for
+example `FNB`). A staff user with no banks sees nothing. A signed-in user with neither role gets a
+"No access" page.
 
 ---
 
 ## Option A — Docker Compose (quickest)
 
-One command starts everything: API, UI, PostgreSQL, Redis, Seq, pgAdmin,
-Redis Commander, Prometheus, and Grafana. Migrations and seeding run automatically
-on first start.
+One command starts the system: API, worker, UI, PostgreSQL, Redis, Kafka, Keycloak, Seq and
+the mock bank aggregator. Migrations and seeding run automatically on first start. Tooling is
+opt-in through profiles: `--profile tools` (pgAdmin, Redis Commander, Kafka UI) and
+`--profile monitoring` (Prometheus, Grafana).
 
 ### Prerequisites
 
@@ -232,7 +240,11 @@ on first start.
 ```bash
 cd /path/to/TransactionAggregationAPI
 
-docker-compose up --build
+cp .env.template .env        # once: fill in every value (compose refuses to start without them)
+docker compose up --build                                        # the system
+docker compose --profile tools --profile monitoring up --build   # plus tooling
+
+scripts/smoke-test.sh http://localhost:5001                      # verify it
 ```
 
 ### What's running
@@ -243,16 +255,16 @@ docker-compose up --build
 | **API** | http://localhost:5001 |
 | **API docs** (Scalar) | http://localhost:5001/scalar/v1 |
 | **Seq** structured logs | http://localhost:5341 |
-| **Prometheus** | http://localhost:9090 |
-| **Grafana** | http://localhost:3000 (admin / admin) |
-| **pgAdmin** | http://localhost:5050 |
-| **Redis Commander** | http://localhost:8082 |
-| **Kafka UI** | http://localhost:8083 |
+| **Prometheus** (`--profile monitoring`) | http://localhost:9090 |
+| **Grafana** (`--profile monitoring`) | http://localhost:3000 (admin / `GRAFANA_ADMIN_PASSWORD`) |
+| **pgAdmin** (`--profile tools`) | http://localhost:5050 |
+| **Redis Commander** (`--profile tools`) | http://localhost:8082 |
+| **Kafka UI** (`--profile tools`) | http://localhost:8083 |
 | **Kafka broker** (from the host) | `localhost:9092` |
-| **Mock aggregator** (bank-link consent) | http://localhost:5090 |
+| **Mock aggregator** (bank feeds) | http://localhost:5090 |
 
-> **pgAdmin first-time setup:** login `admin@transaction.com` / `admin`,
-> add server → host `postgres`, port `5432`, user `postgres`, password `postgres`.
+> **pgAdmin first-time setup:** log in as `admin@test.com` / `PGADMIN_PASSWORD`, then
+> add server → host `postgres`, port `5432`, user `postgres`, password `POSTGRES_PASSWORD`.
 
 > **Grafana:** open the pre-provisioned "Transaction Aggregation API" dashboard.
 > Data appears within ~30 seconds after the API starts serving requests.
@@ -286,6 +298,9 @@ dotnet workload install aspire
 ```bash
 cd /path/to/TransactionAggregationAPI
 
+# once: copy each secrets.template.json to secrets.json and fill it in
+#   TransactionAggregationAPI.AppHost/, TransactionAggregationAPI/, TransactionAggregation.Worker/,
+#   TransactionAggregation.MockAggregator/   (all git-ignored)
 dotnet run --project TransactionAggregationAPI.AppHost
 ```
 
@@ -301,11 +316,13 @@ project. The Aspire dashboard opens automatically in your browser.
 | **API docs** (Scalar) | https://localhost:5101/scalar/v1 |
 | **Seq** structured logs | Linked from Aspire dashboard |
 | **Kafka UI** | http://localhost:8083 |
-| **Mock aggregator** (bank-link consent) | http://localhost:5090 |
+| **Mock aggregator** (bank feeds) | http://localhost:5090 |
+| **Prometheus** (targets, alerts) | http://localhost:9090 |
+| **Grafana** | http://localhost:3000 (admin / `grafana-admin-password`) |
 
-> Aspire uses a fixed PostgreSQL password (`postgres`) stored in
-> `TransactionAggregationAPI.AppHost/appsettings.Development.json` so
-> the data volume survives restarts without authentication errors.
+> Aspire reads its parameters (PostgreSQL, Keycloak, Grafana and dev-user passwords, the mock's
+> base key) from the git-ignored `TransactionAggregationAPI.AppHost/secrets.json`. Keep the
+> PostgreSQL password stable: the data volume keeps the password it was created with.
 
 ### Attach a debugger
 
@@ -324,10 +341,14 @@ This is the closest to a real staging or production deployment.
 | Component | Replicas | Notes |
 |---|---|---|
 | **API** (.NET 10) | 2 | Auto-scales to 10 via HPA |
-| **PostgreSQL 16** | 1 | StatefulSet + 10 Gi PVC |
+| **Worker** (.NET 10) | 2 | Kafka consumer, inbox/outbox dispatchers, event publishing; KEDA on backlog (2–30) or CPU HPA |
+| **db-migrate Job** | 1 run | Applies migrations as `tagg_migrator` before every rollout |
+| **PgBouncer** | 2 | Transaction pooling between the pods and PostgreSQL |
+| **PostgreSQL 17.6** | 1 | StatefulSet + 10 Gi PVC |
 | **Redis 7** | 1 | StatefulSet + 2 Gi PVC, AOF persistence |
 | **Seq** | 1 | StatefulSet + 5 Gi PVC; access via port-forward (no Ingress) |
-| **Kafka** (KRaft, single node) | 1 | StatefulSet + 5 Gi PVC; `bank-transactions` topic (6 partitions) + `.dlq` |
+| **Kafka** (KRaft, single node) | 1 | StatefulSet + 5 Gi PVC; `bank-transactions` (6 partitions) + `.dlq`, and `transaction-events` |
+| **Keycloak** | 1 | Realm import with the admin user; staff users are created in the console |
 | **UI** (nginx + Blazor WASM) *(`--ui`)* | 2 | Serves frontend, proxies `/api/` to the API service |
 | **Prometheus** *(`--monitoring`)* | 1 | Pod annotation-based scrape discovery |
 | **Grafana** *(`--monitoring`)* | 1 | Pre-provisioned dashboard + Prometheus datasource |
@@ -393,27 +414,24 @@ nerdctl --namespace k8s.io build \
 nerdctl --namespace k8s.io images | grep transaction
 ```
 
-### Step 2 — Fill in secrets
+### Step 2 — Provide the secrets
 
-Open `k8s/secrets.yaml` and replace the `CHANGE_ME_BEFORE_DEPLOY` values:
+**With Vault** (production-like): pass `--vault`. The Vault Agent Injector renders each pod's
+`secrets.json` (the same shape developers keep locally) and the hosts read it through
+`Secrets:FilePath`. Setup, policy and paths are in [k8s/vault/README.md](k8s/vault/README.md).
 
-```bash
-# PostgreSQL password
-echo -n 'YourStrongPassword123!' | base64
-
-# Keycloak admin console password
-echo -n 'YourAdminPassword!' | base64
-
-# pgAdmin password
-echo -n 'YourAdminPassword!' | base64
-```
-
-`keycloak-admin-client-secret` is already correct for a fresh local/ephemeral cluster — it
-matches the `transaction-admin` client secret baked into `k8s/keycloak/configmap.yaml`'s realm
-export. If you rotate one, rotate both (see the comment next to it in `secrets.yaml`).
+**Without Vault** (a local cluster): replace every `CHANGE_ME_BEFORE_DEPLOY` value in
+`k8s/secrets.yaml` (`postgres-password`, `keycloak-admin-password`, `app-admin-password`,
+`migrator-db-password`, `app-db-password`, `pgadmin-password`), for example with
+`openssl rand -base64 24 | tr -d '\n' | base64`. `deploy-k8s.sh` refuses to deploy while any
+placeholder remains.
 
 > **Never commit `secrets.yaml` with real values.**
 > Protect it: `git update-index --assume-unchanged k8s/secrets.yaml`
+
+> **Upgrading an existing cluster from PostgreSQL 16:** the StatefulSet now runs 17.6, which
+> cannot open a 16 data directory. Dump first (`pg_dump -Fc`), redeploy on a fresh volume, then
+> restore with `pg_restore`, or `--teardown` a disposable cluster.
 
 ### Step 3 — Run the deploy script
 
@@ -437,6 +455,9 @@ summary at the end.
 # Deploy all optional components
 ./deploy-k8s.sh --ui --monitoring --dev-tools
 
+# Read the API and worker secrets from Vault
+./deploy-k8s.sh --vault
+
 # Skip the /etc/hosts update (if you manage it manually)
 ./deploy-k8s.sh --skip-hosts
 
@@ -450,18 +471,21 @@ The script runs these phases automatically:
 |---|---|
 | Pre-flight | Checks kubectl, cluster reachability, images in the k8s.io namespace, and that secrets.yaml is populated |
 | Namespace | Creates the `transaction-aggregation` namespace |
-| Secrets & ConfigMaps | Applies secrets and API ConfigMap; UI ConfigMap *(if `--ui`)* |
-| Data stores | Deploys PostgreSQL, Redis, Seq StatefulSets — waits for both PostgreSQL and Redis to be Ready |
-| API | Deploys Service, Deployment, Ingress, HPA, PDB — waits for the readiness probe (`/health`) |
+| Secrets & ConfigMaps | Applies secrets and the API and worker ConfigMaps; UI ConfigMap *(if `--ui`)* |
+| Data stores | Deploys PostgreSQL, Redis, Seq, Kafka and Keycloak, and waits for them |
+| Migrations | Runs the `db-migrate` Job and stops the deployment if it fails |
+| PgBouncer | Deploys the connection pooler |
+| API | Deploys Service, Deployment, Ingress, HPA, PDB (Vault patch with `--vault`) and waits for `/readiness` |
+| Worker | Deploys the worker, PDB and autoscaler (KEDA when available, otherwise CPU HPA) |
 | UI *(if `--ui`)* | Deploys Deployment, Service, Ingress — waits for readiness |
 | Network policies | Applies pod-level traffic rules |
 | Dev tools *(if `--dev-tools`)* | Deploys pgAdmin and Redis Commander |
 | Monitoring *(if `--monitoring`)* | Applies Prometheus RBAC then Deployment + Service + Ingress; Grafana ConfigMaps, PVC, Deployment, Service, Ingress |
 | /etc/hosts | Adds hostnames for all deployed services via sudo (skips entries already present) |
+| Smoke test | Runs `scripts/smoke-test.sh` against the deployed API |
 
-> EF Core migrations run automatically inside the API pod at startup (`ApplyMigrationsAsync`).
-> There is no separate migration step. `k8s/api/migration-job.yaml` exists as an alternative
-> if you ever need to decouple migrations from app startup.
+> Pods never migrate outside Development. The `db-migrate` Job applies every module's migrations
+> with the same image the API is about to run, as the schema owner, before any replica starts.
 
 ### Step 4 — Open the app
 
@@ -523,28 +547,15 @@ kubectl delete namespace transaction-aggregation
 ### Authentication
 
 Keycloak is the identity provider — this API never issues or verifies passwords itself, it only
-validates the JWTs Keycloak signs. All endpoints except registration require a bearer token:
+validates the JWTs Keycloak signs. Every endpoint except the webhook and health checks requires a
+bearer token carrying the `staff` or `admin` realm role (see [Logins](#logins)):
 
 ```
 Authorization: Bearer <token>
 ```
 
-**Register a new account:**
-
-```http
-POST /api/v1/customers
-Content-Type: application/json
-
-{
-  "name": "Jane Smith",
-  "email": "jane@example.com",
-  "password": "SecurePassword123!"
-}
-```
-
-This creates the user directly in Keycloak (via its Admin API, using the confidential
-`transaction-admin` service-account client) and a matching local `Customer` row using Keycloak's
-own user id — see `IKeycloakAdminClient`/`CreateCustomerCommandHandler`.
+Users are created in Keycloak (admin console → Users) and given a role there; the API has no
+registration endpoint.
 
 **Log in:**
 
@@ -563,43 +574,28 @@ end up with, put it in the `Authorization` header for subsequent requests.
 
 All routes are prefixed with `/api/v1`.
 
-#### Customers
+#### Transactions
 
-| Method | Path | Auth | Description |
+Readable by `staff` and `admin`, and read-only. The ledger is insert-only: no endpoint changes or
+deletes a transaction, its category included, and the database refuses such changes from anyone.
+Staff see only the banks in their `institutions` claim; another bank's transaction is a `404`.
+Every read can be narrowed with `institution` (a bank code) and `externalAccountId` (which
+requires `institution`).
+
+| Method | Path | Role | Description |
 |---|---|---|---|
-| `POST` | `/customers` | No | Register (provisions the user in Keycloak too) |
-| `GET` | `/customers` | Yes | List all (paginated) |
-| `GET` | `/customers/{id}` | Yes | Get by ID |
-| `GET` | `/customers/email/{email}` | Yes | Get by email |
-| `PUT` | `/customers/{id}` | Yes | Update name / email |
+| `GET` | `/transactions` | staff | Cursor-paginated, filtered, sorted list (see [Filter query parameters](#filter-query-parameters)) |
+| `GET` | `/transactions/{id}` | staff | Get by ID, with its bank, account and the bank's metadata |
+| `GET` | `/transactions/summary` | staff | Income / expenses / spend per category / monthly breakdown |
+| `GET` | `/transactions/aggregates/institutions` | staff | Totals and account count per bank, then per account |
+| `GET` | `/banks` | staff | The bank directory: code, display name, colour, active, last delivery |
+| `GET` | `/transactions/aggregates/categories` | staff | Spending or income per category, with share |
+| `GET` | `/transactions/aggregates/cash-flow` | staff | Income / expenses / net per day, week or month |
+| `GET` | `/transactions/aggregates/comparison` | staff | Period against the previous equal period |
 
-> No account-deletion endpoint exists yet — see `docs/data-retention.md` for why
-> that's a real gap if a right-to-erasure obligation applies, not just a
-> documentation omission.
-
-#### Accounts (under a customer)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/customers/{id}/accounts` | Yes | List accounts |
-| `GET` | `/customers/{id}/accounts/{accountId}` | Yes | Get account |
-| `POST` | `/customers/{id}/accounts` | Yes | Create account |
-| `PATCH` | `/customers/{id}/accounts/{accountId}/deactivate` | Yes | Deactivate |
-
-#### Transactions (under a customer)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/customers/{id}/transactions/filter` | Yes | Paginated + filtered list |
-| `GET` | `/customers/{id}/transactions/summary` | Yes | Income / expenses / monthly breakdown |
-| `GET` | `/customers/{id}/transactions/export` | Yes | Download as CSV |
-
-#### Transactions (standalone)
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| `GET` | `/transactions/{id}` | Yes | Get by ID |
-| `PATCH` | `/transactions/{id}/categorize` | Yes | Override category |
+Aggregate periods are South African calendar days (`from`, `to`; default the last 12 months).
+Every aggregate is computed in one currency, `currency` (ISO 4217, default `ZAR`), so amounts in
+different currencies are never added together.
 
 #### Webhooks
 
@@ -609,9 +605,9 @@ button/endpoint.
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/webhooks/bank-aggregator/transactions` | API key (`X-Api-Key` header) | Aggregator pushes new transactions for one linked account |
+| `POST` | `/webhooks/bank-aggregator/transactions` | API key (`X-Api-Key` header) | Aggregator pushes new transactions for one account |
 
-Auth is an API key, not a customer's JWT — this is a server-to-server call with no logged-in
+Auth is an API key, not a user's JWT — this is a server-to-server call with no logged-in
 user involved. Sources and their keys are **database rows, not config** — a `WebhookSource` per
 source, managed live through the admin UI (`/admin/webhook-sources`, staff with the Keycloak
 `admin` realm role only) or its backing API (`/api/v1/admin/webhook-sources`). Only a SHA-256
@@ -620,14 +616,11 @@ rotated, and can't be retrieved afterwards. Keys are per-source, not one shared 
 source's key leaks, only that entry needs rotating (from the UI, no redeploy), and whichever key
 a request presents tells the API which source it actually came from (logged as `SourceName` on
 every ingest — see `WebhookApiKeyEndpointFilter`/`ReceiveBankTransactionsCommand`), not just "someone
-with a valid key." The payload identifies the linked account by `externalAccountId`; the API
-resolves it to the matching (active) `BankLink` to find which customer/internal account it
-belongs to. **Each source is scoped to the institutions it serves** (`authorizedInstitutions`,
-required when a source is created): a delivery is only ever applied to links at those
-institutions, and one naming an account at any other institution is dead-lettered and audited
-([ADR-0013](docs/adr/0013-webhook-source-institution-scoping.md)). The body is versioned
-(`schemaVersion`, default 1); see [docs/event-contracts.md](docs/event-contracts.md) for the
-full contract and its evolution rules:
+with a valid key." **Each source is one bank**, so the key also decides which
+bank the transactions belong to. The payload names the account as the bank identifies it
+(`externalAccountId`), and may name the bank (`institution`), which must then be the key's bank:
+anything else is a 400 at the webhook, or dead-lettered and audited if it gets as far as processing. The body is versioned
+(`schemaVersion`, current and default 2, and 1 is still accepted):
 
 ```http
 POST /api/v1/webhooks/bank-aggregator/transactions
@@ -635,7 +628,7 @@ X-Api-Key: <a key from /admin/webhook-sources>
 Content-Type: application/json
 
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "externalAccountId": "acc_123",
   "transactions": [
     { "id": "txn_abc", "amount": -150.00, "currency": "ZAR",
@@ -651,46 +644,25 @@ Validation failures are `400` ProblemDetails with per-field messages under `erro
 and every response carries an `X-Correlation-Id` header (the caller's own when it is a short
 `[A-Za-z0-9._-]` token, otherwise the trace id) that ties it to the logs.
 
-#### Transaction status and totals
+#### Posted, pending and the ledger
 
-The bank decides when a transaction is settled. `status` is optional on each transaction:
+Only posted transactions are recorded.
+`status` is optional on each transaction:
 
-| `status` | Stored as | Later |
-|---|---|---|
-| `posted`, or omitted | **Settled** | Replays are skipped as duplicates |
-| `pending` | **Pending** | When the same `id` arrives again as `posted`, the existing row is **settled in place**, taking the bank's posted `amount` and `date`. This is recorded as `transaction.settled`, not as a duplicate. A late `pending` for an already-settled row is ignored |
+| `status` | What happens |
+|---|---|
+| `posted`, or omitted | Recorded as a ledger entry, once. A replay is skipped as a duplicate, audited and alerted |
+| `pending` | Acknowledged, audited as `transaction.pending_skipped`, **not recorded**. A pending authorisation can still change (a tip is added) or vanish, and a ledger entry never changes. The posting arrives later as its own `posted` item and is recorded with the bank's posted amount and date |
 
-**One rule for every money figure** (`TransactionTotals` in the domain): income, expenses,
-net, spending by category and month, and account balances count **Settled** transactions
-only. Pending authorisations are reported next to them, never inside them:
-- `pendingIncome` / `pendingExpenses` on the summary and customer endpoints;
-- `pendingBalance` / `availableBalance` on accounts. Available = balance less pending
-  outflows; pending inflows aren't spendable yet.
-
-Rejected, Cancelled, Refunded, Expired and the review states (Approved, Flagged, Disputed)
-count toward neither.
-
-**Stuck pending transactions expire.** A bank sometimes drops an authorisation and never
-posts it. To stop such a row sitting in the pending figures and lowering the available
-balance forever, a background job (`PendingExpiryBackgroundService`) runs every
-`PendingExpiry:CheckIntervalMinutes` (default 60).
-- It marks a transaction **Expired** once it has been Pending for longer than
-  `PendingExpiry:ExpireAfterDays` (default 7). The clock starts from the later of the bank's
-  transaction date and when we received it.
-- Expired is our inference, not the bank's word, so a posting that arrives later still
-  settles the row. A late *pending* for an expired row is ignored.
-- Each expiry is audited as `transaction.expired` on the `system` channel, the affected
-  customers' cached totals are cleared, and `pending_transactions_expired_total` counts expiries.
-- It's safe with several replicas: an optimistic concurrency token on the row (Postgres
-  `xmin`) makes a batch that races ingestion or another replica roll back rather than
-  overwrite a posting.
-- Set `PendingExpiry:Enabled=false` to turn it off.
+So there is one rule for every money figure: income, expenses, net and every aggregate are sums
+of ledger entries in the requested currency. There is no pending state to settle, no expiry job
+and no concurrency token, because nothing in the ledger is ever updated. Rows written by the
+earlier pending lifecycle stay in the table untouched and are excluded from every read and index.
 
 #### Normalization
 
-Every delivery is normalized with the linked bank's profile before anything else looks at
-it — the bank link identifies the institution, so normalization runs right after the
-customer is resolved. Rules live in `normalization-rules.json` (overridable per environment
+Every delivery is normalized with its bank's profile before anything else looks at it. The
+source that delivered it (the key) selects the profile. Rules live in `normalization-rules.json` (overridable per environment
 like any configuration); `Default` applies to every bank, including ones with no profile,
 and a bank's profile under `Institutions` only adds to it.
 
@@ -713,13 +685,14 @@ webhook uses, so both channels share validation, the inbox write, and idempotenc
 value is the JSON body shown above. The key is optional (use `externalAccountId` to keep one
 account's batches ordered on one partition).
 
-- **Source:** set a **`source`** header to the name of a webhook source (created at
-  `/api/v1/admin/webhook-sources`). It must exist and be active, otherwise the record is
-  dead-lettered. Deactivating a source stops it on both channels. Kafka has no per-record
-  credential, so use topic ACLs to stop one producer claiming another's name.
-- A record **without** the header is recorded under `Kafka:SourceName` (default
-  `kafka-bank-aggregator`). That name isn't checked against the registry. Set
-  `Kafka:RequireSourceHeader=true` to dead-letter header-less records instead.
+- **Source and signature:** every record carries a **`source`** header naming an active
+  webhook source (created at `/api/v1/admin/webhook-sources`) and a **`signature`** header:
+  an ECDSA P-256 signature over the source, the idempotency key and the payload hash, made
+  with the source's private key (`KafkaRecordSignature` defines the signed bytes). The platform verifies it
+  against the public key registered with `PUT /api/v1/admin/webhook-sources/{id}/signing-key`.
+  A record with no source, no signature, or one that doesn't verify is dead-lettered and
+  audited as `unauthenticated`; there is no default source. Deactivating a source stops it on
+  both channels.
 
 - **Delivery:** at-least-once. An offset is committed only after the record is stored in the
   inbox or moved to the dead-letter topic.
@@ -727,21 +700,20 @@ account's batches ordered on one partition).
   by `Kafka:MaxRetryBackoffSeconds`), which pauses that partition until it succeeds.
 - **Records that can never succeed** (malformed JSON, failed validation, unknown source) go to
   **`bank-transactions.dlq`** with `dlq-reason` / `dlq-original-*` headers.
-- Topics are created on startup (`Kafka:CreateTopics`). The consumer only runs when
-  `ConnectionStrings:kafka` is set.
+- Topics are created on startup (`Kafka:CreateTopics`). The worker requires
+  `ConnectionStrings:kafka`, because it also publishes integration events; `Kafka:Enabled=false`
+  switches off only the inbound consumer.
+
+#### Integration events (outbound)
+
+Every ledger entry produces a **`TransactionRecorded` v1** event on the **`transaction-events`**
+topic. It is written to the outbox in the same transaction as the entry and published by the
+worker. It is keyed `{institution}:{externalAccountId}`, so one account's events stay in order,
+and it carries the `message-id`, `event-type`, `schema-version`, `occurred-at`, `traceparent`
+and `correlation-id` headers. Delivery is at least once; consumers deduplicate on `message-id`.
 
 Browse and produce test records in Kafka UI (http://localhost:8083 in both docker-compose and
 Aspire). From the host, the docker-compose broker is `localhost:9092`.
-
-#### Joint accounts
-
-A delivery is matched to customers by its `externalAccountId` through their active bank
-links. A joint account has one link per holder, all with the same `externalAccountId`,
-and **every holder receives the delivery**: each gets their own copy of each transaction,
-under their own account, with their own duplicate detection and settlement. All holders'
-copies commit together, so a retried delivery never finds one holder done and the other
-not. A holder who links later receives deliveries from then on; earlier history isn't
-backfilled.
 
 #### Idempotency and duplicate notifications
 
@@ -750,25 +722,28 @@ Duplicates are checked at two levels. Neither level fails the rest of a delivery
 | Level | Detected by | What happens |
 |---|---|---|
 | **Delivery** (same webhook call / Kafka record sent again) | `Idempotency-Key` HTTP header or `idempotency-key` Kafka header. Without one, the SHA-256 of the payload is used. Unique per source. | No second inbox row. The caller gets the original `inboxMessageId` with `isDuplicate: true`. If that original was dead-lettered, it's requeued with a fresh retry budget (`requeued: true`). The same key with a **different** payload is refused with `422` (`Inbox.IdempotencyKeyReused`; dead-lettered on Kafka), never acknowledged as a duplicate, because that would drop the new data. |
-| **Transaction** (external id already stored for the customer at that institution, or repeated inside one batch) | Unique index on `(CustomerId, SourceName, SourceExternalId)` plus a lookup before insert. External ids are only unique per bank, so the same id from two banks is two transactions. | Only the duplicates are skipped; every other transaction in the batch is stored. A concurrent insert that wins the race triggers a re-check and retry, not a dropped batch. |
+| **Transaction** (bank id already in the ledger for that account at that bank, or repeated inside one batch) | Unique partial index `IX_Transactions_Ledger_Key` on `(SourceName, ExternalAccountId, SourceExternalId)` (bank, account, bank id), plus a lookup before insert. The same id from another bank or account is a different transaction. | Only the duplicates are skipped; every other transaction in the batch is recorded. A concurrent insert that wins the race triggers a re-check and retry, not a dropped batch. |
 
 Every duplicate at either level:
 
 - increments `inbound_duplicates_total{source_name, level}`
-- writes a `DuplicateInboundDetected` outbox message. The outbox dispatcher logs it and, if
-  `NotificationOptions:DuplicateAlertWebhookUrl` is set, POSTs an alert there. Because this is
-  asynchronous and never throws, a failing alert channel can't block ingestion.
+- writes a `DuplicateInboundDetected` outbox message. The outbox dispatcher logs it (account id
+  masked) and, if `NotificationOptions:DuplicateAlertWebhookUrl` is set, POSTs an alert there.
+  It runs asynchronously, so a failing alert channel can't block ingestion. A failed alert is
+  retried by the outbox (408, 429, 5xx) or dead-lettered (other 4xx), never silently dropped.
+  The hook URL can embed a token, so it is never logged.
 
 #### Audit trail (admin)
 
-Every inbound delivery leaves an append-only trail in `audit."AuditEvents"` (the
-Audit module, see [ADR-0011](docs/adr/0011-audit-trail-for-inbound-data.md)). It records
-where the data came from (channel and source), when, how (the channel's own metadata),
-and what happened to it afterwards.
+Every inbound delivery and every administrative change leaves an append-only trail in
+`audit."AuditEvents"` (the Audit module).
+It records where the data came from (channel and source), when, how (the channel's own
+metadata), what happened to it afterwards, and for admin changes, who made them (`actor`, the
+admin's Keycloak subject id).
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/admin/audit/events` | Search, newest first. Filters: `channel`, `sourceName`, `eventType`, `externalAccountId`, `inboxMessageId`, `customerId`, `transactionId`, `externalTransactionId`, `from`, `to`, `pageNumber`, `pageSize` (max 200) |
+| `GET` | `/admin/audit/events` | Search, newest first. Filters: `channel`, `sourceName`, `eventType`, `actor`, `externalAccountId`, `inboxMessageId`, `transactionId`, `externalTransactionId`, `from`, `to`, `cursor`, `pageSize` (max 200), `includeTotal` |
 | `GET` | `/admin/audit/transactions/{id}/lineage` | One transaction's origin: channel, source, received/ingested times, and every event of the delivery that carried it |
 
 Requires the Keycloak `admin` realm role. There is no endpoint to edit or delete audit
@@ -786,26 +761,29 @@ the URL, so any view can be shared as a link.
 | `inbound.duplicate` / `inbound.requeued` | Replay of a stored / dead-lettered delivery | As above, plus `originalStatus` |
 | `inbound.rejected` | Failed validation, or malformed Kafka record (moved to the DLQ) | As above; reason in `detail` |
 | `inbound.unauthorized` | Webhook call with a missing or unknown API key (the key is never recorded) | Webhook metadata |
-| `inbound.processed` / `inbound.processing_failed` / `inbound.dead_lettered` | Inbox dispatcher outcome | `ingestedCount`, `duplicateCount` / `attempt`, `maxAttempts`, `nextAttemptAt` |
-| `transaction.ingested` / `transaction.duplicate_skipped` | Per transaction in a delivery | `bankLinkId`, `accountId`, `institution`, `amount`, `currency`, `status` |
-| `transaction.settled` | A pending (or expired) transaction the bank has now posted | `amount`, `previousStatus`, plus `pendingAmount` / `pendingDate` when the posting changed them |
-| `transaction.expired` | Pending past `PendingExpiry:ExpireAfterDays` with no posting (channel `system`) | `amount`, `currency`, `institution`, `pendingSince`, `cutoff` |
+| `inbound.processed` / `inbound.processing_failed` / `inbound.dead_lettered` | Inbox dispatcher outcome | `recordedCount`, `duplicateCount`, `pendingCount` / `attempt`, `maxAttempts`, `failureKind`, `nextAttemptAt` |
+| `transaction.ingested` | A ledger entry was recorded | `institution`, `amount`, `currency`, `category` |
+| `transaction.duplicate_skipped` | A posting already in the ledger (or repeated in the batch) | the bank id; reason in `detail` |
+| `transaction.pending_skipped` | A pending notice, acknowledged and not recorded | the bank id; reason in `detail` |
+| `admin.source_created` / `_updated` / `_key_rotated` / `_signing_key_registered` / `_activated` / `_deactivated` | An admin changed a bank source (channel `admin`, with `actor`) | the change, never key material |
 
-Events that describe a database change are queued through the transactional outbox in
-the same commit as that change, so they appear within one outbox poll (~5 s) and are
-never recorded for a change that rolled back. All events of one delivery share its
+Events that describe a database change are written in the same database transaction as
+that change, so they appear the moment it commits and are never recorded for a change that
+rolled back. All events of one delivery share its
 `inboxMessageId`; `traceId` links to the request's logs and traces in Seq.
 
 #### Admin — webhook sources
 
-Manages the `WebhookSource` rows above (who's allowed to call the webhook and with what key).
-Requires the Keycloak `admin` realm role — a customer JWT without it gets `403`.
+Manages the banks: the `WebhookSource` rows above, one per bank (who's allowed to call the
+webhook, with what key, and how the bank is shown). The UI's **Banks** page does all of this.
+Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/admin/webhook-sources` | List sources (never includes key material) |
-| `POST` | `/admin/webhook-sources` | Create a source: `{ "name", "authorizedInstitutions": ["FNB", "Absa"] }`. The response includes the API key once |
-| `PUT` | `/admin/webhook-sources/{id}/institutions` | Replace the institutions a source may deliver for: `{ "authorizedInstitutions": [...] }` |
+| `GET` | `/admin/webhook-sources` | List banks (never includes key material) |
+| `POST` | `/admin/webhook-sources` | Add a bank: `{ "code": "Nedbank", "displayName": "Nedbank", "color": "#007A4D" }`. The code (letters, digits, `-`, `_`) is fixed and stamped on its transactions. The response includes the API key once |
+| `PUT` | `/admin/webhook-sources/{id}` | Change a bank's display name and colour: `{ "displayName", "color" }` |
+| `PUT` | `/admin/webhook-sources/{id}/signing-key` | Register the bank's Kafka signing key (ECDSA P-256) |
 | `POST` | `/admin/webhook-sources/{id}/rotate` | Replace the key — old one stops working immediately |
 | `POST` | `/admin/webhook-sources/{id}/activate` | Re-enable a deactivated source |
 | `POST` | `/admin/webhook-sources/{id}/deactivate` | Disable without deleting (key stops authenticating) |
@@ -814,29 +792,32 @@ Requires the Keycloak `admin` realm role — a customer JWT without it gets `403
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/health` | No | Readiness — checks Postgres + Redis (Redis reports Degraded, not Unhealthy) |
-| `GET` | `/alive` | No | Liveness — self only (fast) |
-| `GET` | `/metrics` | No | Prometheus scrape endpoint |
+| `GET` | `/liveness` | No | Process is responsive (no dependency I/O) — liveness/startup probe |
+| `GET` | `/readiness` | No | Postgres reachable; Redis only degrades it (still 200); Seq never affects it |
+| `GET` | `/health` | No | Every check, detailed in Development |
+| `GET` | `/metrics` | No | Prometheus scrape endpoint — **port 9464 only** (`Metrics__Port`), never exposed publicly |
 
 ---
 
 ### Filter query parameters
 
-`GET /customers/{id}/transactions/filter` accepts:
+`GET /transactions` accepts:
 
 | Parameter | Type | Description |
 |---|---|---|
-| `pageNumber` | int | Default `1` |
+| `cursor` | string | `nextCursor` from the previous page; omit for the first page |
 | `pageSize` | int | Default `20`, max `100` |
+| `includeTotal` | bool | Default `false`; adds `totalCount`, counted up to 10,000 (`totalCountCapped: true` beyond that) |
 | `fromDate` | datetime | Transaction date lower bound |
 | `toDate` | datetime | Transaction date upper bound |
 | `category` | int | `0`=Uncategorized `1`=Groceries `2`=Dining `3`=Transportation `4`=Entertainment `5`=Utilities `6`=Housing `7`=Healthcare `8`=Income `9`=Transfer `10`=Shopping `11`=Subscriptions |
-| `status` | int | `0`=Pending `1`=Approved `2`=Rejected `3`=Flagged `4`=Settled `5`=Refunded `6`=Disputed `7`=Cancelled |
+| `currency` | string | ISO 4217 code, upper case (e.g. `ZAR`, `USD`) |
 | `minAmount` | decimal | Absolute amount lower bound |
 | `maxAmount` | decimal | Absolute amount upper bound |
-| `searchTerm` | string | Matches description or source name |
-| `source` | string | Institution the transaction came from, e.g. `FNB`, `Absa`, `Capitec`, `StandardBank` |
-| `sortBy` | string | `date` / `amount` / `category` / `status` / `description` |
+| `searchTerm` | string | 3–100 characters; case-insensitive substring of the description (trigram index) |
+| `institution` | string | Bank code (the source that delivered it), e.g. `FNB`, `Absa`, `Capitec`, `StandardBank` |
+| `externalAccountId` | string | The account, as the bank identifies it (requires `institution`) |
+| `sortBy` | string | `date` (default) or `amount`, the two sorts backed by an index |
 | `sortDescending` | bool | Default `true` |
 
 ---
@@ -845,7 +826,7 @@ Requires the Keycloak `admin` realm role — a customer JWT without it gets `403
 
 | Scope | Limit | Notes |
 |---|---|---|
-| Per endpoint group | 60 req / min per client | `/customers`, `/transactions`, `/accounts` |
+| Per endpoint group | 60 req / min per client | `/transactions`, `/admin/...` |
 | Global (burst ceiling) | 100 req / min per client | All routes combined |
 
 Returns `HTTP 429` with a `Retry-After` header when exceeded.
@@ -856,19 +837,30 @@ Counters live in Redis and are shared across all replicas.
 
 ## Configuration reference
 
+Configuration is layered, later sources winning: `appsettings.json` →
+`appsettings.{Environment}.json` → **`secrets.json`** → environment variables → command line.
+Non-secret settings are tracked in `appsettings*.json`. Secrets live in a `secrets.json` next to
+each host: git-ignored locally (copy `secrets.template.json`), and rendered by the Vault Agent in
+clusters at the path in `Secrets:FilePath`, with the same keys
+. Code reads both the same way, by key.
+A configured `Secrets:FilePath` that does not exist stops the host at startup.
+
 Environment variables use `__` as a section separator:
 `ConnectionStrings__transactiondb` → `ConnectionStrings:transactiondb`.
 
-| Key | Description | Default (Docker Compose) |
+| Key | Description | Where it comes from (compose) |
 |---|---|---|
-| `ConnectionStrings:transactiondb` | PostgreSQL connection string | `Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=postgres` |
+| `ConnectionStrings:transactiondb` | PostgreSQL connection string (secret) | built from `POSTGRES_PASSWORD` in `.env` |
+| `ConnectionStrings:kafka` | Kafka bootstrap servers (worker: required) | `kafka:9093` |
+| `Secrets:FilePath` | Absolute path of the secrets file (clusters: the Vault-rendered file) | not set: `secrets.json` in the content root, optional |
+| `Kafka:IntegrationEventsTopic` | Topic for `TransactionRecorded` events | `transaction-events` |
+| `NotificationOptions:DuplicateAlertWebhookUrl` | Optional alert hook (secret: it embeds a token) | `DUPLICATE_ALERT_WEBHOOK_URL` in `.env` |
 | `ConnectionStrings:redis` | Redis connection string | `redis:6379` |
 | `ConnectionStrings:seq` | Seq ingestion URL | `http://seq:80` |
 | `Keycloak:Authority` | Keycloak server root the API itself calls (in-cluster/compose service address) | `http://keycloak:8080` |
 | `Keycloak:PublicIssuer` | Full realm URL the browser uses — must match the `iss` claim on tokens | `http://localhost:8081/realms/transaction-aggregation` |
 | `Keycloak:Realm` | Keycloak realm name | `transaction-aggregation` |
 | `Keycloak:Audience` | Expected token audience | `transaction-ui` |
-| `Keycloak:AdminClientId` / `AdminClientSecret` | Confidential service-account client used to provision customers | Set in `appsettings.Development.json` / k8s Secret |
 | `ASPNETCORE_ENVIRONMENT` | `Development` / `Production` | `Development` |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP collector for traces (optional) | not set |
 
@@ -936,8 +928,8 @@ kubectl describe  pod -n transaction-aggregation \
   -l app.kubernetes.io/name=transaction-api
 ```
 
-The readiness probe calls `/health` (checks Postgres + Redis). If either
-dependency is unhealthy the pod waits until they recover.
+The readiness probe calls `/readiness` (Postgres; Redis only degrades it). If Postgres is
+unreachable the pod waits out of rotation until it recovers.
 
 Migrations run in the `db-migrate` Job before the API rolls out, not inside API pods.
 If the deploy script stopped at "Database migrations", read the Job's logs:

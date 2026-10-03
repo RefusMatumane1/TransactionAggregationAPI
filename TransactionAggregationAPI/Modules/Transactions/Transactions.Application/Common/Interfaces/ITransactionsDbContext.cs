@@ -1,5 +1,6 @@
-
 using Microsoft.EntityFrameworkCore;
+using Modules.Audit.Contracts;
+using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Domain.Entities;
 
 namespace Modules.Transactions.Application.Common.Interfaces
@@ -8,14 +9,16 @@ namespace Modules.Transactions.Application.Common.Interfaces
     {
         DbSet<Transaction> Transactions { get; }
 
+        DbSet<DailyTotal> DailyTotals { get; }
+
+        DbSet<AggregationCheckpoint> AggregationCheckpoints { get; }
+
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-        /// <summary>
-        /// Forgets every change a failed SaveChangesAsync left behind — this context's tracked
-        /// entities and any Outbox rows still pending on the shared MessagingDbContext (added
-        /// by the caller or by domain-event handlers during that save) — so a retry, or the
-        /// next unit of work in the same scope, doesn't re-submit them.
-        /// </summary>
+        // Staged events are written to the audit trail inside the next SaveChangesAsync's database
+        // transaction, so they commit (or roll back) with the changes they describe.
+        void StageAudit(IEnumerable<AuditEventRecord> events);
+
         void DiscardPendingChanges();
     }
 }

@@ -1,16 +1,23 @@
 using Modules.WebhookSources.Application.Features.CreateWebhookSource;
-using Modules.WebhookSources.Application.Features.UpdateWebhookSourceInstitutions;
+using Modules.WebhookSources.Application.Features.RegisterWebhookSourceSigningKey;
+using Modules.WebhookSources.Application.Features.UpdateWebhookSource;
+using Modules.WebhookSources.Domain;
 
 namespace Modules.WebhookSources.Presentation.Requests
 {
-    /// <param name="AuthorizedInstitutions">The institutions this source may deliver transactions for — required, at least one.</param>
-    public sealed record CreateWebhookSourceRequest(string Name, IReadOnlyList<string>? AuthorizedInstitutions)
+    public sealed record CreateWebhookSourceRequest(string? Code, string? DisplayName, string? Color)
     {
-        internal CreateWebhookSourceCommand ToCommand() => new(Name, AuthorizedInstitutions ?? []);
+        internal CreateWebhookSourceCommand ToCommand() =>
+            new(Code ?? string.Empty, DisplayName ?? string.Empty, Color ?? WebhookSource.DefaultColor);
     }
 
-    public sealed record UpdateWebhookSourceInstitutionsRequest(IReadOnlyList<string>? AuthorizedInstitutions)
+    public sealed record UpdateWebhookSourceRequest(string? DisplayName, string? Color)
     {
-        internal UpdateWebhookSourceInstitutionsCommand ToCommand(Guid id) => new(id, AuthorizedInstitutions ?? []);
+        internal UpdateWebhookSourceCommand ToCommand(Guid id) => new(id, DisplayName ?? string.Empty, Color ?? string.Empty);
+    }
+
+    public sealed record RegisterWebhookSourceSigningKeyRequest(string? PublicKey)
+    {
+        internal RegisterWebhookSourceSigningKeyCommand ToCommand(Guid id) => new(id, PublicKey ?? string.Empty);
     }
 }

@@ -8,16 +8,10 @@
     <!-- Core -->
     <PackageVersion Include="Asp.Versioning.Http" Version="10.0.0" />
     <PackageVersion Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.0.0" />
-    <PackageVersion Include="Bogus" Version="35.6.5" />
-    <PackageVersion Include="Mapster.DependencyInjection" Version="10.0.6" />
     <PackageVersion Include="MediatR" Version="14.1.0" />
-    <PackageVersion Include="Mapster" Version="10.0.6" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
     <!-- Microsoft / EF -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
-    <PackageVersion Include="Microsoft.AspNetCore.Http" Version="2.3.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.3.9" />
-    <PackageVersion Include="Microsoft.AspNetCore.Http.Extensions" Version="2.3.9" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.5" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.5" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.InMemory" Version="10.0.5" />
@@ -25,9 +19,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.6" />
     <PackageVersion Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="10.0.6" />
     <PackageVersion Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.12" />
@@ -39,21 +31,14 @@
     <!-- Resilience -->
     <!-- Messaging -->
     <PackageVersion Include="Confluent.Kafka" Version="2.15.1" />
-    <PackageVersion Include="Polly" Version="8.6.6" />
-    <PackageVersion Include="Polly.Extensions.Http" Version="3.0.0" />
     <!-- Serilog -->
     <PackageVersion Include="prometheus-net.AspNetCore" Version="8.2.1" />
-    <PackageVersion Include="Serilog" Version="4.3.1" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.Seq" Version="9.0.0" />
     <!-- Health Checks -->
-    <PackageVersion Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Redis" Version="9.0.0" />
-    <PackageVersion Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
     <!-- API Versioning -->
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Versioning" Version="5.1.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Versioning.ApiExplorer" Version="5.1.0" />
     <!-- OpenAPI / Scalar -->
     <PackageVersion Include="Scalar.AspNetCore" Version="2.13.13" />
     <!-- Aspire -->
@@ -70,7 +55,6 @@
     <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.4.0" />
     <!-- OpenTelemetry -->
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.3" />
-    <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.9.0" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.15.3" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.1" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.15.0" />

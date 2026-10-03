@@ -4,10 +4,8 @@
 
 namespace Modules.Transactions.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddPasswordHashToCustomer : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<string>(
@@ -19,7 +17,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                 defaultValue: "");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

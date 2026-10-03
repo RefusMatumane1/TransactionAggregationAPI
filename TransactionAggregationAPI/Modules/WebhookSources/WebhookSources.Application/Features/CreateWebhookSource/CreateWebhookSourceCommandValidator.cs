@@ -7,8 +7,9 @@ namespace Modules.WebhookSources.Application.Features.CreateWebhookSource
     {
         public CreateWebhookSourceCommandValidator()
         {
-            RuleFor(x => x.Name).NotEmpty().MaximumLength(200);
-            RuleFor(x => x.AuthorizedInstitutions).AuthorizedInstitutions();
+            RuleFor(x => x.Code).BankCode();
+            RuleFor(x => x.DisplayName).BankDisplayName();
+            RuleFor(x => x.Color).BankColor();
         }
     }
 }

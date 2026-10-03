@@ -8,27 +8,29 @@ metadata:
     app.kubernetes.io/component: config
 data:
   # ── ASP.NET Core ──────────────────────────────────────────────────────
-  # This ConfigMap (and the plain `kubectl apply` workflow k8s/README.md documents
-  # for it) is the single, shared path used regardless of target environment —
-  # there is no per-environment templating here (that's what k8s/helm/ is for,
-  # once it has actual templates — see docs/production-readiness-checklist.md).
+  # One ConfigMap for every environment; there is no per-environment templating.
+  # Settings only the worker reads (Kafka, inbox/outbox, archive, alerts) live in
+  # worker/configmap.yaml; this one is shared by the API and the worker.
   # It must therefore default to a safe, non-Development value: Production gates
   # Program.cs's IsDevelopment()-conditioned behavior correctly (no demo-data
   # seeding, no Swagger UI exposure, no detailed EF Core errors, no localhost CORS
   # fallback). Only override this to "Development" for a genuinely local/throwaway
   # cluster where those trade-offs are wanted.
   ASPNETCORE_ENVIRONMENT: "Production"
-  ASPNETCORE_HTTP_PORTS: "8080"
+  # 8080 serves traffic; 9464 serves /metrics only (see Metrics__Port). The Service/Ingress
+  # publish 8080 alone.
+  ASPNETCORE_HTTP_PORTS: "8080;9464"
+  Metrics__Port: "9464"
 
   # In-cluster Keycloak currently serves plain HTTP (see k8s/keycloak —
   # KC_HTTP_ENABLED), with TLS terminated at the Ingress for external traffic only;
   # NetworkPolicy isolates the namespace for internal hops. Explicitly false here
   # rather than left to default from ASPNETCORE_ENVIRONMENT, since "is this
   # Production" and "does this specific hop need HTTPS" are different questions —
-  # see Program.cs. Revisit if in-cluster TLS (e.g. a service mesh) is introduced.
+  # see AuthenticationSetup.cs. Revisit if in-cluster TLS (e.g. a service mesh) is introduced.
   Keycloak__RequireHttpsMetadata: "false"
 
-  # ── CORS (production only — Program.cs falls back to a localhost allow-list in
+  # ── CORS (production only — ApiPlatformSetup.cs falls back to a localhost allow-list in
   # development) ───────────────────────────────────────────────────────────
   # Set to the real deployed SPA origin(s); an empty/unset value here means production
   # gets no CORS-allowed origins at all, not a silent wildcard.
@@ -41,35 +43,14 @@ data:
   POSTGRES_HOST: "postgres"
   POSTGRES_PORT: "5432"
   POSTGRES_DB: "transactiondb"
+  # The PostgreSQL superuser, used only by the postgres StatefulSet itself (and its init
+  # script, which creates the tagg_migrator and tagg_app roles). Applications never use it.
   POSTGRES_USER: "postgres"
 
   # ── Redis ─────────────────────────────────────────────────────────────
   # Full Aspire/StackExchange.Redis connection string.
   # abortConnect=false prevents startup failures when Redis is briefly unavailable.
   REDIS_CONNECTION_STRING: "redis:6379,abortConnect=false"
-
-  # ── Kafka (second inbound channel for bank transactions) ──────────────
-  # Bootstrap servers for ConnectionStrings__kafka (mapped in worker/deployment.yaml). The
-  # consumer stores each record in the inbox exactly like the REST webhook does — see
-  # BankTransactionsKafkaConsumer. Remove the ConnectionStrings__kafka mapping (or set
-  # Kafka__Enabled to "false") to run REST-only without a broker. The group id keeps its
-  # historical "-api" name so offsets committed before the worker split still apply.
-  KAFKA_BOOTSTRAP_SERVERS: "kafka:9093"
-  Kafka__Enabled: "true"
-  Kafka__BankTransactionsTopic: "bank-transactions"
-  Kafka__DeadLetterTopic: "bank-transactions.dlq"
-  # One consumer group across all worker replicas: partitions are split between pods, so
-  # TopicPartitions caps how many replicas actually consume in parallel.
-  Kafka__GroupId: "transaction-aggregation-api"
-  # SourceName applies only to records without a "source" header; a header must name an
-  # active WebhookSource (admin UI) or the record is dead-lettered. Set RequireSourceHeader
-  # to "true" once every producer sends the header.
-  Kafka__SourceName: "kafka-bank-aggregator"
-  Kafka__RequireSourceHeader: "false"
-  Kafka__CreateTopics: "true"
-  Kafka__TopicPartitions: "6"
-  Kafka__TopicReplicationFactor: "1"
-  Kafka__MaxRetryBackoffSeconds: "60"
 
   # ── Seq structured logging ────────────────────────────────────────────
   SEQ_URL: "http://seq:80"
@@ -78,7 +59,7 @@ data:
   # Authority: reached by the API itself — in-cluster service DNS, reliable, no dependency on
   # host-file hostnames. PublicIssuer: reached by the browser via the Traefik ingress; this is
   # what appears as the `iss` claim on every token, so it's validated separately from where the
-  # API fetches signing keys from. See Program.cs and k8s/keycloak/deployment.yaml (KC_HOSTNAME).
+  # API fetches signing keys from. See AuthenticationSetup.cs and k8s/keycloak/deployment.yaml (KC_HOSTNAME).
   Keycloak__Authority: "http://keycloak:8080"
   Keycloak__PublicIssuer: "http://keycloak.transaction.local/realms/transaction-aggregation"
   Keycloak__Realm: "transaction-aggregation"
@@ -89,47 +70,9 @@ data:
   # OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4317"
   # OTEL_SERVICE_NAME: "transactionaggregationapi"
 
-  # ── Bank account aggregator (real FNB/Standard Bank/Absa/Capitec linking) ─
-  # Backs only the OAuth consent handshake (Initiate/CompleteBankLink) — the aggregator pushes
-  # transaction data to us via /api/v1/webhooks/bank-aggregator/transactions (see
-  # WebhookEndpoints), it isn't pulled through these endpoints. Confirm these paths against your
-  # chosen aggregator's current API docs. Webhook auth keys are no longer config at all — they're
-  # WebhookSource rows in the database, managed live via /api/v1/admin/webhook-sources (the admin
-  # UI) — see WebhookSourceEndpoints/ApiKeyEndpointFilter.
-  BankAggregator__AuthorizeEndpoint: ""
-  BankAggregator__TokenEndpoint: ""
-  BankAggregator__AccountEndpoint: ""
-  BankAggregator__RedirectUri: "https://api.transaction.local/api/v1/bank-links/callback"
-
-  # ── Notification options ───────────────────────────────────────────────
-  # Where DuplicateInboundDetected alerts are POSTed; empty = log + metric only.
-  NotificationOptions__DuplicateAlertWebhookUrl: ""
-
-  # ── Transactional outbox dispatcher ────────────────────────────────────
-  # Polls OutboxMessages for cache-invalidation/analytics/notification side effects queued by
-  # the ingestion path — see OutboxDispatcherBackgroundService. Safe to run multiple replicas;
-  # claiming uses Postgres FOR UPDATE SKIP LOCKED so they drain the queue in parallel.
-  Outbox__PollIntervalSeconds: "5"
-  Outbox__BatchSize: "50"
-  Outbox__MaxAttempts: "5"
-
-  # ── Inbound webhook inbox dispatcher ────────────────────────────────────
-  # Polls InboxMessages for raw webhook payloads queued by ReceiveBankTransactionsCommandHandler
-  # — see InboxDispatcherBackgroundService. Same multi-replica-safe claim as the outbox.
-  Inbox__PollIntervalSeconds: "5"
-  Inbox__BatchSize: "50"
-  Inbox__MaxAttempts: "5"
-
-  # ── Pending-transaction expiry ─────────────────────────────────────────
-  # Pending authorisations the bank never posts are expired after this many days so they
-  # stop counting toward pending/available figures (a late posting still settles them).
-  # Safe with multiple replicas — see PendingExpiryBackgroundService.
-  PendingExpiry__Enabled: "true"
-  PendingExpiry__ExpireAfterDays: "7"
-  PendingExpiry__CheckIntervalMinutes: "60"
-  PendingExpiry__BatchSize: "200"
-
   # ── Serilog (minimal; code wires Seq from ConnectionStrings:seq) ───────
+  # Cached aggregate reads live until the next scheduled rebuild clears them (worker Aggregation__IntervalMinutes).
+  Caching__ScopeExpirationMinutes__transaction-aggregates: "55"
   Serilog__MinimumLevel__Default: "Information"
   Serilog__MinimumLevel__Override__Microsoft: "Warning"
   Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore: "Warning"

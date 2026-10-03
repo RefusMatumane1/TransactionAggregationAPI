@@ -4,10 +4,8 @@
 
 namespace Modules.Transactions.Infrastructure.Migrations
 {
-    /// <inheritdoc />
     public partial class AddOutboxMessages : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
@@ -36,7 +34,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
                 columns: new[] { "Status", "NextAttemptAt" });
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(

@@ -1,6 +1,6 @@
+using BuildingBlocks.Application.Logging;
 using Serilog.Core;
 using Serilog.Events;
-using SharedKernel.Common.Attributes;
 using System.Reflection;
 
 namespace TransactionAggregation.Hosting.Logging

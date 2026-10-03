@@ -1,55 +1,58 @@
+using BuildingBlocks.Application.Logging;
 using FluentAssertions;
-using Modules.Customers.Application.Features.CreateCustomer;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using TransactionAggregation.Hosting.Logging;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Logging;
-
-public class SensitiveDataDestructuringPolicyTests
+namespace TransactionAggregation.Tests.Unit.Logging
 {
-    private sealed class CapturingSink : ILogEventSink
+    public class SensitiveDataDestructuringPolicyTests
     {
-        public LogEvent? LastEvent { get; private set; }
-        public void Emit(LogEvent logEvent) => LastEvent = logEvent;
-    }
+        private sealed record SignIn(string Email, [property: Sensitive] string Password);
 
-    [Fact]
-    public void Destructure_RedactsPropertyMarkedSensitive()
-    {
-        var sink = new CapturingSink();
-        var logger = new LoggerConfiguration()
-            .Destructure.With<SensitiveDataDestructuringPolicy>()
-            .WriteTo.Sink(sink)
-            .CreateLogger();
+        private sealed class CapturingSink : ILogEventSink
+        {
+            public LogEvent? LastEvent { get; private set; }
+            public void Emit(LogEvent logEvent) => LastEvent = logEvent;
+        }
 
-        var command = new CreateCustomerCommand("user@example.com", "Test User", "SuperSecret123");
+        [Fact]
+        public void Destructure_RedactsPropertyMarkedSensitive()
+        {
+            var sink = new CapturingSink();
+            var logger = new LoggerConfiguration()
+                .Destructure.With<SensitiveDataDestructuringPolicy>()
+                .WriteTo.Sink(sink)
+                .CreateLogger();
 
-        logger.Information("Request {@Request}", command);
+            var command = new SignIn("user@test.com", "SuperSecret123");
 
-        sink.LastEvent.Should().NotBeNull();
-        var structure = (StructureValue)sink.LastEvent!.Properties["Request"];
-        var passwordProperty = structure.Properties.Single(p => p.Name == "Password");
-        var passwordValue = ((ScalarValue)passwordProperty.Value).Value as string;
+            logger.Information("Request {@Request}", command);
 
-        passwordValue.Should().Be("***REDACTED***");
-        sink.LastEvent.RenderMessage().Should().NotContain("SuperSecret123");
-    }
+            sink.LastEvent.Should().NotBeNull();
+            var structure = (StructureValue)sink.LastEvent!.Properties["Request"];
+            var passwordProperty = structure.Properties.Single(p => p.Name == "Password");
+            var passwordValue = ((ScalarValue)passwordProperty.Value).Value as string;
 
-    [Fact]
-    public void Destructure_LeavesTypesWithNoSensitivePropertiesUntouched()
-    {
-        var sink = new CapturingSink();
-        var logger = new LoggerConfiguration()
-            .Destructure.With<SensitiveDataDestructuringPolicy>()
-            .WriteTo.Sink(sink)
-            .CreateLogger();
+            passwordValue.Should().Be("***REDACTED***");
+            sink.LastEvent.RenderMessage().Should().NotContain("SuperSecret123");
+        }
 
-        logger.Information("Plain {@Value}", new { Name = "hello" });
+        [Fact]
+        public void Destructure_LeavesTypesWithNoSensitivePropertiesUntouched()
+        {
+            var sink = new CapturingSink();
+            var logger = new LoggerConfiguration()
+                .Destructure.With<SensitiveDataDestructuringPolicy>()
+                .WriteTo.Sink(sink)
+                .CreateLogger();
 
-        sink.LastEvent.Should().NotBeNull();
-        sink.LastEvent!.RenderMessage().Should().Contain("hello");
+            logger.Information("Plain {@Value}", new { Name = "hello" });
+
+            sink.LastEvent.Should().NotBeNull();
+            sink.LastEvent!.RenderMessage().Should().Contain("hello");
+        }
     }
 }

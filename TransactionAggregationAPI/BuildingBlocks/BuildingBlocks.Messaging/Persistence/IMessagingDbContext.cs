@@ -1,3 +1,4 @@
+using BuildingBlocks.Messaging.Archiving;
 using BuildingBlocks.Messaging.Inbox;
 using BuildingBlocks.Messaging.Outbox;
 using Microsoft.EntityFrameworkCore;
@@ -8,13 +9,14 @@ namespace BuildingBlocks.Messaging.Persistence
     {
         DbSet<InboxMessage> InboxMessages { get; }
         DbSet<OutboxMessage> OutboxMessages { get; }
+        DbSet<ArchivedInboxMessage> ArchivedInboxMessages { get; }
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
         Task<List<OutboxMessage>> ClaimOutboxMessagesAsync(
-            int batchSize, TimeSpan claimTimeout, CancellationToken cancellationToken = default);
+            int batchSize, TimeSpan claimTimeout, int maxAttempts, CancellationToken cancellationToken = default);
 
         Task<List<InboxMessage>> ClaimInboxMessagesAsync(
-            int batchSize, TimeSpan claimTimeout, CancellationToken cancellationToken = default);
+            int batchSize, TimeSpan claimTimeout, int maxAttempts, CancellationToken cancellationToken = default);
     }
 }

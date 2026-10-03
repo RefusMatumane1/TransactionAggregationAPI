@@ -1,0 +1,5 @@
+10020	FAIL	(Anti-clickjacking header missing - X-Frame-Options is set on every response)
+10021	FAIL	(X-Content-Type-Options missing - set on every response)
+10023	FAIL	(Information disclosure - debug error messages)
+90022	FAIL	(Application error disclosure - stack traces must never reach clients)
+10037	FAIL	(Server leaks information via X-Powered-By)

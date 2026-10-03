@@ -1,0 +1,7 @@
+<span class="bank-badge" title="@Bank.Code">
+    <span class="bank-dot" style="background:@Bank.Color"></span>@Bank.DisplayName
+</span>
+
+@code {
+    [Parameter, EditorRequired] public BankModel Bank { get; set; } = null!;
+}

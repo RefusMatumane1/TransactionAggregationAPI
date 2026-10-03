@@ -2,120 +2,114 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Services;
-using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
-using SharedKernel.Common.ValueObjects;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
-namespace TransactionAggregation.Tests.Unit.Services;
-
-public class TransactionCategorizationServiceTests
+namespace TransactionAggregation.Tests.Unit.Services
 {
-    private static readonly CategorizationOptions DefaultOptions = new()
+    public class TransactionCategorizationServiceTests
     {
-        Keywords = new Dictionary<string, string>
+        private static readonly CategorizationOptions DefaultOptions = new()
         {
-            ["walmart"] = "Groceries",
-            ["kroger"] = "Groceries",
-            ["grocery"] = "Groceries",
-            ["restaurant"] = "Dining",
-            ["starbucks"] = "Dining",
-            ["uber"] = "Transportation",
-            ["lyft"] = "Transportation",
-            ["netflix"] = "Entertainment",
-            ["spotify"] = "Entertainment",
-            ["electric"] = "Utilities",
-            ["water bill"] = "Utilities",
-            ["rent"] = "Housing",
-            ["mortgage"] = "Housing"
+            Keywords = new Dictionary<string, string>
+            {
+                ["walmart"] = "Groceries",
+                ["kroger"] = "Groceries",
+                ["grocery"] = "Groceries",
+                ["restaurant"] = "Dining",
+                ["starbucks"] = "Dining",
+                ["uber"] = "Transportation",
+                ["lyft"] = "Transportation",
+                ["netflix"] = "Entertainment",
+                ["spotify"] = "Entertainment",
+                ["electric"] = "Utilities",
+                ["water bill"] = "Utilities",
+                ["rent"] = "Housing",
+                ["mortgage"] = "Housing"
+            }
+        };
+
+        private readonly TransactionCategorizationService _sut =
+            new(Options.Create(DefaultOptions));
+
+        private static Transaction MakeTransaction(decimal amount, string description)
+        {
+            return TestTransactions.Create(amount, description);
         }
-    };
 
-    private readonly TransactionCategorizationService _sut =
-        new(Options.Create(DefaultOptions));
+        [Theory]
+        [InlineData("walmart grocery run", TransactionCategory.Groceries)]
+        [InlineData("kroger checkout", TransactionCategory.Groceries)]
+        [InlineData("restaurant bill", TransactionCategory.Dining)]
+        [InlineData("starbucks morning coffee", TransactionCategory.Dining)]
+        [InlineData("uber ride home", TransactionCategory.Transportation)]
+        [InlineData("lyft to airport", TransactionCategory.Transportation)]
+        [InlineData("netflix monthly subscription", TransactionCategory.Entertainment)]
+        [InlineData("spotify premium", TransactionCategory.Entertainment)]
+        [InlineData("electric company payment", TransactionCategory.Utilities)]
+        [InlineData("water bill", TransactionCategory.Utilities)]
+        [InlineData("rent payment", TransactionCategory.Housing)]
+        [InlineData("mortgage instalment", TransactionCategory.Housing)]
+        public void Categorize_KeywordMatch_ReturnsCorrectCategory(
+            string description, TransactionCategory expected)
+        {
+            var tx = MakeTransaction(-100m, description);
 
-    private static Transaction MakeTransaction(decimal amount, string description)
-    {
-        return Transaction.Create(
-            CustomerId.Create(),
-            Money.Create(amount, "ZAR"),
-            description,
-            TransactionCategory.Uncategorized,
-            TransactionSource.Create("test", Guid.NewGuid().ToString()));
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, bankCategory: null);
 
-    [Theory]
-    [InlineData("walmart grocery run", TransactionCategory.Groceries)]
-    [InlineData("kroger checkout", TransactionCategory.Groceries)]
-    [InlineData("restaurant bill", TransactionCategory.Dining)]
-    [InlineData("starbucks morning coffee", TransactionCategory.Dining)]
-    [InlineData("uber ride home", TransactionCategory.Transportation)]
-    [InlineData("lyft to airport", TransactionCategory.Transportation)]
-    [InlineData("netflix monthly subscription", TransactionCategory.Entertainment)]
-    [InlineData("spotify premium", TransactionCategory.Entertainment)]
-    [InlineData("electric company payment", TransactionCategory.Utilities)]
-    [InlineData("water bill", TransactionCategory.Utilities)]
-    [InlineData("rent payment", TransactionCategory.Housing)]
-    [InlineData("mortgage instalment", TransactionCategory.Housing)]
-    public async Task CategorizeAsync_KeywordMatch_ReturnsCorrectCategory(
-        string description, TransactionCategory expected)
-    {
-        var tx = MakeTransaction(-100m, description);
+            result.Should().Be(expected);
+        }
 
-        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
+        [Fact]
+        public void Categorize_PositiveAmount_ReturnsIncome()
+        {
+            var tx = MakeTransaction(1500m, "unknown source");
 
-        result.Should().Be(expected);
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, bankCategory: null);
 
-    [Fact]
-    public async Task CategorizeAsync_PositiveAmount_ReturnsIncome()
-    {
-        var tx = MakeTransaction(1500m, "unknown source");
+            result.Should().Be(TransactionCategory.Income);
+        }
 
-        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
+        [Fact]
+        public void Categorize_UnknownNegativeDescription_ReturnsUncategorized()
+        {
+            var tx = MakeTransaction(-50m, "payment xyz");
 
-        result.Should().Be(TransactionCategory.Income);
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, bankCategory: null);
 
-    [Fact]
-    public async Task CategorizeAsync_UnknownNegativeDescription_ReturnsUncategorized()
-    {
-        var tx = MakeTransaction(-50m, "payment xyz");
+            result.Should().Be(TransactionCategory.Uncategorized);
+        }
 
-        var result = await _sut.CategorizeTransactionAsync(tx, bankCategory: null, CancellationToken.None);
+        [Fact]
+        public void Categorize_NoKeywordMatch_UsesTheBanksCategory()
+        {
+            var tx = MakeTransaction(-80m, "Some unknown merchant");
 
-        result.Should().Be(TransactionCategory.Uncategorized);
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, TransactionCategory.Healthcare);
 
-    [Fact]
-    public async Task CategorizeTransactionAsync_NoKeywordMatch_UsesTheBanksCategory()
-    {
-        var tx = MakeTransaction(-80m, "Some unknown merchant");
+            result.Should().Be(TransactionCategory.Healthcare);
+        }
 
-        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Healthcare, CancellationToken.None);
+        [Fact]
+        public void Categorize_KeywordMatch_WinsOverTheBanksCategory()
+        {
+            var tx = MakeTransaction(-80m, "uber ride home");
 
-        result.Should().Be(TransactionCategory.Healthcare);
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, TransactionCategory.Shopping);
 
-    [Fact]
-    public async Task CategorizeTransactionAsync_KeywordMatch_WinsOverTheBanksCategory()
-    {
-        // Our rules are applied the same way to every bank, so one merchant gets one category.
-        var tx = MakeTransaction(-80m, "uber ride home");
+            result.Should().Be(TransactionCategory.Transportation);
+        }
 
-        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Shopping, CancellationToken.None);
+        [Fact]
+        public void Categorize_MoneyInWithABankCategory_UsesItRatherThanDefaultingToIncome()
+        {
+            var tx = MakeTransaction(500m, "Transfer from savings");
 
-        result.Should().Be(TransactionCategory.Transportation);
-    }
+            var result = _sut.Categorize(tx.Description, tx.Amount.Amount, TransactionCategory.Transfer);
 
-    [Fact]
-    public async Task CategorizeTransactionAsync_MoneyInWithABankCategory_UsesItRatherThanDefaultingToIncome()
-    {
-        var tx = MakeTransaction(500m, "Transfer from savings");
-
-        var result = await _sut.CategorizeTransactionAsync(tx, TransactionCategory.Transfer, CancellationToken.None);
-
-        result.Should().Be(TransactionCategory.Transfer);
+            result.Should().Be(TransactionCategory.Transfer);
+        }
     }
 }

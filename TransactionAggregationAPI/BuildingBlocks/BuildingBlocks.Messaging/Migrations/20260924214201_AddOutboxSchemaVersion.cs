@@ -4,10 +4,8 @@
 
 namespace BuildingBlocks.Messaging.Migrations
 {
-    /// <inheritdoc />
     public partial class AddOutboxSchemaVersion : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AddColumn<int>(
@@ -19,7 +17,6 @@ namespace BuildingBlocks.Messaging.Migrations
                 defaultValue: 1);
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropColumn(

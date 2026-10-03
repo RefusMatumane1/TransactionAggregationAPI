@@ -6,21 +6,14 @@ using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Modules.Audit.Contracts;
-using Modules.Transactions.Application.Common.Interfaces;
-using Modules.Transactions.Infrastructure.BackgroundServices;
 using NSubstitute;
-using SharedKernel.Common.Interfaces;
 using SharedKernel.Common.Models;
 using TransactionAggregation.Tests.Helpers;
+using TransactionAggregation.Worker.BackgroundServices;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices
 {
-    /// <summary>
-    /// Dead-lettering a message must increment the matching Prometheus counter, not just change its
-    /// status. Drives the dispatchers' internal per-message methods directly.
-    /// </summary>
     public class DeadLetterMetricsTests
     {
         [Fact]
@@ -34,14 +27,7 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
                 NullLogger<OutboxDispatcherBackgroundService>.Instance,
                 Options.Create(new OutboxOptions()));
 
-            await sut.ProcessMessageAsync(
-                message,
-                Substitute.For<ITransactionsDbContext>(),
-                Substitute.For<ICacheService>(),
-                Substitute.For<IAnalyticsService>(),
-                Substitute.For<INotificationService>(),
-                Substitute.For<IAuditTrail>(),
-                CancellationToken.None);
+            await sut.ProcessMessageAsync(message);
 
             message.Status.Should().Be(OutboxMessageStatus.DeadLettered);
             DeadLetterMetrics.OutboxMessagesDeadLettered.WithLabels(messageType).Value.Should().Be(1);

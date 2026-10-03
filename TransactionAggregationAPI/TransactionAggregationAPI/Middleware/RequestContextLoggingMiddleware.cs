@@ -1,49 +1,46 @@
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Web;
 using Serilog.Context;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
-namespace TransactionAggregationAPI.Middleware;
-
-/// <summary>
-/// Gives every request one correlation id: the caller's X-Correlation-Id when it's a safe,
-/// bounded token, otherwise the W3C trace id — so logs, traces and audit records line up.
-/// The id is echoed on the response, so a caller (or support) can quote it back.
-/// </summary>
-public partial class RequestContextLoggingMiddleware(
-    RequestDelegate next,
-    ILogger<RequestContextLoggingMiddleware> logger)
+namespace TransactionAggregationAPI.Middleware
 {
-    public const string CorrelationIdHeaderName = "X-Correlation-Id";
-
-    /// <summary>
-    /// Client-supplied ids end up in every log line of the request, so only short
-    /// [A-Za-z0-9._-] tokens are accepted — no CR/LF log forging, no unbounded values.
-    /// </summary>
-    [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
-    private static partial Regex SafeCorrelationId();
-
-    public async Task Invoke(HttpContext context)
+    public partial class RequestContextLoggingMiddleware(
+        RequestDelegate next,
+        ILogger<RequestContextLoggingMiddleware> logger)
     {
-        var correlationId = GetCorrelationId(context);
+        public const string CorrelationIdHeaderName = CorrelationContext.HeaderName;
 
-        context.Response.OnStarting(() =>
+        [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
+        private static partial Regex SafeCorrelationId();
+
+        public async Task Invoke(HttpContext context)
         {
-            context.Response.Headers[CorrelationIdHeaderName] = correlationId;
-            return Task.CompletedTask;
-        });
+            var correlationId = GetCorrelationId(context);
+            CorrelationContext.Set(context, correlationId);
+            // Baggage carries it into the inbox and outbox rows this request writes, and to their processing.
+            Activity.Current?.SetBaggage(MessagingTelemetry.CorrelationBaggageKey, correlationId);
 
-        using var serilogProp = LogContext.PushProperty("CorrelationId", correlationId);
-        using var scope = logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId });
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers[CorrelationIdHeaderName] = correlationId;
+                return Task.CompletedTask;
+            });
 
-        await next(context);
-    }
+            using var serilogProp = LogContext.PushProperty("CorrelationId", correlationId);
+            using var scope = logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId });
 
-    private static string GetCorrelationId(HttpContext context)
-    {
-        var supplied = context.Request.Headers[CorrelationIdHeaderName].FirstOrDefault();
+            await next(context);
+        }
 
-        return supplied is not null && SafeCorrelationId().IsMatch(supplied)
-            ? supplied
-            : Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+        private static string GetCorrelationId(HttpContext context)
+        {
+            var supplied = context.Request.Headers[CorrelationIdHeaderName].FirstOrDefault();
+
+            return supplied is not null && SafeCorrelationId().IsMatch(supplied)
+                ? supplied
+                : Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+        }
     }
 }

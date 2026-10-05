@@ -1,0 +1,463 @@
+@page "/transactions"
+@attribute [Authorize(Roles = "staff,admin")]
+@inject TransactionService TransactionService
+@inject BankService BankService
+@inject NavigationManager Nav
+
+<PageTitle>Transactions · Transaction Aggregation</PageTitle>
+
+<PageHeader Title="Transactions">
+    <Subtitle>Every ledger entry, live: new transactions appear here as soon as they are recorded.</Subtitle>
+</PageHeader>
+
+@* Filters edit a draft; Enter or "Apply" puts it in the URL, which is what the list follows. *@
+<form class="card mb-3" @onsubmit="ApplyDraft" @onsubmit:preventDefault>
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-12 col-lg-4">
+                <label class="form-label small mb-1" for="tx-search">Search descriptions</label>
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                    <input id="tx-search" type="search" class="form-control @(SearchTooShort ? "is-invalid" : "")" @bind="_draft.Search"
+                           @bind:event="oninput" placeholder="e.g. Woolworths" aria-describedby="tx-search-hint" />
+                </div>
+                <div id="tx-search-hint" class="form-text @(SearchTooShort ? "text-danger" : "")">
+                    @(SearchTooShort ? "Type at least 3 characters." : "At least 3 characters.")
+                </div>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small mb-1" for="tx-bank">Bank</label>
+                <select id="tx-bank" class="form-select form-select-sm" @bind="_draft.Bank">
+                    <option value="">All banks</option>
+                    @foreach (var bank in _banks.Values.OrderBy(b => b.DisplayName))
+                    {
+                        <option value="@bank.Code">@bank.DisplayName</option>
+                    }
+                </select>
+                <div class="form-text">&nbsp;</div>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small mb-1" for="tx-account">Account</label>
+                <input id="tx-account" class="form-control form-control-sm" @bind="_draft.Account"
+                       placeholder="@(string.IsNullOrEmpty(_draft.Bank) ? "Choose a bank" : "Any")"
+                       disabled="@string.IsNullOrEmpty(_draft.Bank)" aria-describedby="tx-account-hint" />
+                <div id="tx-account-hint" class="form-text">Account ids are unique per bank.</div>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <label class="form-label small mb-1" for="tx-category">Category</label>
+                <select id="tx-category" class="form-select form-select-sm" @bind="_draft.Category">
+                    <option value="">All categories</option>
+                    @foreach (var c in Enum.GetValues<TransactionCategory>())
+                    {
+                        <option value="@c">@c</option>
+                    }
+                </select>
+                <div class="form-text">&nbsp;</div>
+            </div>
+            <div class="col-6 col-md-3 col-lg-2">
+                <button type="button" class="btn btn-sm btn-link px-0" aria-expanded="@(_moreFilters ? "true" : "false")" aria-controls="tx-more"
+                        @onclick="() => _moreFilters = !_moreFilters">
+                    <i class="bi @(_moreFilters ? "bi-chevron-up" : "bi-sliders") me-1" aria-hidden="true"></i>@(_moreFilters ? "Fewer filters" : "Dates & amounts")
+                </button>
+                <div class="form-text">&nbsp;</div>
+            </div>
+        </div>
+
+        @if (_moreFilters)
+        {
+            <div id="tx-more" class="row g-2 mt-1">
+                <div class="col-6 col-md-3 col-lg-2">
+                    <label class="form-label small mb-1" for="tx-from">Booked from</label>
+                    <input id="tx-from" type="date" class="form-control form-control-sm" @bind="_draft.From" />
+                </div>
+                <div class="col-6 col-md-3 col-lg-2">
+                    <label class="form-label small mb-1" for="tx-to">Booked to</label>
+                    <input id="tx-to" type="date" class="form-control form-control-sm" @bind="_draft.To" />
+                </div>
+                <div class="col-6 col-md-3 col-lg-2">
+                    <label class="form-label small mb-1" for="tx-min">Amount at least (R)</label>
+                    <input id="tx-min" type="number" min="0" step="0.01" inputmode="decimal" class="form-control form-control-sm" @bind="_draft.Min" />
+                </div>
+                <div class="col-6 col-md-3 col-lg-2">
+                    <label class="form-label small mb-1" for="tx-max">Amount at most (R)</label>
+                    <input id="tx-max" type="number" min="0" step="0.01" inputmode="decimal" class="form-control form-control-sm @(AmountRangeInvalid ? "is-invalid" : "")" @bind="_draft.Max" />
+                </div>
+                <div class="col-12 col-lg-4 form-text align-self-center">
+                    Amounts match income and spending alike (by size, ignoring sign).
+                    @if (AmountRangeInvalid)
+                    {
+                        <span class="text-danger d-block">"At most" must not be below "at least".</span>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+            <button type="submit" class="btn btn-primary btn-sm" disabled="@(SearchTooShort || AmountRangeInvalid)">
+                <i class="bi bi-funnel me-1" aria-hidden="true"></i>Apply
+            </button>
+            @foreach (var chip in Chips)
+            {
+                <span class="filter-chip">
+                    @chip.Label
+                    <button type="button" aria-label="@($"Remove filter {chip.Label}")" @onclick="() => Remove(chip.Keys)">
+                        <i class="bi bi-x" aria-hidden="true"></i>
+                    </button>
+                </span>
+            }
+            @if (Chips.Count > 0)
+            {
+                <a class="small ms-1" href="/transactions">Clear all</a>
+            }
+        </div>
+    </div>
+</form>
+
+@if (_error is not null)
+{
+    <ErrorPanel Message="@_error" OnRetry="LoadPageAsync" />
+}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2 small">
+    <span class="text-muted" aria-live="polite">
+        @if (_loading && _transactions.Count == 0)
+        {
+            <span>Loading…</span>
+        }
+        else if (_totalCount is { } total)
+        {
+            @($"{Format.Count(total)}{(_totalCapped ? "+" : "")} transaction{(total == 1 && !_totalCapped ? "" : "s")}")
+            @if (_previousCursors.Count > 0)
+            {
+                <span> · page @(_previousCursors.Count + 1)</span>
+            }
+        }
+    </span>
+    <span class="d-flex align-items-center gap-2">
+        <label class="text-muted" for="tx-size">Rows</label>
+        <select id="tx-size" class="form-select form-select-sm w-auto" value="@_applied.Size" @onchange="e => SetPageSize(e.Value as string)">
+            @foreach (var size in PageSizes)
+            {
+                <option value="@size">@size</option>
+            }
+        </select>
+    </span>
+</div>
+
+@if (_loading && _transactions.Count > 0)
+{
+    <div class="refresh-bar" role="progressbar" aria-label="Updating"></div>
+}
+
+<div class="card @(_loading && _transactions.Count > 0 ? "is-refreshing" : "")">
+    @if (_loading && _transactions.Count == 0)
+    {
+        <div class="card-body">
+            @for (var i = 0; i < 8; i++)
+            {
+                <Skeleton Height="1.5rem" Class="mb-2" />
+            }
+        </div>
+    }
+    else if (_transactions.Count == 0 && _error is null)
+    {
+        <EmptyState Title="No transactions match these filters" Icon="bi-search">
+            @if (Chips.Count > 0)
+            {
+                <a href="/transactions">Clear all filters</a>
+            }
+        </EmptyState>
+    }
+    else if (_transactions.Count > 0)
+    {
+        <div class="table-responsive">
+            <table class="table table-hover table-sticky mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col" class="ps-3" aria-sort="@AriaSort("date")">
+                            <button class="sort-btn" @onclick='() => Sort("date")'>Date<SortIcon Active='_applied.Sort == "date"' Descending="_applied.Descending" /></button>
+                        </th>
+                        <th scope="col">Description</th>
+                        <th scope="col" class="d-none d-md-table-cell">Category</th>
+                        <th scope="col" class="d-none d-lg-table-cell">Bank</th>
+                        <th scope="col" class="d-none d-xl-table-cell">Account</th>
+                        <th scope="col" class="text-end pe-3" aria-sort="@AriaSort("amount")">
+                            <button class="sort-btn" @onclick='() => Sort("amount")'>Amount<SortIcon Active='_applied.Sort == "amount"' Descending="_applied.Descending" /></button>
+                        </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var tx in _transactions)
+                    {
+                        var bank = BankDirectory.Find(_banks, tx.Source);
+                        <tr class="clickable" @onclick="() => Open(tx.Id)">
+                            <td class="ps-3 text-nowrap small">@Format.BookingDate(tx.Date)</td>
+                            <td>
+                                <button type="button" class="row-link" @onclick="() => Open(tx.Id)" @onclick:stopPropagation>@tx.Description</button>
+                                <div class="small text-muted d-md-none">@tx.Category · @bank.DisplayName</div>
+                            </td>
+                            <td class="d-none d-md-table-cell"><CategoryBadge Category="@tx.Category" /></td>
+                            <td class="d-none d-lg-table-cell small"><BankBadge Bank="@bank" /></td>
+                            <td class="d-none d-xl-table-cell small text-muted font-monospace">@tx.ExternalAccountId</td>
+                            <td class="text-end pe-3 num fw-semibold @(tx.Amount > 0 ? "text-good" : "")">@Format.SignedMoney(tx.Amount, tx.Currency)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (_transactions.Count > 0 && (_previousCursors.Count > 0 || _nextCursor is not null))
+{
+    <nav class="d-flex justify-content-end mt-3" aria-label="Pages">
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" disabled="@(_previousCursors.Count == 0 || _loading)" @onclick="PreviousPage">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i> Previous
+            </button>
+            <button class="btn btn-outline-secondary" disabled="@(_nextCursor is null || _loading)" @onclick="NextPage">
+                Next <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+        </div>
+    </nav>
+}
+
+@if (_openId is { } openId)
+{
+    <TransactionDrawer Id="openId" Banks="_banks" OnClose="Close" />
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+    [SupplyParameterFromQuery(Name = "bank")] public string? Bank { get; set; }
+    [SupplyParameterFromQuery(Name = "account")] public string? Account { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] public string? Category { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
+    [SupplyParameterFromQuery(Name = "min")] public decimal? Min { get; set; }
+    [SupplyParameterFromQuery(Name = "max")] public decimal? Max { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortBy { get; set; }
+    [SupplyParameterFromQuery(Name = "dir")] public string? Dir { get; set; }
+    [SupplyParameterFromQuery(Name = "size")] public int? Size { get; set; }
+    [SupplyParameterFromQuery(Name = "tx")] public Guid? Tx { get; set; }
+
+    private static readonly int[] PageSizes = [20, 50, 100];
+    private const int MinSearchLength = 3;
+
+    private sealed class Query
+    {
+        public string? Search { get; set; }
+        public string? Bank { get; set; }
+        public string? Account { get; set; }
+        public string? Category { get; set; }
+        public DateOnly? From { get; set; }
+        public DateOnly? To { get; set; }
+        public decimal? Min { get; set; }
+        public decimal? Max { get; set; }
+        public string Sort { get; set; } = "date";
+        public bool Descending { get; set; } = true;
+        public int Size { get; set; } = 20;
+
+        public Query Copy() => (Query)MemberwiseClone();
+
+        // Everything that changes which rows match (not the open drawer).
+        public string Key => string.Join('|', Search, Bank, Account, Category, From, To, Min, Max, Sort, Descending, Size);
+    }
+
+    private sealed record Chip(string Label, string[] Keys);
+
+    private Query _applied = new();
+    private Query _draft = new();
+    private string? _loadedKey;
+    private bool _moreFilters;
+    private List<TransactionModel> _transactions = [];
+    private IReadOnlyDictionary<string, BankModel> _banks = new Dictionary<string, BankModel>();
+    private readonly Stack<string?> _previousCursors = new();
+    private string? _currentCursor;
+    private string? _nextCursor;
+    private int? _totalCount;
+    private bool _totalCapped;
+    private bool _loading = true;
+    private string? _error;
+    private Guid? _openId;
+    private int _loadVersion;
+
+    private bool SearchTooShort => _draft.Search is { Length: > 0 } s && s.Trim().Length is > 0 and < MinSearchLength;
+
+    private bool AmountRangeInvalid => _draft.Min is { } min && _draft.Max is { } max && max < min;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _banks = await BankService.GetBanksAsync();
+
+        _applied = new Query
+        {
+            Search = Clean(Q),
+            Bank = Clean(Bank),
+            Account = Clean(Bank) is null ? null : Clean(Account),
+            Category = Enum.TryParse<TransactionCategory>(Category, ignoreCase: true, out var c) ? c.ToString() : null,
+            From = Format.ParseDay(From),
+            To = Format.ParseDay(To),
+            Min = Min is >= 0 ? Min : null,
+            Max = Max is >= 0 ? Max : null,
+            Sort = SortBy == "amount" ? "amount" : "date",
+            Descending = Dir != "asc",
+            Size = PageSizes.Contains(Size ?? 0) ? Size!.Value : PageSizes[0]
+        };
+        _openId = Tx;
+
+        // Opening or closing a transaction changes the URL too; only a different query reloads the list.
+        if (_applied.Key == _loadedKey)
+            return;
+
+        _draft = _applied.Copy();
+        _moreFilters |= _applied.From is not null || _applied.To is not null || _applied.Min is not null || _applied.Max is not null;
+        _previousCursors.Clear();
+        _currentCursor = null;
+        _totalCount = null;
+        _loadedKey = _applied.Key;
+        await LoadPageAsync();
+    }
+
+    private async Task LoadPageAsync()
+    {
+        var version = ++_loadVersion;
+        _loading = true;
+        _error = null;
+
+        var (page, error) = await TransactionService.FilterTransactionsAsync(new TransactionFilterParams
+        {
+            Cursor = _currentCursor,
+            PageSize = _applied.Size,
+            SearchTerm = _applied.Search,
+            Institution = _applied.Bank,
+            ExternalAccountId = _applied.Account,
+            Category = Enum.TryParse<TransactionCategory>(_applied.Category, out var category) ? category : null,
+            // Whole days, inclusive of the "to" day.
+            FromDate = _applied.From?.ToDateTime(TimeOnly.MinValue),
+            ToDate = _applied.To?.ToDateTime(TimeOnly.MaxValue),
+            MinAmount = _applied.Min,
+            MaxAmount = _applied.Max,
+            SortBy = _applied.Sort,
+            SortDescending = _applied.Descending
+        });
+
+        if (version != _loadVersion)
+            return;
+
+        _error = error;
+        _transactions = page?.Items ?? [];
+        _nextCursor = page?.NextCursor;
+        if (page?.TotalCount is { } total)
+        {
+            _totalCount = total;
+            _totalCapped = page.TotalCountCapped;
+        }
+        _loading = false;
+    }
+
+    private void ApplyDraft()
+    {
+        if (SearchTooShort || AmountRangeInvalid)
+            return;
+        Navigate(_draft);
+    }
+
+    private void Navigate(Query q, Guid? open = null) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters("/transactions", new Dictionary<string, object?>
+        {
+            ["q"] = Clean(q.Search),
+            ["bank"] = Clean(q.Bank),
+            ["account"] = Clean(q.Bank) is null ? null : Clean(q.Account),
+            ["category"] = Clean(q.Category),
+            ["from"] = q.From is { } f ? Format.Invariant(f) : null,
+            ["to"] = q.To is { } t ? Format.Invariant(t) : null,
+            ["min"] = q.Min,
+            ["max"] = q.Max,
+            ["sort"] = q.Sort == "date" ? null : q.Sort,
+            ["dir"] = q.Descending ? null : "asc",
+            ["size"] = q.Size == PageSizes[0] ? null : q.Size,
+            ["tx"] = open
+        }));
+
+    private void Sort(string column)
+    {
+        var next = _applied.Copy();
+        next.Descending = next.Sort != column || !next.Descending;
+        next.Sort = column;
+        Navigate(next);
+    }
+
+    private string? AriaSort(string column) =>
+        _applied.Sort == column ? (_applied.Descending ? "descending" : "ascending") : null;
+
+    private void SetPageSize(string? value)
+    {
+        if (!int.TryParse(value, out var size))
+            return;
+        var next = _applied.Copy();
+        next.Size = size;
+        Navigate(next);
+    }
+
+    private List<Chip> Chips
+    {
+        get
+        {
+            var chips = new List<Chip>();
+            if (_applied.Search is { } s) chips.Add(new($"“{s}”", ["Search"]));
+            if (_applied.Bank is { } b) chips.Add(new(BankDirectory.Find(_banks, b).DisplayName, ["Bank", "Account"]));
+            if (_applied.Account is { } a) chips.Add(new($"Account {a}", ["Account"]));
+            if (_applied.Category is { } c) chips.Add(new(c, ["Category"]));
+            if (_applied.From is { } f) chips.Add(new($"From {Format.Day(f)}", ["From"]));
+            if (_applied.To is { } t) chips.Add(new($"To {Format.Day(t)}", ["To"]));
+            if (_applied.Min is { } min) chips.Add(new($"≥ {Format.Money(min)}", ["Min"]));
+            if (_applied.Max is { } max) chips.Add(new($"≤ {Format.Money(max)}", ["Max"]));
+            return chips;
+        }
+    }
+
+    private void Remove(string[] keys)
+    {
+        var next = _applied.Copy();
+        foreach (var key in keys)
+        {
+            switch (key)
+            {
+                case "Search": next.Search = null; break;
+                case "Bank": next.Bank = null; break;
+                case "Account": next.Account = null; break;
+                case "Category": next.Category = null; break;
+                case "From": next.From = null; break;
+                case "To": next.To = null; break;
+                case "Min": next.Min = null; break;
+                case "Max": next.Max = null; break;
+            }
+        }
+        Navigate(next);
+    }
+
+    private async Task NextPage()
+    {
+        if (_nextCursor is null)
+            return;
+        _previousCursors.Push(_currentCursor);
+        _currentCursor = _nextCursor;
+        await LoadPageAsync();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_previousCursors.Count == 0)
+            return;
+        _currentCursor = _previousCursors.Pop();
+        await LoadPageAsync();
+    }
+
+    // The open transaction lives in the URL: it can be shared, and Back closes it.
+    private void Open(Guid id) => Navigate(_applied, id);
+
+    private void Close() => Navigate(_applied);
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+		Composition shared by the two process hosts — TransactionAggregationAPI (HTTP) and
+		TransactionAggregation.Worker (background processing). Both run the same modules against
+		the same database, cache and Data Protection key ring, so the wiring lives here once
+		rather than drifting apart in two Program.cs files.
+	-->
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+
+		<PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" />
+		<PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" />
+		<PackageReference Include="Serilog.AspNetCore" />
+		<PackageReference Include="Serilog.Sinks.Console" />
+		<PackageReference Include="Serilog.Sinks.Seq" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+		<ProjectReference Include="..\BuildingBlocks\BuildingBlocks.Persistence\BuildingBlocks.Persistence.csproj" />
+		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
+		<ProjectReference Include="..\BuildingBlocks\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
+		<ProjectReference Include="..\Modules\Audit\Audit.Infrastructure\Audit.Infrastructure.csproj" />
+		<ProjectReference Include="..\Modules\Transactions\Transactions.Infrastructure\Transactions.Infrastructure.csproj" />
+		<ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Infrastructure\WebhookSources.Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+			Normalization and categorization run only in the worker today (ingestion is the sole way
+			transactions are created), but both hosts register the Transactions module and its ingestion
+			services, so the rules ship with both rather than failing later if an API-side path uses them.
+		-->
+		<None Update="categorization-rules.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<None Update="normalization-rules.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+		<!-- The mock banks' rules; loaded only when the environment is Development. -->
+		<None Update="normalization-rules.Development.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+</Project>

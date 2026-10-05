@@ -1,60 +1,44 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
-using System.Net;
-using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.Mvc;
 
 namespace TransactionAggregationAPI.Middleware
 {
-    public class GlobalExceptionHandler : IExceptionHandler
+    internal sealed class GlobalExceptionHandler(
+        IProblemDetailsService problemDetailsService,
+        ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
     {
-        private readonly ILogger<GlobalExceptionHandler> _logger;
-        private readonly IWebHostEnvironment _environment;
-
-        public GlobalExceptionHandler(
-            ILogger<GlobalExceptionHandler> logger,
-            IWebHostEnvironment environment)
+        public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
         {
-            _logger = logger;
-            _environment = environment;
-        }
+            var problem = exception is BadHttpRequestException badRequest
+                ? new ProblemDetails
+                {
+                    Status = badRequest.StatusCode,
+                    Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                    Title = "The request could not be read",
+                    Detail = "The request body or parameters are malformed."
+                }
+                : new ProblemDetails
+                {
+                    Status = StatusCodes.Status500InternalServerError,
+                    Type = "https://tools.ietf.org/html/rfc9110#section-15.6.1",
+                    Title = "An error occurred while processing your request",
+                    Detail = "An unexpected error occurred."
+                };
 
-        public async ValueTask<bool> TryHandleAsync(
-            HttpContext httpContext,
-            Exception exception,
-            CancellationToken cancellationToken)
-        {
-            _logger.LogError(exception, "An unhandled exception occurred");
+            if (problem.Status >= StatusCodes.Status500InternalServerError)
+                logger.LogError(exception, "Unhandled exception for {Method} {Path}", httpContext.Request.Method, httpContext.Request.Path);
+            else
+                logger.LogWarning("Rejected malformed request {Method} {Path}: {Reason}",
+                    httpContext.Request.Method, httpContext.Request.Path, exception.Message);
 
-            var statusCode = exception switch
+            httpContext.Response.StatusCode = problem.Status!.Value;
+
+            return await problemDetailsService.TryWriteAsync(new ProblemDetailsContext
             {
-                ArgumentException => (int)HttpStatusCode.BadRequest,
-                KeyNotFoundException => (int)HttpStatusCode.NotFound,
-                UnauthorizedAccessException => (int)HttpStatusCode.Unauthorized,
-                _ => (int)HttpStatusCode.InternalServerError
-            };
-
-            var errorResponse = new ErrorResponse
-            {
-                StatusCode = statusCode,
-                Message = exception.Message,
-                StackTrace = _environment.IsDevelopment() ? exception.StackTrace : null,
-                Timestamp = DateTime.UtcNow
-            };
-
-            httpContext.Response.ContentType = "application/json";
-            httpContext.Response.StatusCode = statusCode;
-
-            var json = JsonSerializer.Serialize(errorResponse);
-            await httpContext.Response.WriteAsync(json, cancellationToken);
-
-            return true;
+                HttpContext = httpContext,
+                Exception = exception,
+                ProblemDetails = problem
+            });
         }
-    }
-
-    public class ErrorResponse
-    {
-        public int StatusCode { get; set; }
-        public string Message { get; set; } = null!;
-        public string? StackTrace { get; set; }
-        public DateTime Timestamp { get; set; }
     }
 }

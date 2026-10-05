@@ -1,17 +1,13 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.IdentityModel.Tokens;
+using Modules.Audit;
+using Modules.Transactions;
+using Modules.WebhookSources;
+using Prometheus;
 using Scalar.AspNetCore;
 using Serilog;
-using System.Text;
-using System.Threading.RateLimiting;
-using Microsoft.EntityFrameworkCore;
-using StackExchange.Redis;
-using TransactionAggregation.Application;
-using TransactionAggregation.Infrastructure;
-using TransactionAggregation.Persistence;
-using TransactionAggregationAPI;
-using TransactionAggregationAPI.Endpoints;
+using TransactionAggregation.Hosting;
+using TransactionAggregation.Hosting.Observability;
+using TransactionAggregationAPI.Authentication;
+using TransactionAggregationAPI.Development;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
 using TransactionAggregationAPI.RateLimiting;
@@ -19,185 +15,79 @@ using TransactionAggregationAPI.RateLimiting;
 try
 {
     var builder = WebApplication.CreateBuilder(args);
-
+    builder.AddSecretsFile();
 
     builder.Logging.ClearProviders();
-
     builder.AddServiceDefaults();
+    builder.AddSerilogLogging();
 
-    Log.Logger = new LoggerConfiguration()
-        .ReadFrom.Configuration(builder.Configuration)
-        .Enrich.FromLogContext()
-        .Enrich.WithProperty("Application", builder.Environment.ApplicationName)
-        .CreateLogger();
-
-    
-    builder.Logging.AddSerilog(Log.Logger, dispose: true);
-
-    builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
-    builder.Services.AddSingleton<Serilog.Extensions.Hosting.DiagnosticContext>();
-    builder.Services.AddSingleton<Serilog.IDiagnosticContext>(
-        sp => sp.GetRequiredService<Serilog.Extensions.Hosting.DiagnosticContext>());
-
-    var connectionString = builder.Configuration.GetConnectionString("transactiondb");
-    builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    {
-        options.UseNpgsql(connectionString, npgsqlOptions =>
-        {
-            npgsqlOptions.MigrationsAssembly("TransactionAggregation.Persistence");
-            npgsqlOptions.EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorCodesToAdd: null);
-        });
-
-        if (builder.Environment.IsDevelopment())
-        {
-            options.EnableDetailedErrors();
-            options.EnableSensitiveDataLogging();
-        }
-    });
-    
-    builder.EnrichNpgsqlDbContext<ApplicationDbContext>();
-
-    builder.AddRedisClient("redis");
-
-    builder.Services.AddApplication(builder.Configuration);
-    builder.Services.AddInfrastructure(builder.Configuration);
-    builder.Services.AddPersistence();
-
-    builder.Services
-        .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-        .AddJwtBearer(options =>
-        {
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
-                ValidateIssuerSigningKey = true,
-                ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                ValidAudience = builder.Configuration["Jwt:Audience"],
-                IssuerSigningKey = new SymmetricSecurityKey(
-                    Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!))
-            };
-        });
-    
-    builder.Services.AddAuthorization();
-
-    builder.Services.AddResponseCaching();
-    builder.Services.AddHttpContextAccessor();
-
-    builder.Services.AddApiVersioning(options =>
-    {
-        options.AssumeDefaultVersionWhenUnspecified = true;
-        options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
-        options.ReportApiVersions = true;
-    }).AddApiExplorer(options =>
-    {
-        options.GroupNameFormat = "'v'VVV";
-        options.SubstituteApiVersionInUrl = true;
-    });
-
-    builder.Services.AddControllers();
-    builder.Services.AddOpenApi();
-
-    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-    builder.Services.AddProblemDetails();
-
-    builder.Services.AddCors(options =>
-    {
-        options.AddPolicy("DevCors", policy =>
-            policy.WithOrigins("http://localhost:7200", "https://localhost:7201")
-                  .AllowAnyHeader()
-                  .AllowAnyMethod());
-    });
-
-    builder.Services.AddSingleton<RedisFixedWindowPolicy>();
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.AddPolicy<string, RedisFixedWindowPolicy>("FixedWindow");
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    });
-
-   
-    builder.Services.AddOptions<RateLimiterOptions>()
-        .Configure<IConnectionMultiplexer>((options, redis) =>
-        {
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-                context =>
-                {
-                    var key = context.User.Identity?.Name
-                        ?? context.Connection.RemoteIpAddress?.ToString()
-                        ?? "anonymous";
-
-                    return RateLimitPartition.Get<string>(
-                        key,
-                        partitionKey => new RedisFixedWindowRateLimiter(
-                            redis,
-                            $"ratelimit:global:{partitionKey}",
-                            new RedisRateLimiterOptions
-                            {
-                                PermitLimit = 100,
-                                Window = TimeSpan.FromMinutes(1),
-                                AllowRequestOnRedisFailure = true
-                            }));
-                });
-        });
+    builder.AddApplicationModules();
+    builder.AddKeycloakAuthentication();
+    builder.AddApiPlatform();
+    builder.Services.AddRedisRateLimiting();
 
     var app = builder.Build();
 
-    app.MapDefaultEndpoints();
+    app.UseForwardedHeaders();
 
-    if (app.Environment.IsDevelopment())
-    {
-        app.MapOpenApi();
-        app.MapScalarApiReference();
-    }
-    
+    app.UseMiddleware<RequestContextLoggingMiddleware>();
+    app.UseExceptionHandler();
+
+    app.UseStatusCodePages();
+    app.UseMiddleware<SecurityHeadersMiddleware>();
+
+    app.UsePrivateMetricsEndpoint();
+    app.UseHttpMetrics();
+
+    if (!app.Environment.IsDevelopment())
+        app.UseHsts();
+
     app.UseHttpsRedirection();
+    app.UseResponseCompression();
 
     app.UseBlazorFrameworkFiles();
     app.UseStaticFiles();
 
-    app.UseResponseCaching();
+    app.UseCors(ApiPlatformSetup.CorsPolicyName);
 
-    app.UseCors("DevCors");
-
-    app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-    app.UseRequestContextLogging();
-
-    app.UseSerilogRequestLogging();
-
-    app.UseExceptionHandler();
+    app.UseRouteTemplateRequestLogging();
 
     app.UseAuthentication();
     app.UseAuthorization();
-
     app.UseRateLimiter();
 
-    app.MapCustomerEndpoints();
-    app.MapTransactionEndpoints();
-    app.MapAccountEndpoints();
+    app.MapDefaultEndpoints();
 
+    var openApi = app.MapOpenApi();
+    if (app.Environment.IsDevelopment())
+        app.MapScalarApiReference();
+    else
+        openApi.RequireAuthorization();
+
+    app.MapTransactionsEndpoints();
+    app.MapWebhookSourcesEndpoints();
+    app.MapAuditEndpoints();
+
+    // An unknown API path is a 404, not the SPA shell: only non-API routes fall back to the UI.
+    app.MapFallback("api/{**path}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound));
     app.MapFallbackToFile("index.html");
 
-    // --migrate-only: apply pending migrations and exit with code 0.
-    // Used exclusively by the Kubernetes pre-deploy Job (k8s/api/migration-job.yaml)
-    // so that exactly one process runs migrations before any API replica starts.
-    /*if (args.Contains("--migrate-only"))
+    if (args.Contains("--migrate-only"))
     {
-        await app.ApplyMigrationsAsync();
+        await app.ApplyAllModuleMigrationsAsync();
         return;
-    }*/
-    
-    await app.ApplyMigrationsAsync();
+    }
 
-    await SeedData.SeedDatabaseAsync(app.Services);
+    if (app.Environment.IsDevelopment())
+    {
+        await app.ApplyAllModuleMigrationsAsync();
+        await SeedData.SeedDatabaseAsync(app.Services, app.Configuration);
+        await MockAggregatorSource.EnsureRegisteredAsync(app.Services, app.Configuration);
+    }
+
     await app.RunAsync();
 }
-catch (Exception ex)
+catch (Exception ex) when (ex is not HostAbortedException)
 {
     Log.Fatal(ex, "Application start-up failed");
     throw;
@@ -207,5 +97,4 @@ finally
     Log.CloseAndFlush();
 }
 
-// Expose Program to the integration test assembly
 public partial class Program { }

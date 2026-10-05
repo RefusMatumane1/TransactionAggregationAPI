@@ -10,3 +10,7 @@ metadata:
 data:
   # nginx proxies /api/ to this upstream — uses in-cluster service DNS
   API_UPSTREAM: "http://transaction-api"
+  # Baked into wwwroot/appsettings.json at container start (see
+  # docker-entrypoint.d/20-keycloak-authority.sh) — must be reachable from the browser, so this
+  # is the ingress hostname, not the in-cluster service DNS.
+  KEYCLOAK_AUTHORITY: "http://keycloak.transaction.local/realms/transaction-aggregation"

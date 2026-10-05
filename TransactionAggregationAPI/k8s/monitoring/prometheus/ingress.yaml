@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: prometheus
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: transaction-aggregation
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Prometheus has no auth of its own, so require basic auth at the ingress
+    # instead — see basic-auth-*.yaml.
+    traefik.ingress.kubernetes.io/router.middlewares: transaction-aggregation-monitoring-basic-auth@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: prometheus.transaction.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  name: http

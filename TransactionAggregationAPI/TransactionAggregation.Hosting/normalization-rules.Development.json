@@ -1,0 +1,16 @@
+{
+  "Normalization": {
+    "Institutions": {
+      "FNB": {
+        "CategoryMap": {
+          "Takeaways": "Dining",
+          "Petrol": "Transportation",
+          "Municipal": "Utilities"
+        }
+      },
+      "Absa": {
+        "DescriptionPrefixes": [ "ABSA CARD" ]
+      }
+    }
+  }
+}

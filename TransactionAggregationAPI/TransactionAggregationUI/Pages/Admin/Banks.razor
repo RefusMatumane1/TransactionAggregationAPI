@@ -1,0 +1,317 @@
+@page "/admin/banks"
+@page "/admin/webhook-sources"
+@attribute [Authorize(Roles = "admin")]
+@inject BankService BankService
+@inject IJSRuntime JS
+
+<PageTitle>Banks · Transaction Aggregation</PageTitle>
+
+<PageHeader Title="Banks">
+    <Actions>
+        <button class="btn btn-primary btn-sm" @onclick="OpenCreate">
+            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Add bank
+        </button>
+    </Actions>
+</PageHeader>
+
+<p class="text-muted small mb-4">
+    Each bank is its own source: it pushes its transactions to the webhook with its own API key (or to
+    Kafka, signed with its own key). The key decides which bank a delivery belongs to. Keys are shown
+    once, when created or rotated; only their hash is stored.
+</p>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger py-2">@_error</div>
+}
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border text-primary"></div>
+    </div>
+}
+else if (_sources.Count == 0)
+{
+    <div class="alert alert-info">No banks yet. Add one to let it push transactions.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var source in _sources)
+        {
+            <div class="col-md-6 col-xl-4">
+                <div class="card h-100 bank-admin-card" style="--bank-color:@source.Color">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div>
+                                <h5 class="mb-0">@source.DisplayName</h5>
+                                <code class="small">@source.Code</code>
+                            </div>
+                            @if (source.IsActive)
+                            {
+                                <span class="badge text-bg-success">Active</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Inactive</span>
+                            }
+                        </div>
+                        <dl class="row small mt-3 mb-0">
+                            <dt class="col-6 text-muted fw-normal">Last delivery</dt>
+                            <dd class="col-6 mb-1">@BankDirectory.DescribeAge(source.LastUsedAt)</dd>
+                            <dt class="col-6 text-muted fw-normal">Kafka signing key</dt>
+                            <dd class="col-6 mb-1">@(source.SigningKeyRegistered ? "Registered" : "Not registered")</dd>
+                            <dt class="col-6 text-muted fw-normal">Added</dt>
+                            <dd class="col-6 mb-0">@source.CreatedAt.ToLocalTime().ToString("d MMM yyyy")</dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer bg-transparent d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(_actingOnId == source.Id)" @onclick="() => OpenEdit(source)">
+                            <i class="bi bi-pencil me-1"></i>Edit
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(_actingOnId == source.Id)" @onclick="() => RotateKey(source)">
+                            <i class="bi bi-key me-1"></i>New API key
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" disabled="@(_actingOnId == source.Id)" @onclick="() => OpenSigningKey(source)">
+                            <i class="bi bi-shield-lock me-1"></i>Signing key
+                        </button>
+                        <button class="btn btn-sm @(source.IsActive ? "btn-outline-danger" : "btn-outline-success") ms-auto"
+                                disabled="@(_actingOnId == source.Id)" @onclick="() => SetActive(source, !source.IsActive)">
+                            @(source.IsActive ? "Deactivate" : "Activate")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@if (_editing is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@(_editing.Id is null ? "Add bank" : $"Edit {_editing.Code}")</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="() => _editing = null"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_modalError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_modalError</div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label" for="bank-code">Code</label>
+                        <input id="bank-code" class="form-control" @bind="_editing.Code" disabled="@(_editing.Id is not null)" placeholder="e.g. Nedbank" />
+                        <div class="form-text">
+                            How the bank appears on every transaction and in the Kafka <code>source</code> header.
+                            Letters, digits, '-' or '_'. It can't be changed later.
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="bank-name">Display name</label>
+                        <input id="bank-name" class="form-control" @bind="_editing.DisplayName" placeholder="e.g. Nedbank" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="bank-color">Colour</label>
+                        <div class="d-flex align-items-center gap-2">
+                            <input id="bank-color" type="color" class="form-control form-control-color" @bind="_editing.Color" />
+                            <span class="bank-badge"><span class="bank-dot" style="background:@_editing.Color"></span>@(string.IsNullOrWhiteSpace(_editing.DisplayName) ? "Preview" : _editing.DisplayName)</span>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" @onclick="() => _editing = null">Cancel</button>
+                        <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveAsync">
+                            @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            @(_editing.Id is null ? "Add bank" : "Save")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_signingKeyFor is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Kafka signing key — @_signingKeyFor.DisplayName</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="() => _signingKeyFor = null"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_modalError is not null)
+                    {
+                        <div class="alert alert-danger py-2">@_modalError</div>
+                    }
+                    <label class="form-label" for="signing-key">Public key (base64 SubjectPublicKeyInfo, ECDSA P-256)</label>
+                    <textarea id="signing-key" class="form-control font-monospace" rows="4" @bind="_signingKey"></textarea>
+                    <div class="form-text mb-3">Kafka records from this bank must be signed with the matching private key.</div>
+                    <div class="d-flex gap-2 justify-content-end">
+                        <button type="button" class="btn btn-secondary" @onclick="() => _signingKeyFor = null">Cancel</button>
+                        <button type="button" class="btn btn-primary" disabled="@_saving" @onclick="SaveSigningKeyAsync">Register</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_revealedKey is not null)
+{
+    <div class="modal d-block" tabindex="-1" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">API key for @_revealedFor</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning py-2">
+                        This key will not be shown again. Copy it now and give it to the bank; it sends it as
+                        the <code>X-Api-Key</code> header.
+                    </div>
+                    <div class="input-group">
+                        <input class="form-control font-monospace" readonly value="@_revealedKey" aria-label="API key" />
+                        <button class="btn btn-outline-secondary" @onclick="CopyRevealedKey">
+                            <i class="bi bi-clipboard me-1"></i>Copy
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" @onclick="() => _revealedKey = null">Done</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed class BankForm
+    {
+        public Guid? Id { get; init; }
+        public string Code { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+        public string Color { get; set; } = "#0d6efd";
+    }
+
+    private List<BankSourceModel> _sources = [];
+    private bool _loading = true;
+    private bool _saving;
+    private string? _error;
+    private string? _modalError;
+    private BankForm? _editing;
+    private BankSourceModel? _signingKeyFor;
+    private string _signingKey = string.Empty;
+    private string? _revealedKey;
+    private string? _revealedFor;
+    private Guid? _actingOnId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        _loading = false;
+    }
+
+    private async Task LoadAsync() =>
+        _sources = (await BankService.GetSourcesAsync()).OrderBy(s => s.DisplayName).ToList();
+
+    private void OpenCreate()
+    {
+        _modalError = null;
+        _editing = new BankForm();
+    }
+
+    private void OpenEdit(BankSourceModel source)
+    {
+        _modalError = null;
+        _editing = new BankForm { Id = source.Id, Code = source.Code, DisplayName = source.DisplayName, Color = source.Color.ToLowerInvariant() };
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_editing is null)
+            return;
+
+        _saving = true;
+        _modalError = null;
+        if (_editing.Id is { } id)
+        {
+            _modalError = await BankService.UpdateAsync(id, _editing.DisplayName, _editing.Color);
+        }
+        else
+        {
+            var (result, error) = await BankService.CreateAsync(_editing.Code, _editing.DisplayName, _editing.Color);
+            _modalError = error;
+            if (result is not null)
+            {
+                _revealedKey = result.ApiKey;
+                _revealedFor = result.Code;
+            }
+        }
+        _saving = false;
+
+        if (_modalError is null)
+        {
+            _editing = null;
+            await LoadAsync();
+        }
+    }
+
+    private void OpenSigningKey(BankSourceModel source)
+    {
+        _modalError = null;
+        _signingKey = string.Empty;
+        _signingKeyFor = source;
+    }
+
+    private async Task SaveSigningKeyAsync()
+    {
+        if (_signingKeyFor is null)
+            return;
+
+        _saving = true;
+        _modalError = await BankService.RegisterSigningKeyAsync(_signingKeyFor.Id, _signingKey.Trim());
+        _saving = false;
+
+        if (_modalError is null)
+        {
+            _signingKeyFor = null;
+            await LoadAsync();
+        }
+    }
+
+    private async Task RotateKey(BankSourceModel source)
+    {
+        _actingOnId = source.Id;
+        _error = null;
+        var (apiKey, error) = await BankService.RotateKeyAsync(source.Id);
+        _actingOnId = null;
+
+        if (error is not null)
+        {
+            _error = error;
+            return;
+        }
+
+        _revealedKey = apiKey;
+        _revealedFor = source.DisplayName;
+        await LoadAsync();
+    }
+
+    private async Task SetActive(BankSourceModel source, bool active)
+    {
+        _actingOnId = source.Id;
+        _error = await BankService.SetActiveAsync(source.Id, active);
+        _actingOnId = null;
+        await LoadAsync();
+    }
+
+    private async Task CopyRevealedKey()
+    {
+        if (_revealedKey is not null)
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _revealedKey);
+    }
+}

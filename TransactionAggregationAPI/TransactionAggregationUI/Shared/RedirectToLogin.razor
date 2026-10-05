@@ -1,9 +1,8 @@
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Nav
 
 @code {
-    protected override void OnInitialized()
-    {
-        var returnUrl = Uri.EscapeDataString(Nav.Uri);
-        Nav.NavigateTo($"/login?returnUrl={returnUrl}");
-    }
+    // NavigateToLogin carries the return URL in navigation state rather than the query string
+    // — the counterpart of NavigateToLogout (see MainLayout).
+    protected override void OnInitialized() => Nav.NavigateToLogin("authentication/login");
 }

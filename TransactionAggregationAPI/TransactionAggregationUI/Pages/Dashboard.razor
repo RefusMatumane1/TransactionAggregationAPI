@@ -1,145 +1,496 @@
 @page "/"
-@attribute [Authorize]
-@inject AuthService AuthService
-@inject CustomerService CustomerService
-@inject TransactionService TransactionService
-@inject AccountService AccountService
+@attribute [Authorize(Roles = "staff,admin")]
+@inject AggregateService Aggregates
+@inject BankService BankService
+@inject NavigationManager Nav
 
-<PageTitle>Dashboard</PageTitle>
+<PageTitle>Dashboard · Transaction Aggregation</PageTitle>
 
-<h4 class="mb-4">Dashboard</h4>
+<PageHeader Title="Dashboard">
+    <Subtitle>
+        @(_selectedBank?.DisplayName ?? "All banks") · @Format.Day(_filter.From) – @Format.Day(_filter.To)
+    </Subtitle>
+    <Actions>
+        <span class="freshness" title="Totals are rebuilt on a schedule (about hourly), not on every request. New transactions appear after the next rebuild.">
+            <i class="bi bi-clock-history" aria-hidden="true"></i>
+            @(_asOf is { } asOf ? $"Totals as of {Format.Timestamp(asOf)}" : "Totals not built yet")
+        </span>
+    </Actions>
+</PageHeader>
 
-@if (_loading)
-{
-    <div class="d-flex justify-content-center py-5">
-        <div class="spinner-border text-primary"></div>
+@* Filters: one row above everything they drive. *@
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+    <div class="segmented" role="group" aria-label="Period">
+        @foreach (var (key, label) in ReportRange.Presets)
+        {
+            <button type="button" aria-pressed="@(_range == key ? "true" : "false")" @onclick="() => SetRange(key)">@label</button>
+        }
+        <button type="button" aria-pressed="@(_range == ReportRange.Custom ? "true" : "false")" @onclick="() => SetRange(ReportRange.Custom)">Custom</button>
     </div>
+    @if (_range == ReportRange.Custom)
+    {
+        <div class="d-flex align-items-center gap-1">
+            <label class="visually-hidden" for="dash-from">From</label>
+            <input id="dash-from" type="date" class="form-control form-control-sm" max="@Format.Invariant(_filter.To)"
+                   value="@Format.Invariant(_filter.From)" @onchange="e => SetCustom(Format.ParseDay(e.Value as string), _filter.To)" />
+            <span class="text-muted small">to</span>
+            <label class="visually-hidden" for="dash-to">To</label>
+            <input id="dash-to" type="date" class="form-control form-control-sm" min="@Format.Invariant(_filter.From)"
+                   value="@Format.Invariant(_filter.To)" @onchange="e => SetCustom(_filter.From, Format.ParseDay(e.Value as string))" />
+        </div>
+    }
+</div>
+
+@* One card per bank: the main way to move between sources. Clicking narrows everything below. *@
+<div class="bank-strip" role="group" aria-label="Bank">
+    <button type="button" class="bank-card" style="--bank-color:#334155" aria-pressed="@(_filter.Institution is null ? "true" : "false")"
+            @onclick="() => SelectBank(null)">
+        <div class="fw-semibold small mb-1">All banks</div>
+        @if (_institutions is null)
+        {
+            <Skeleton Height="1.4rem" Width="7rem" />
+        }
+        else
+        {
+            <div class="fs-5 fw-bold num">@Format.Money(_allBanksNet)</div>
+            <div class="small text-muted">@Format.Count(_allBanksCount) transactions · @_allBanksAccounts accounts</div>
+        }
+    </button>
+    @foreach (var bank in _bankCards)
+    {
+        var totals = _institutionTotals.GetValueOrDefault(bank.Code);
+        <button type="button" class="bank-card" style="--bank-color:@bank.Color" aria-pressed="@(Same(_filter.Institution, bank.Code) ? "true" : "false")"
+                @onclick="() => SelectBank(bank.Code)">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                <span class="fw-semibold small">@bank.DisplayName</span>
+                @if (bank.IsActive)
+                {
+                    <span class="badge rounded-pill text-bg-light border fw-normal" title="Last delivery from this bank">
+                        <i class="bi bi-broadcast me-1 text-success" aria-hidden="true"></i>@BankDirectory.DescribeAge(bank.LastDeliveryAt)
+                    </span>
+                }
+                else
+                {
+                    <span class="badge rounded-pill text-bg-secondary fw-normal">Inactive</span>
+                }
+            </div>
+            <div class="fs-5 fw-bold num">@Format.Money(totals?.Net ?? 0)</div>
+            <div class="small text-muted">@Format.Count(totals?.TransactionCount ?? 0) transactions · @(totals?.AccountCount ?? 0) accounts</div>
+        </button>
+    }
+</div>
+
+@if (_error is not null)
+{
+    <ErrorPanel Message="@_error" OnRetry="LoadAsync" />
 }
-else if (_customer is not null)
+
+@if (_loading && _cashFlow is not null)
 {
-    <div class="mb-2 text-muted">Welcome back, <strong>@_customer.Name</strong></div>
+    <div class="refresh-bar" role="progressbar" aria-label="Updating"></div>
+}
 
-    <!-- Summary stat cards -->
-    <div class="row g-3 mb-4">
-        <div class="col-sm-6 col-xl-3">
-            <StatCard Label="Total Income" Value="@($"{_summary?.TotalIncome.ToString("C", new System.Globalization.CultureInfo("en-ZA"))}")"
-                      IconClass="bi-arrow-down-circle-fill" IconBg="bg-success" />
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <StatCard Label="Total Expenses" Value="@($"{_summary?.TotalExpenses.ToString("C", new System.Globalization.CultureInfo("en-ZA"))}")"
-                      IconClass="bi-arrow-up-circle-fill" IconBg="bg-danger" />
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <StatCard Label="Net Balance" Value="@($"{_summary?.NetBalance.ToString("C", new System.Globalization.CultureInfo("en-ZA"))}")"
-                      IconClass="bi-wallet2" IconBg="bg-primary" />
-        </div>
-        <div class="col-sm-6 col-xl-3">
-            <StatCard Label="Transactions" Value="@($"{_summary?.TotalTransactions}")"
-                      IconClass="bi-receipt" IconBg="bg-info" />
-        </div>
-    </div>
+<div aria-live="polite" class="visually-hidden">@(_loading ? "Loading the dashboard" : "Dashboard updated")</div>
 
-    <div class="row g-3">
-        <!-- Spending by category -->
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header fw-semibold">Spending by Category</div>
-                <div class="card-body p-0">
-                    @if (_summary?.SpendingByCategory is { Count: > 0 })
-                    {
-                        <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Category</th>
-                                    <th class="text-end">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var (cat, amt) in _summary.SpendingByCategory.OrderByDescending(x => x.Value))
-                                {
-                                    <tr>
-                                        <td>
-                                            <span class="badge badge-@cat">@cat</span>
-                                        </td>
-                                        <td class="text-end">@amt.ToString("C", new System.Globalization.CultureInfo("en-ZA"))</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
-                    else
-                    {
-                        <p class="text-muted p-3">No spending data.</p>
-                    }
-                </div>
-            </div>
+@if (_cashFlow is null)
+{
+    @if (_loading)
+    {
+        <div class="row g-3 mb-3">
+            @for (var i = 0; i < 4; i++)
+            {
+                <div class="col-sm-6 col-xl-3"><div class="kpi"><Skeleton Width="40%" /><Skeleton Height="1.8rem" Width="70%" Class="mt-2" /></div></div>
+            }
         </div>
-
-        <!-- Account list -->
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center fw-semibold">
-                    <span>Accounts</span>
-                    <a href="/accounts" class="btn btn-sm btn-outline-primary">Manage</a>
-                </div>
-                <div class="card-body p-0">
-                    @if (_accounts.Count > 0)
-                    {
-                        <table class="table table-sm mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Name</th>
-                                    <th>Type</th>
-                                    <th class="text-end">Balance</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach (var acc in _accounts)
-                                {
-                                    <tr>
-                                        <td>
-                                            <a href="/accounts/@acc.Id/transactions">@acc.AccountName</a>
-                                        </td>
-                                        <td><span class="badge bg-secondary">@acc.AccountType</span></td>
-                                        <td class="text-end">@acc.Balance.ToString("C",  new System.Globalization.CultureInfo("en-ZA"))</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    }
-                    else
-                    {
-                        <p class="text-muted p-3">No accounts yet.</p>
-                    }
-                </div>
-            </div>
-        </div>
-    </div>
+        <div class="card"><div class="card-body"><Skeleton Height="15rem" /></div></div>
+    }
 }
 else
 {
-    <div class="alert alert-warning">Could not load profile. Please try again.</div>
+    <div class="@(_loading ? "is-refreshing" : "")">
+        @if (_asOf is null)
+        {
+            <div class="alert alert-info d-flex gap-2 align-items-start">
+                <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+                <div>Totals haven't been built yet. The first rebuild runs shortly after the worker starts; this page then fills in.</div>
+            </div>
+        }
+
+        <div class="row g-3 mb-3">
+            <div class="col-sm-6 col-xl-3">
+                <Kpi Label="Income" Value="@Format.Money(_cashFlow.TotalIncome)" Swatch="var(--series-income)"
+                     Change="_comparison?.IncomeChangePercent" HigherIsBetter="true" HasComparison="_comparison is not null" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <Kpi Label="Expenses" Value="@Format.Money(_cashFlow.TotalExpenses)" Swatch="var(--series-expense)"
+                     Change="_comparison?.ExpensesChangePercent" HigherIsBetter="false" HasComparison="_comparison is not null" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <Kpi Label="Net" Value="@Format.Money(_cashFlow.Net)" Note="Income minus expenses" />
+            </div>
+            <div class="col-sm-6 col-xl-3">
+                <Kpi Label="Transactions" Value="@Format.Count(_cashFlow.Points.Sum(p => p.TransactionCount))"
+                     Note="@($"{_accountRows.Count} accounts")" />
+            </div>
+        </div>
+
+        <div class="row g-3 mb-3">
+            <div class="col-xl-8">
+                <section class="card h-100" aria-labelledby="cashflow-title">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h2 id="cashflow-title" class="panel-title">Monthly cash flow</h2>
+                        <div class="segmented" role="group" aria-label="Cash flow view">
+                            <button type="button" aria-pressed="@(!_cashFlowAsTable ? "true" : "false")" @onclick="() => _cashFlowAsTable = false">
+                                <i class="bi bi-bar-chart" aria-hidden="true"></i> Chart
+                            </button>
+                            <button type="button" aria-pressed="@(_cashFlowAsTable ? "true" : "false")" @onclick="() => _cashFlowAsTable = true">
+                                <i class="bi bi-table" aria-hidden="true"></i> Table
+                            </button>
+                        </div>
+                    </div>
+                    @if (_cashFlow.Points.All(p => p.TransactionCount == 0))
+                    {
+                        <EmptyState Title="No transactions in this period" Icon="bi-bar-chart">Try a longer period or another bank.</EmptyState>
+                    }
+                    else if (_cashFlowAsTable)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="ps-3">Month</th>
+                                        <th scope="col" class="text-end">Income</th>
+                                        <th scope="col" class="text-end">Expenses</th>
+                                        <th scope="col" class="text-end">Net</th>
+                                        <th scope="col" class="text-end pe-3">Transactions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var point in _cashFlow.Points)
+                                    {
+                                        <tr>
+                                            <th scope="row" class="ps-3 fw-normal">@Format.Month(point.PeriodStart)</th>
+                                            <td class="text-end num">@Format.Money(point.Income)</td>
+                                            <td class="text-end num">@Format.Money(point.Expenses)</td>
+                                            <td class="text-end num fw-semibold">@Format.Money(point.Net)</td>
+                                            <td class="text-end num pe-3">@Format.Count(point.TransactionCount)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-body">
+                            <CashFlowChart Points="_cashFlow.Points" />
+                        </div>
+                    }
+                </section>
+            </div>
+
+            <div class="col-xl-4">
+                <section class="card h-100" aria-labelledby="categories-title">
+                    <div class="card-header">
+                        <h2 id="categories-title" class="panel-title">Spending by category</h2>
+                    </div>
+                    <div class="card-body">
+                        @if (_categories?.Categories is { Count: > 0 } categories)
+                        {
+                            @foreach (var category in categories)
+                            {
+                                <a class="share-row" href="@TransactionsLink(category: category.Category)"
+                                   aria-label="@($"{category.Category}: {Format.Money(category.Amount)}, {Format.Percent(category.Share)} of spending. Show these transactions")">
+                                    <div class="d-flex justify-content-between align-items-center small gap-2">
+                                        <CategoryBadge Category="@category.Category" />
+                                        <span class="num">@Format.Money(category.Amount) <span class="text-muted">· @Format.Percent(category.Share)</span></span>
+                                    </div>
+                                    <div class="share-track" aria-hidden="true">
+                                        <div class="share-fill" style="width:@Width(category.Share)"></div>
+                                    </div>
+                                </a>
+                            }
+                        }
+                        else
+                        {
+                            <EmptyState Title="No spending in this period" Icon="bi-pie-chart" />
+                        }
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-xl-7">
+                <section class="card h-100" aria-labelledby="accounts-title">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h2 id="accounts-title" class="panel-title">Accounts</h2>
+                        <a class="small" href="@TransactionsLink()">All transactions <i class="bi bi-arrow-right" aria-hidden="true"></i></a>
+                    </div>
+                    @if (_accountRows.Count > 0)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover mb-0 align-middle">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="ps-3">Account</th>
+                                        <th scope="col" class="d-none d-md-table-cell">Bank</th>
+                                        <th scope="col" class="text-end" aria-sort="@AriaSort(AccountSort.Income)"><button class="sort-btn" @onclick="() => SortAccounts(AccountSort.Income)">Income<SortIcon Active="_accountSort == AccountSort.Income" /></button></th>
+                                        <th scope="col" class="text-end" aria-sort="@AriaSort(AccountSort.Expenses)"><button class="sort-btn" @onclick="() => SortAccounts(AccountSort.Expenses)">Expenses<SortIcon Active="_accountSort == AccountSort.Expenses" /></button></th>
+                                        <th scope="col" class="text-end" aria-sort="@AriaSort(AccountSort.Net)"><button class="sort-btn" @onclick="() => SortAccounts(AccountSort.Net)">Net<SortIcon Active="_accountSort == AccountSort.Net" /></button></th>
+                                        <th scope="col" class="text-end pe-3" aria-sort="@AriaSort(AccountSort.Count)"><button class="sort-btn" @onclick="() => SortAccounts(AccountSort.Count)">Txns<SortIcon Active="_accountSort == AccountSort.Count" /></button></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var (bank, account) in SortedAccounts)
+                                    {
+                                        <tr>
+                                            <th scope="row" class="ps-3 fw-normal">
+                                                <a class="font-monospace small" href="@TransactionsLink(bank.Code, account.ExternalAccountId)"
+                                                   title="Show this account's transactions">@account.ExternalAccountId</a>
+                                                <div class="d-md-none small"><BankBadge Bank="bank" /></div>
+                                            </th>
+                                            <td class="d-none d-md-table-cell"><BankBadge Bank="bank" /></td>
+                                            <td class="text-end num">@Format.Money(account.Income)</td>
+                                            <td class="text-end num">@Format.Money(account.Expenses)</td>
+                                            <td class="text-end num fw-semibold">@Format.Money(account.Net)</td>
+                                            <td class="text-end num pe-3">@Format.Count(account.TransactionCount)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <EmptyState Title="No accounts with transactions in this period" Icon="bi-wallet2" />
+                    }
+                </section>
+            </div>
+
+            <div class="col-xl-5">
+                <section class="card h-100" aria-labelledby="comparison-title">
+                    <div class="card-header">
+                        <h2 id="comparison-title" class="panel-title">Spending against the previous period</h2>
+                        @if (_comparison is not null)
+                        {
+                            <div class="small text-muted">
+                                @Format.Day(_comparison.Previous.Period.From) – @Format.Day(_comparison.Previous.Period.To)
+                            </div>
+                        }
+                    </div>
+                    @if (_comparison?.Categories is { Count: > 0 } changes)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="ps-3">Category</th>
+                                        <th scope="col" class="text-end">Now</th>
+                                        <th scope="col" class="text-end">Before</th>
+                                        <th scope="col" class="text-end pe-3">Change</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var change in changes)
+                                    {
+                                        <tr>
+                                            <th scope="row" class="ps-3 fw-normal"><CategoryBadge Category="@change.Category" /></th>
+                                            <td class="text-end num">@Format.Money(change.CurrentSpend)</td>
+                                            <td class="text-end num text-muted">@Format.Money(change.PreviousSpend)</td>
+                                            <td class="text-end num pe-3 @(change.Change > 0 ? "text-bad" : change.Change < 0 ? "text-good" : "")">
+                                                @if (change.ChangePercent is { } pct)
+                                                {
+                                                    <i class="bi @(pct > 0 ? "bi-arrow-up-right" : pct < 0 ? "bi-arrow-down-right" : "bi-dash") me-1" aria-hidden="true"></i>
+                                                    @Format.Change(pct)
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-muted">New</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <EmptyState Title="Nothing to compare" Icon="bi-arrow-left-right">No spending in either period.</EmptyState>
+                    }
+                </section>
+            </div>
+        </div>
+    </div>
 }
 
 @code {
-    private CustomerModel? _customer;
-    private TransactionSummaryModel? _summary;
-    private List<AccountModel> _accounts = [];
-    private bool _loading = true;
+    [SupplyParameterFromQuery(Name = "range")] public string? Range { get; set; }
+    [SupplyParameterFromQuery(Name = "from")] public string? From { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] public string? To { get; set; }
+    [SupplyParameterFromQuery(Name = "bank")] public string? Bank { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    private enum AccountSort { Income, Expenses, Net, Count }
+
+    private ReportFilter _filter = new();
+    private string _range = ReportRange.Default;
+    private IReadOnlyDictionary<string, BankModel> _banks = new Dictionary<string, BankModel>();
+    private List<BankModel> _bankCards = [];
+    private Dictionary<string, InstitutionTotalModel> _institutionTotals = new(StringComparer.OrdinalIgnoreCase);
+    private List<(BankModel Bank, AccountTotalModel Account)> _accountRows = [];
+    private BankModel? _selectedBank;
+    private InstitutionBreakdownModel? _institutions;
+    private decimal _allBanksNet;
+    private int _allBanksCount;
+    private int _allBanksAccounts;
+    private CategoryBreakdownModel? _categories;
+    private CashFlowSeriesModel? _cashFlow;
+    private PeriodComparisonModel? _comparison;
+    private DateTime? _asOf;
+    private string? _error;
+    private bool _loading = true;
+    private bool _cashFlowAsTable;
+    private AccountSort _accountSort = AccountSort.Count;
+    private int _loadVersion;
+
+    // The URL is the state: back/forward, refresh and shared links all show the same report.
+    protected override async Task OnParametersSetAsync()
     {
-        var userIdStr = AuthService.GetCurrentUserId();
-        if (Guid.TryParse(userIdStr, out var userId))
+        var today = Format.TodayInSouthAfrica();
+        var from = Format.ParseDay(From);
+        var to = Format.ParseDay(To);
+
+        if (Range == ReportRange.Custom && from is { } f && to is { } t && f <= t)
         {
-                var customerTask = CustomerService.GetCustomerAsync(userId);
-            var summaryTask = TransactionService.GetSummaryAsync(userId);
-            var accountsTask = AccountService.GetAccountsAsync(userId);
-            await Task.WhenAll(customerTask, summaryTask, accountsTask);
-            _customer = customerTask.Result;
-            _summary = summaryTask.Result;
-            _accounts = accountsTask.Result;
+            _range = ReportRange.Custom;
+            _filter = new ReportFilter { From = f, To = t, Institution = NullIfEmpty(Bank) };
         }
+        else
+        {
+            _range = ReportRange.Resolve(Range, today) is null ? ReportRange.Default : Range!;
+            var (start, end) = ReportRange.Resolve(_range, today)!.Value;
+            _filter = new ReportFilter { From = start, To = end, Institution = NullIfEmpty(Bank) };
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var version = ++_loadVersion;
+        _loading = true;
+        _error = null;
+
+        _banks = await BankService.GetBanksAsync();
+        _selectedBank = _filter.Institution is { } code ? BankDirectory.Find(_banks, code) : null;
+
+        // The bank cards always show every bank, whichever one is selected below.
+        var allBanks = new ReportFilter { From = _filter.From, To = _filter.To };
+        var institutions = Aggregates.GetInstitutionsAsync(allBanks);
+        var categories = Aggregates.GetCategoriesAsync(_filter);
+        var cashFlow = Aggregates.GetMonthlyCashFlowAsync(_filter);
+        var comparison = Aggregates.GetComparisonAsync(_filter);
+        await Task.WhenAll(institutions, categories, cashFlow, comparison);
+
+        // A newer filter started while this one was in flight: its results win.
+        if (version != _loadVersion)
+            return;
+
+        _error = new[] { institutions.Result.Error, categories.Result.Error, cashFlow.Result.Error, comparison.Result.Error }
+            .FirstOrDefault(e => e is not null);
+        if (_error is not null)
+        {
+            _loading = false;
+            return;
+        }
+
+        _institutions = institutions.Result.Value;
+        var rows = _institutions?.Institutions ?? [];
+        _institutionTotals = rows.ToDictionary(i => i.Institution, StringComparer.OrdinalIgnoreCase);
+        _allBanksNet = rows.Sum(i => i.Net);
+        _allBanksCount = rows.Sum(i => i.TransactionCount);
+        _allBanksAccounts = rows.Sum(i => i.AccountCount);
+
+        // Registered banks first (by name), then any code that only appears in the data. A switched-off
+        // bank only gets a card while it still has money in the period (or is the one selected).
+        _bankCards = _banks.Values
+            .Where(b => b.IsActive || _institutionTotals.ContainsKey(b.Code) || Same(_filter.Institution, b.Code))
+            .OrderBy(b => b.DisplayName)
+            .Concat(rows.Where(i => !_banks.ContainsKey(i.Institution)).Select(i => BankDirectory.Find(_banks, i.Institution)))
+            .ToList();
+
+        _accountRows = rows
+            .Where(i => _filter.Institution is null || Same(i.Institution, _filter.Institution))
+            .SelectMany(i => i.Accounts.Select(a => (BankDirectory.Find(_banks, i.Institution), a)))
+            .ToList();
+
+        _categories = categories.Result.Value;
+        _cashFlow = cashFlow.Result.Value;
+        _comparison = comparison.Result.Value;
+
+        // Every report reads the same scheduled rebuild; the oldest stamp is the honest one.
+        _asOf = new[] { _institutions?.AsOf, _categories?.AsOf, _cashFlow?.AsOf, _comparison?.AsOf }
+            .Where(a => a is not null)
+            .Min();
         _loading = false;
     }
+
+    private void SetRange(string key)
+    {
+        if (key == ReportRange.Custom)
+        {
+            // Start the custom range from what is on screen, so switching loses nothing.
+            Navigate(ReportRange.Custom, _filter.From, _filter.To, _filter.Institution);
+            return;
+        }
+        Navigate(key, null, null, _filter.Institution);
+    }
+
+    private void SetCustom(DateOnly? from, DateOnly? to)
+    {
+        if (from is { } f && to is { } t && f <= t)
+            Navigate(ReportRange.Custom, f, t, _filter.Institution);
+    }
+
+    private void SelectBank(string? code) =>
+        Navigate(_range, _range == ReportRange.Custom ? _filter.From : null, _range == ReportRange.Custom ? _filter.To : null, code);
+
+    private void Navigate(string range, DateOnly? from, DateOnly? to, string? bank) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["range"] = range == ReportRange.Default ? null : range,
+            ["from"] = from is { } f ? Format.Invariant(f) : null,
+            ["to"] = to is { } t ? Format.Invariant(t) : null,
+            ["bank"] = bank
+        }));
+
+    private IEnumerable<(BankModel Bank, AccountTotalModel Account)> SortedAccounts => _accountSort switch
+    {
+        AccountSort.Income => _accountRows.OrderByDescending(r => r.Account.Income),
+        AccountSort.Expenses => _accountRows.OrderByDescending(r => r.Account.Expenses),
+        AccountSort.Net => _accountRows.OrderByDescending(r => r.Account.Net),
+        _ => _accountRows.OrderByDescending(r => r.Account.TransactionCount)
+    };
+
+    private void SortAccounts(AccountSort sort) => _accountSort = sort;
+
+    private string? AriaSort(AccountSort sort) => _accountSort == sort ? "descending" : null;
+
+    private string TransactionsLink(string? bank = null, string? account = null, TransactionCategory? category = null) =>
+        Nav.GetUriWithQueryParameters("/transactions", new Dictionary<string, object?>
+        {
+            ["bank"] = bank ?? _filter.Institution,
+            ["account"] = account,
+            ["category"] = category?.ToString(),
+            ["from"] = Format.Invariant(_filter.From),
+            ["to"] = Format.Invariant(_filter.To)
+        });
+
+    private static string Width(decimal share) =>
+        (share * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private static bool Same(string? a, string? b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
+    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 }

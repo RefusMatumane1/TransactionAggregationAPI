@@ -1,4 +1,4 @@
-﻿<Project>
+<Project>
 
 	<!--Central Package Management -->
 	<PropertyGroup>
@@ -15,14 +15,16 @@
 
 	<!--Build & Code Quality -->
 	<PropertyGroup>
-		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-		<!-- turn true in CI -->
-		<WarningsAsErrors />
 		<AnalysisLevel>latest</AnalysisLevel>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+		<!-- Roslyn only reports IDE0005 (unused usings) on build when XML documentation is generated
+		     (dotnet/roslyn#41640). Public members are not required to carry doc comments. -->
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<NoWarn>$(NoWarn);CS1591</NoWarn>
+		<!-- CI builds (GitHub Actions sets CI=true) fail on any warning; local builds report them. -->
+		<TreatWarningsAsErrors Condition="'$(CI)' == 'true'">true</TreatWarningsAsErrors>
 	</PropertyGroup>
 
-	<!--Versioning (optional but recommended) -->
 	<PropertyGroup>
 		<Version>1.0.0</Version>
 	</PropertyGroup>

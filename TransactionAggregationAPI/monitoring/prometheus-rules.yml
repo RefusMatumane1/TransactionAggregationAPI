@@ -1,0 +1,125 @@
+# Alert rules for docker-compose and Aspire. k8s carries the same groups inline in
+# k8s/monitoring/prometheus/configmap.yaml (rules.yml key) — keep the two in step.
+# No Alertmanager runs locally: firing alerts show at http://localhost:9090/alerts.
+groups:
+  - name: transaction-api.rules
+    rules:
+      - alert: TransactionApiDown
+        expr: up{job="transaction-api"} == 0 or absent(up{job="transaction-api"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "transaction-api target is down"
+          description: "Prometheus has not successfully scraped {{ $labels.instance }} (or the target is missing) for 2 minutes."
+
+      - alert: TransactionApiHighErrorRate
+        expr: |
+          100 * sum(rate(http_request_duration_seconds_count{job="transaction-api",code=~"5.."}[5m]))
+          / sum(rate(http_request_duration_seconds_count{job="transaction-api"}[5m]))
+          > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "transaction-api 5xx rate above 5%"
+          description: "Matches the dashboard's own red threshold (Error Rate panel). Check /readiness first — Postgres/Redis outages surface here before their own signal exists (no DB/Redis exporter is deployed)."
+
+      - alert: TransactionApiHighLatencyP99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job="transaction-api"}[5m])) by (le)) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "transaction-api P99 latency above 1s"
+          description: "Matches the dashboard's own red threshold (P99 Latency panel)."
+
+      - alert: TransactionApiHighMemoryUsage
+        expr: process_working_set_bytes{job="transaction-api"} > 450 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "transaction-api working set approaching its 512Mi container limit"
+          description: "k8s/api/deployment.yaml sets a 512Mi memory limit; sustained usage above ~450Mi risks an OOMKill."
+
+  # Background processing runs in the worker (job="transaction-worker"), so every
+  # messaging signal is scraped from there, not from the API.
+  - name: message-dispatch.rules
+    rules:
+      - alert: TransactionWorkerDown
+        expr: up{job="transaction-worker"} == 0 or absent(up{job="transaction-worker"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "transaction-worker target is down"
+          description: "Nothing is ingesting: inbox, outbox and the Kafka consumer all run in the worker."
+
+      - alert: OutboxMessagesDeadLettering
+        expr: increase(outbox_messages_dead_lettered_total{job="transaction-worker"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox message(s) dead-lettered in the last 15 minutes"
+          description: "Inspect the dead-lettered rows in the messaging schema: LastError says why; requeue or discard them once the cause is fixed."
+
+      - alert: InboxMessagesDeadLettering
+        expr: increase(inbox_messages_dead_lettered_total{job="transaction-worker"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inbox message(s) dead-lettered in the last 15 minutes"
+          description: "LastError on the row carries the SQLSTATE or domain reason."
+
+      - alert: InboxBacklogGrowing
+        expr: max(messaging_backlog_messages{job="transaction-worker",queue="inbox",status="pending"}) > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 500 inbox messages waiting for 15 minutes"
+          description: "Ingestion is falling behind or blocked (database slow/unavailable?). Scale the worker or check /readiness."
+
+      - alert: OutboxBacklogGrowing
+        expr: max(messaging_backlog_messages{job="transaction-worker",queue="outbox",status="pending"}) > 500
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 500 outbox messages waiting for 15 minutes"
+          description: "Integration events are not being published (database slow, or a handler failing repeatedly)."
+
+      - alert: DeadLetteredMessagesUnresolved
+        expr: max by (queue) (messaging_backlog_messages{job="transaction-worker",status="dead_lettered"}) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} {{ $labels.queue }} message(s) dead-lettered and not yet handled"
+          description: "The DeadLettering alerts only fire when a message is first parked; this one stays on until an operator requeues or discards them."
+
+      - alert: IngestionLagHigh
+        expr: histogram_quantile(0.95, sum(rate(messaging_end_to_end_lag_seconds_bucket{job="transaction-worker",queue="inbox"}[10m])) by (le)) > 300
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 time from receipt to stored transaction above 5 minutes"
+          description: "New transactions reach the dashboards late. Check the inbox backlog and dead-letter alerts first."
+
+      - alert: KafkaRecordsDeadLettered
+        expr: increase(kafka_bank_transactions_permanent_failures_total{job="transaction-worker"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka records moved to bank-transactions.dlq"
+          description: "Records the store refused, or that failed repeatedly with an unrecognised error. The dlq-reason header says which."
+
+      - alert: KafkaConsumerCrashed
+        expr: increase(kafka_bank_transactions_consumer_crashes_total{job="transaction-worker"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The bank-transactions Kafka consumer loop died and restarted its host"
+          description: "Repeated crashes mean ingestion over Kafka is not progressing. Check worker logs for the LogCritical entry."

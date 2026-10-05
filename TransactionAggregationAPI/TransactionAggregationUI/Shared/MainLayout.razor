@@ -1,32 +1,40 @@
 @inherits LayoutComponentBase
-@inject AuthService AuthService
+@implements IDisposable
+@using Microsoft.AspNetCore.Components.WebAssembly.Authentication
 @inject NavigationManager Nav
 
 <AuthorizeView>
     <Authorized>
-        <div class="app-wrapper">
-            <nav class="sidebar d-flex flex-column">
+        <a class="skip-link" href="@SkipHref">Skip to content</a>
+        <div class="app-wrapper @(_navOpen ? "nav-open" : "")">
+            <nav id="app-nav" class="sidebar" aria-label="Main">
                 <div class="brand">
-                    <i class="bi bi-bank me-2"></i>Transaction Aggregation
+                    <i class="bi bi-bank me-2" aria-hidden="true"></i>Transaction Aggregation
                 </div>
                 <NavMenu />
                 <div class="mt-auto px-3 pb-3">
                     <button class="btn btn-sm btn-outline-secondary w-100" @onclick="Logout">
-                        <i class="bi bi-box-arrow-left me-1"></i>Logout
+                        <i class="bi bi-box-arrow-left me-1" aria-hidden="true"></i>Sign out
                     </button>
                 </div>
             </nav>
+            <div class="sidebar-backdrop" @onclick="CloseNav"></div>
             <div class="main-content d-flex flex-column">
-                <div class="topbar">
-                    <span class="fw-semibold text-dark">Transaction Aggregation</span>
-                    <span class="text-muted small">
-                        <i class="bi bi-person-circle me-1"></i>
-                        @context.User.Identity?.Name
+                <header class="topbar">
+                    <button class="btn btn-sm btn-light d-lg-none" aria-controls="app-nav" aria-expanded="@(_navOpen ? "true" : "false")"
+                            aria-label="Open menu" @onclick="() => _navOpen = !_navOpen">
+                        <i class="bi bi-list fs-5" aria-hidden="true"></i>
+                    </button>
+                    <span class="fw-semibold d-lg-none">Transaction Aggregation</span>
+                    <span class="ms-auto small text-muted d-flex align-items-center gap-2">
+                        <i class="bi bi-person-circle" aria-hidden="true"></i>
+                        <span>@context.User.Identity?.Name</span>
+                        <span class="badge rounded-pill text-bg-light border">@(context.User.IsInRole("admin") ? "Admin" : "Staff")</span>
                     </span>
-                </div>
-                <div class="page-body flex-grow-1">
+                </header>
+                <main id="main" class="page-body flex-grow-1">
                     @Body
-                </div>
+                </main>
             </div>
         </div>
     </Authorized>
@@ -36,9 +44,32 @@
 </AuthorizeView>
 
 @code {
-    private async Task Logout()
+    private bool _navOpen;
+
+    // Fragment links resolve against <base href="/">, so the skip link carries the current path.
+    private string SkipHref => $"{new Uri(Nav.Uri).PathAndQuery}#main";
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
-        await AuthService.LogoutAsync();
-        Nav.NavigateTo("/login", forceLoad: true);
+        if (!_navOpen)
+            return;
+        _navOpen = false;
+        StateHasChanged();
     }
+
+    private void CloseNav() => _navOpen = false;
+
+    private void Logout()
+    {
+        // NavigateToLogout, not a plain navigation: RemoteAuthenticatorView only performs a
+        // logout the app started this way. A direct (or force-reloaded) visit to
+        // authentication/logout is refused as "not initiated from within the page" — the
+        // tokens stay in session storage and the Keycloak session survives, so the user is
+        // still signed in. This clears both, via Keycloak's end-session endpoint.
+        Nav.NavigateToLogout("authentication/logout");
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

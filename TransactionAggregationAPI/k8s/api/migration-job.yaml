@@ -1,14 +1,10 @@
 # ── EF Core Migration Job ──────────────────────────────────────────────────
-# Run BEFORE deploying the API Deployment to prevent the race condition where
-# multiple API pods all call ApplyMigrationsAsync() on startup simultaneously.
-#
-# Apply workflow:
+# Applies every module's migrations as the schema owner (tagg_migrator) with the image the API
+# is about to run. Pods never migrate outside Development. deploy-k8s.sh runs it before the
+# rollout and stops if it fails; by hand:
 #   1. kubectl apply -f k8s/api/migration-job.yaml -n transaction-aggregation
-#   2. kubectl wait --for=condition=complete job/db-migrate -n transaction-aggregation --timeout=120s
+#   2. kubectl wait --for=condition=complete job/db-migrate -n transaction-aggregation --timeout=300s
 #   3. kubectl apply -f k8s/api/deployment.yaml -n transaction-aggregation
-#
-# In CI/CD (e.g. GitHub Actions / Rancher Fleet):
-#   helm upgrade ... (renders the Job as a pre-install hook — see annotation below)
 # ──────────────────────────────────────────────────────────────────────────
 apiVersion: batch/v1
 kind: Job
@@ -19,12 +15,6 @@ metadata:
     app.kubernetes.io/name: db-migrate
     app.kubernetes.io/component: migration
     app.kubernetes.io/part-of: transaction-aggregation
-  annotations:
-    # Helm pre-install/pre-upgrade hook — runs this Job before any other
-    # resources are applied.
-    helm.sh/hook: pre-install,pre-upgrade
-    helm.sh/hook-weight: "-5"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
   activeDeadlineSeconds: 300 # Fail the job after 5 minutes
@@ -43,23 +33,55 @@ spec:
 
       containers:
         - name: migrate
-          image: transactionaggregationapi:latest
+          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
           imagePullPolicy: IfNotPresent
 
           # --migrate-only is handled in Program.cs: the app applies all pending
           # EF Core migrations and exits with code 0 without starting the web server.
           command: ["dotnet", "TransactionAggregationAPI.dll", "--migrate-only"]
 
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+          # Startup (AuthenticationSetup.cs) validates Keycloak config and registers the Seq/Redis
+          # clients during startup BEFORE the --migrate-only check runs (they're
+          # builder-time calls, not app-time) — without these, the process
+          # throws before ever reaching the migration. Verified: running this
+          # container with only the env vars this Job used to declare crashes
+          # with "Unable to add a Seq health check because the 'ServerUrl'
+          # setting is missing" before a single migration is attempted.
+          envFrom:
+            - configMapRef:
+                name: transaction-api-config
+
           env:
-            - name: ASPNETCORE_ENVIRONMENT
-              value: "development"
-            - name: POSTGRES_PASSWORD
+            # The only workload that connects as the schema owner: migrations need DDL, the
+            # running application must not have it (k8s/postgres/init-roles.yaml).
+            - name: MIGRATOR_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: transaction-api-secrets
-                  key: postgres-password
+                  key: migrator-db-password
             - name: ConnectionStrings__transactiondb
-              value: "Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+              value: "Host=postgres;Port=5432;Database=transactiondb;Username=tagg_migrator;Password=$(MIGRATOR_DB_PASSWORD)"
+            - name: ConnectionStrings__redis
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: REDIS_CONNECTION_STRING
+            - name: ConnectionStrings__seq
+              valueFrom:
+                configMapKeyRef:
+                  name: transaction-api-config
+                  key: SEQ_URL
 
           resources:
             requests:
@@ -68,3 +90,7 @@ spec:
             limits:
               cpu: "500m"
               memory: "512Mi"
+
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,63 @@
+name: ZAP Baseline Scan
+
+# Dynamic API security testing (Instructions.md section 21). Deliberately NOT run on
+# every push/PR: it needs the full stack up (Postgres, Redis, Keycloak, API) and takes
+# several minutes for a passive baseline pass — running it on every PR would slow the
+# main pipeline for a signal that's most useful pre-release or on a regular cadence,
+# not per-commit. Trigger manually before a release, or let the weekly schedule catch
+# drift. This does NOT replace the Trivy container/SBOM checks or the dependency
+# vulnerability scan in ci-cd.yml — those catch known-CVE and supply-chain issues; ZAP
+# catches runtime API behavior (missing headers, verbose errors, etc.) that static
+# scanning can't see. Neither replaces a real penetration test.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+
+jobs:
+  zap-baseline:
+    name: ZAP Baseline against docker-compose stack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # --wait returns once every service's healthcheck passes (the API's reports Healthy
+      # only after migrations and its dependencies are ready).
+      - name: Start the stack
+        working-directory: TransactionAggregationAPI
+        run: |
+          docker compose up -d --build --wait --wait-timeout 600 || {
+            echo "::error::Stack did not become healthy"
+            docker compose logs api keycloak || true
+            exit 1
+          }
+
+      - name: Smoke test
+        working-directory: TransactionAggregationAPI
+        run: scripts/smoke-test.sh http://localhost:5001
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:5001'
+          # Baseline = passive scan only (no active attack payloads against a shared
+          # local stack). This finds missing security headers, verbose error
+          # disclosure, cookie flags, etc. — not injection/auth-bypass, which needs an
+          # active scan against a disposable environment with real seeded data and is
+          # out of scope for this lightweight pass.
+          # .zap/rules.tsv promotes the checks this API guarantees (anti-clickjacking,
+          # nosniff, no error/stack-trace disclosure) to FAIL: a regression breaks the run.
+          # Everything else stays advisory (-I), since the passive baseline also reports
+          # informational findings on the hosted SPA's static files.
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a -I'
+          fail_action: true
+
+      - name: Stop the stack
+        if: always()
+        working-directory: TransactionAggregationAPI
+        run: docker compose down -v

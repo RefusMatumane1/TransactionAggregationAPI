@@ -1,0 +1,8 @@
+# Shell scripts run inside Linux containers: a CRLF shebang (#!/bin/sh followed by CR) makes
+# the container fail with "not found" when the repo is checked out on Windows (core.autocrlf).
+*.sh text eol=lf
+
+# .editorconfig requires CRLF for C# (end_of_line = crlf) and CI runs `dotnet format
+# --verify-no-changes` on Linux. Without this, a Linux checkout gets LF and the format gate
+# flags every file; with it, every platform checks out what the formatter expects.
+*.cs text eol=crlf

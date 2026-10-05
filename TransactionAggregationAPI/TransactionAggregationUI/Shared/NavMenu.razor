@@ -1,19 +1,31 @@
-@inject NavigationManager Nav
-
 <ul class="nav flex-column mt-2">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
-            <i class="bi bi-speedometer2"></i> Dashboard
-        </NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="/accounts">
-            <i class="bi bi-wallet2"></i> Accounts
-        </NavLink>
-    </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="/summary">
-            <i class="bi bi-bar-chart-line"></i> Summary
-        </NavLink>
-    </li>
+    <AuthorizeView Roles="staff,admin">
+        <Authorized>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="/" Match="NavLinkMatch.All">
+                    <i class="bi bi-speedometer2" aria-hidden="true"></i> Dashboard
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="/transactions">
+                    <i class="bi bi-list-ul" aria-hidden="true"></i> Transactions
+                </NavLink>
+            </li>
+        </Authorized>
+    </AuthorizeView>
+    <AuthorizeView Roles="admin">
+        <Authorized>
+            <li class="nav-section" role="presentation">Administration</li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="/admin/banks">
+                    <i class="bi bi-bank" aria-hidden="true"></i> Banks
+                </NavLink>
+            </li>
+            <li class="nav-item">
+                <NavLink class="nav-link" href="/admin/audit">
+                    <i class="bi bi-journal-check" aria-hidden="true"></i> Audit trail
+                </NavLink>
+            </li>
+        </Authorized>
+    </AuthorizeView>
 </ul>

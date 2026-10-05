@@ -16,17 +16,32 @@
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="NetArchTest.Rules" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="coverlet.collector" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TransactionAggregation.Application\TransactionAggregation.Application.csproj" />
-    <ProjectReference Include="..\TransactionAggregation.Domain\TransactionAggregation.Domain.csproj" />
-    <ProjectReference Include="..\TransactionAggregation.Infrastructure\TransactionAggregation.Infrastructure.csproj" />
-    <ProjectReference Include="..\TransactionAggregation.Persistence\TransactionAggregation.Persistence.csproj" />
+    <ProjectReference Include="..\Modules\Transactions\Transactions.Application\Transactions.Application.csproj" />
+    <ProjectReference Include="..\Modules\Transactions\Transactions.Domain\Transactions.Domain.csproj" />
+    <ProjectReference Include="..\Modules\Transactions\Transactions.Infrastructure\Transactions.Infrastructure.csproj" />
     <ProjectReference Include="..\TransactionAggregationAPI\TransactionAggregationAPI.csproj" />
+    <ProjectReference Include="..\TransactionAggregation.Worker\TransactionAggregation.Worker.csproj" />
+    <ProjectReference Include="..\TransactionAggregation.MockAggregator\TransactionAggregation.MockAggregator.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\SharedKernel\SharedKernel.csproj" />
+    <ProjectReference Include="..\BuildingBlocks\BuildingBlocks.Messaging\BuildingBlocks.Messaging.csproj" />
+    <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Domain\WebhookSources.Domain.csproj" />
+    <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Application\WebhookSources.Application.csproj" />
+    <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Infrastructure\WebhookSources.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+    <ProjectReference Include="..\Modules\Audit\Audit.Domain\Audit.Domain.csproj" />
+    <ProjectReference Include="..\Modules\Audit\Audit.Application\Audit.Application.csproj" />
+    <ProjectReference Include="..\Modules\Audit\Audit.Infrastructure\Audit.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+    <ProjectReference Include="..\Modules\Audit\Audit.Presentation\Audit.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Transactions\Transactions.Presentation\Transactions.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Presentation\WebhookSources.Presentation.csproj" />
   </ItemGroup>
 
 </Project>

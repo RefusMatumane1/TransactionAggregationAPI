@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!--
+	The module's HTTP surface: endpoints plus the request/response contracts that cross the
+	wire. Depends inward on Application only — never on Infrastructure — and Application
+	DTOs are always mapped to a response type here rather than serialized directly.
+	-->
+	<PropertyGroup>
+		<RootNamespace>Modules.WebhookSources.Presentation</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="MediatR" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\WebhookSources.Application\WebhookSources.Application.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
+	</ItemGroup>
+</Project>

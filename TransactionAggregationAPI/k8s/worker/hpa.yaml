@@ -1,0 +1,29 @@
+# ── Worker autoscaling fallback (CPU) ──────────────────────────────────────
+# Applied only when KEDA is not installed; worker/scaledobject.yaml (queue depth)
+# is the primary scaler. CPU is a weak proxy for backlog, so this is a floor, not a
+# substitute.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: transaction-worker
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-worker
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: transaction-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

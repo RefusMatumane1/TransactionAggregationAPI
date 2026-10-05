@@ -3,8 +3,23 @@
         <Found Context="routeData">
             <AuthorizeRouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)">
                 <NotAuthorized>
-                    <RedirectToLogin />
+                    @if (context.User.Identity?.IsAuthenticated == true)
+                    {
+                        @* Signed in, but without the staff or admin realm role: redirecting to login would loop. *@
+                        <div class="alert alert-warning m-4">
+                            <h5 class="alert-heading">No access</h5>
+                            <p class="mb-0">Your account needs the <strong>staff</strong> or <strong>admin</strong> role.
+                                Ask an administrator to grant it in Keycloak, then sign in again.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <RedirectToLogin />
+                    }
                 </NotAuthorized>
+                <Authorizing>
+                    <p class="text-center text-muted mt-5">Signing you in&hellip;</p>
+                </Authorizing>
             </AuthorizeRouteView>
             <FocusOnNavigate RouteData="@routeData" Selector="h1" />
         </Found>

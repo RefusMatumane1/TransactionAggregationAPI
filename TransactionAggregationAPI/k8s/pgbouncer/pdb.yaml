@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pgbouncer
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: pgbouncer
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pgbouncer

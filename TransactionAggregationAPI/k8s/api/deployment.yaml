@@ -14,7 +14,6 @@ metadata:
     configmap.reloader.stakater.com/reload: "transaction-api-config"
     secret.reloader.stakater.com/reload: "transaction-api-secrets"
 spec:
-  replicas: 2
 
   selector:
     matchLabels:
@@ -36,7 +35,7 @@ spec:
         app.kubernetes.io/version: "1.0.0"
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
+        prometheus.io/port: "9464"
         prometheus.io/path: "/metrics"
 
     spec:
@@ -68,12 +67,30 @@ spec:
         - name: transaction-api
           # Replace with your actual image from a registry.
           # Build with: docker build -t <registry>/transactionaggregationapi:1.0.0 .
-          image: transactionaggregationapi:latest
+          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
           imagePullPolicy: IfNotPresent
+
+          # ── Container-level hardening ───────────────────────────────────
+          # Verified locally (docker run --read-only --tmpfs /tmp --cap-drop=ALL
+          # --security-opt=no-new-privileges) that the app starts cleanly and
+          # /liveness responds Healthy under these constraints — the only
+          # writable path it needs is /tmp (.NET's default temp directory),
+          # mounted below as an emptyDir.
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
 
           ports:
             - name: http
               containerPort: 8080
+              protocol: TCP
+            # /metrics only (Metrics__Port in the ConfigMap). The Service and Ingress publish
+            # 8080 alone, so metrics are reachable by Prometheus (pod IP) but not the internet.
+            - name: metrics
+              containerPort: 9464
               protocol: TCP
 
           # ── Environment: non-sensitive from ConfigMap ──────────────────
@@ -83,16 +100,17 @@ spec:
 
           # ── Environment: sensitive from Secret + computed values ───────
           env:
-            - name: POSTGRES_PASSWORD
+            - name: APP_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: transaction-api-secrets
-                  key: postgres-password
+                  key: app-db-password
 
-            # Build the full Npgsql connection string from parts.
-            # This avoids storing the whole string (with password) in the ConfigMap.
+            # Least privilege: tagg_app has DML on the module schemas and nothing else — it
+            # can't alter tables, drop the audit triggers or read outside its grants
+            # (k8s/postgres/init-roles.yaml). Only the db-migrate Job connects as tagg_migrator.
             - name: ConnectionStrings__transactiondb
-              value: "Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=$(POSTGRES_PASSWORD)"
+              value: "Host=pgbouncer;Port=6432;Database=transactiondb;Username=tagg_app;Password=$(APP_DB_PASSWORD);Maximum Pool Size=30;No Reset On Close=true"
 
             # Redis connection string comes from ConfigMap key REDIS_CONNECTION_STRING.
             # ASP.NET Core reads ConnectionStrings__redis, so map it explicitly:
@@ -109,29 +127,15 @@ spec:
                   name: transaction-api-config
                   key: SEQ_URL
 
-            - name: Jwt__Secret
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-api-secrets
-                  key: jwt-secret
+            # No ConnectionStrings__kafka: the Kafka consumer runs in the worker
+            # (k8s/worker/deployment.yaml), not in the API.
 
-            - name: Jwt__Issuer
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-api-secrets
-                  key: jwt-issuer
+            # Keycloak__Authority/PublicIssuer/Realm/Audience (non-secret) come from
+            # transaction-api-config via envFrom above.
 
-            - name: Jwt__Audience
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-api-secrets
-                  key: jwt-audience
-
-            - name: Jwt__ExpirationInMinutes
-              valueFrom:
-                secretKeyRef:
-                  name: transaction-api-secrets
-                  key: jwt-expiration-minutes
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
 
           # ── Resource limits ────────────────────────────────────────────
           resources:
@@ -143,10 +147,10 @@ spec:
               memory: "512Mi"
 
           # ── Liveness probe ─────────────────────────────────────────────
-          # /alive only checks the "self" health-check tag — fast, no DB I/O.
+          # /liveness only checks the "self" health-check tag — fast, no dependency I/O.
           livenessProbe:
             httpGet:
-              path: /alive
+              path: /liveness
               port: 8080
             initialDelaySeconds: 30
             periodSeconds: 15
@@ -155,11 +159,12 @@ spec:
             successThreshold: 1
 
           # ── Readiness probe ────────────────────────────────────────────
-          # /health checks Postgres + Redis + self. Pod only receives traffic
-          # once all dependencies are reachable.
+          # /readiness checks the required dependency (Postgres); Redis only degrades it
+          # (still 200), and Seq — a log sink — is not part of it, so neither can pull
+          # healthy pods out of rotation.
           readinessProbe:
             httpGet:
-              path: /health
+              path: /readiness
               port: 8080
             initialDelaySeconds: 15
             periodSeconds: 10
@@ -172,9 +177,13 @@ spec:
           # before liveness kicks in.
           startupProbe:
             httpGet:
-              path: /alive
+              path: /liveness
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 18
+
+      volumes:
+        - name: tmp
+          emptyDir: {}

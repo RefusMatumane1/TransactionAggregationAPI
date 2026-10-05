@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- Domain primitives only. Domain projects reference this, so it must stay free of
+	     persistence, validation and logging frameworks (see Architecture/LayerDependencyTests). -->
+</Project>

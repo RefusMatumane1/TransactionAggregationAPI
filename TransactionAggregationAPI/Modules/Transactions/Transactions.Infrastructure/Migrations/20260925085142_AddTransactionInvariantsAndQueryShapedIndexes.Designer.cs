@@ -1,0 +1,156 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Modules.Transactions.Infrastructure.Persistence;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+
+#nullable disable
+
+namespace Modules.Transactions.Infrastructure.Migrations
+{
+    [DbContext(typeof(TransactionsDbContext))]
+    [Migration("20260925085142_AddTransactionInvariantsAndQueryShapedIndexes")]
+    partial class AddTransactionInvariantsAndQueryShapedIndexes
+    {
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        {
+#pragma warning disable 612, 618
+            modelBuilder
+                .HasDefaultSchema("transactions")
+                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
+
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Modules.Transactions.Domain.Entities.Transaction", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("AccountId");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Metadata")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .HasDatabaseName("IX_Transactions_AccountId");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("IX_Transactions_Pending_CreatedAt")
+                        .HasFilter("\"Status\" = 0");
+
+                    b.HasIndex("CustomerId", "Status")
+                        .HasDatabaseName("IX_Transactions_Customer_Status");
+
+                    b.HasIndex("CustomerId", "Date", "Category")
+                        .HasDatabaseName("IX_Transactions_Customer_Date_Category");
+
+                    b.ToTable("Transactions", "transactions", t =>
+                        {
+                            t.HasCheckConstraint("CK_Transactions_Amount_NonZero", "\"Amount\" <> 0");
+
+                            t.HasCheckConstraint("CK_Transactions_Category_Defined", "\"Category\" BETWEEN 0 AND 11");
+
+                            t.HasCheckConstraint("CK_Transactions_Currency_Iso4217", "\"Currency\" ~ '^[A-Z]{3}$'");
+
+                            t.HasCheckConstraint("CK_Transactions_Status_Defined", "\"Status\" BETWEEN 0 AND 8");
+                        });
+                });
+
+            modelBuilder.Entity("Modules.Transactions.Domain.Entities.Transaction", b =>
+                {
+                    b.OwnsOne("Modules.Transactions.Domain.Common.ValueObjects.Money", "Amount", b1 =>
+                        {
+                            b1.Property<Guid>("TransactionId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(19, 4)
+                                .HasColumnType("numeric(19,4)")
+                                .HasColumnName("Amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .HasMaxLength(3)
+                                .HasColumnType("character varying(3)")
+                                .HasColumnName("Currency");
+
+                            b1.HasKey("TransactionId");
+
+                            b1.ToTable("Transactions", "transactions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TransactionId");
+                        });
+
+                    b.OwnsOne("Modules.Transactions.Domain.Common.ValueObjects.TransactionSource", "Source", b1 =>
+                        {
+                            b1.Property<Guid>("TransactionId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("ExternalId")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("SourceExternalId");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(50)
+                                .HasColumnType("character varying(50)")
+                                .HasColumnName("SourceName");
+
+                            b1.HasKey("TransactionId");
+
+                            b1.ToTable("Transactions", "transactions");
+
+                            b1.WithOwner()
+                                .HasForeignKey("TransactionId");
+                        });
+
+                    b.Navigation("Amount")
+                        .IsRequired();
+
+                    b.Navigation("Source")
+                        .IsRequired();
+                });
+#pragma warning restore 612, 618
+        }
+    }
+}

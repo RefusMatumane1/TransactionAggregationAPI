@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+	<!--
+		Development-only stand-in for the external account aggregator: it pushes bank
+		transactions for a fixed catalog of accounts. It plays an outside system, so it
+		references no application module — it only speaks the wire contracts (the webhook
+		body and the Kafka record).
+		Never deployed: k8s has no manifest for it.
+	-->
+	<PropertyGroup>
+		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Confluent.Kafka" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+@* Placeholder shaped like the content it stands in for, so the page doesn't jump when data lands. *@
+<span class="skeleton @Class" style="height:@Height;width:@Width" aria-hidden="true"></span>
+
+@code {
+    [Parameter] public string Height { get; set; } = "1rem";
+    [Parameter] public string Width { get; set; } = "100%";
+    [Parameter] public string? Class { get; set; }
+}

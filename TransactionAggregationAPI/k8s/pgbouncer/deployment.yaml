@@ -1,0 +1,120 @@
+# ── PgBouncer ─────────────────────────────────────────────────────────────
+# Transaction pooling in front of Postgres so API and worker replicas can scale
+# without multiplying server connections. Budget (keep in step with Postgres
+# max_connections = 100): replicas × MAX_DB_CONNECTIONS = 2 × 40 = 80, leaving 20
+# for the migration Job, pgAdmin and superuser maintenance. Clients never hold a
+# server connection between transactions, so MAX_CLIENT_CONN can be large.
+# Safe here: the application uses no session state (advisory locks, LISTEN,
+# SET, temp tables); the only session-level use is the migrator's advisory lock,
+# and the migration Job connects to Postgres directly.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pgbouncer
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: pgbouncer
+    app.kubernetes.io/component: connection-pooler
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: pgbouncer
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pgbouncer
+        app.kubernetes.io/component: connection-pooler
+        app.kubernetes.io/part-of: transaction-aggregation
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 60
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: pgbouncer
+      containers:
+        - name: pgbouncer
+          image: edoburu/pgbouncer:v1.24.1-p1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: transactiondb
+            - name: DB_USER
+              value: tagg_app
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: transaction-api-secrets
+                  key: app-db-password
+            - name: AUTH_TYPE
+              value: scram-sha-256
+            - name: POOL_MODE
+              value: transaction
+            - name: MAX_CLIENT_CONN
+              value: "5000"
+            - name: DEFAULT_POOL_SIZE
+              value: "35"
+            - name: MIN_POOL_SIZE
+              value: "5"
+            - name: RESERVE_POOL_SIZE
+              value: "5"
+            - name: MAX_DB_CONNECTIONS
+              value: "40"
+            - name: MAX_PREPARED_STATEMENTS
+              value: "200"
+            - name: SERVER_RESET_QUERY
+              value: ""
+            - name: SERVER_LIFETIME
+              value: "3600"
+            - name: SERVER_IDLE_TIMEOUT
+              value: "300"
+            - name: QUERY_WAIT_TIMEOUT
+              value: "30"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "64Mi"
+            limits:
+              cpu: "500m"
+              memory: "128Mi"
+          readinessProbe:
+            tcpSocket:
+              port: postgres
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: postgres
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 10"]

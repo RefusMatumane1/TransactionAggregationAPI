@@ -1,343 +1,150 @@
 # Transaction Aggregation API
 
-A production-grade .NET 10 REST API that aggregates customer financial transactions from multiple external sources, categorizes them automatically using configurable keyword rules, and exposes rich querying and spend-analytics endpoints.
+A .NET 10 platform that receives posted bank transactions from the banks, deduplicates,
+normalizes and categorizes them, records them in an insert-only PostgreSQL ledger, publishes each
+one as an integration event, and serves them through a secured, versioned REST API with
+aggregation endpoints for staff (scoped to their banks) and administrators. There are no
+customer accounts, and nothing in the ledger is ever edited or deleted. It is a modular monolith: one deployable API, one
+background worker, and modules with explicit boundaries.
+
+The detailed guide is [`TransactionAggregationAPI/README.md`](TransactionAggregationAPI/README.md).
+This page is the front door.
 
 ---
 
-## Table of Contents
+## What it does
 
-1. [Architecture](#architecture)
-2. [Tech Stack](#tech-stack)
-3. [Quick Start](#quick-start)
-4. [Running Tests](#running-tests)
-5. [API Reference](#api-reference)
-6. [Categorization Rules](#categorization-rules)
-7. [Background Sync](#background-sync)
-8. [Trade-offs & Assumptions](#trade-offs--assumptions)
-9. [What I Would Improve With More Time](#what-i-would-improve-with-more-time)
+- **Ingests** bank deliveries by REST webhook (one API key per bank) or Kafka (per-record ECDSA
+  signature against the bank's registered public key). Both land in the same inbox.
+- **Guarantees exactly-once effects under at-least-once delivery.** Deliveries are deduplicated
+  by idempotency key or payload hash. Transactions are unique per institution, account and bank
+  id, enforced by the database. The inbox's "processed" mark commits in the same transaction as
+  the rows it produces.
+- **Normalizes** each bank's format to one canonical model, and **categorizes** by configurable
+  keyword rules.
+- **Records postings only, immutably.** Pending notices are audited and skipped; each posting
+  becomes one ledger entry. A trigger and the application role's grants make UPDATE, DELETE and
+  TRUNCATE impossible, whoever asks.
+- **Publishes** `TransactionRecorded` v1 to the Kafka `transaction-events` topic through the
+  outbox, keyed by account, with trace and correlation headers.
+- **Serves** a JWT-secured API (Keycloak; `staff` reads the banks in their `institutions` claim,
+  `admin` reads all and manages) with cursor pagination on every list, index-backed sorting,
+  filtering, and aggregates in one ISO 4217 currency at a time (by bank, account, category, cash
+  flow, period comparison).
+- **Audits** every inbound delivery, every ledger entry and every admin change (with its actor)
+  in an append-only trail written in the same transaction as the change.
 
----
-
-## Architecture
+## Architecture in brief
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      HTTP Clients                           │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-┌────────────────────────────▼────────────────────────────────┐
-│                TransactionAggregationAPI                    │
-│   Minimal API endpoints  │  Rate Limiter  │  API Versioning │
-│   GlobalExceptionHandler │  Serilog       │  OpenAPI/Scalar │
-└────────────────────────────┬────────────────────────────────┘
-                             │ MediatR — CQRS pipeline
-┌────────────────────────────▼────────────────────────────────┐
-│           TransactionAggregation.Application                │
-│  Commands & Queries                                         │
-│  Pipeline Behaviors: Logging│Validation│Caching│Idempotency │
-│  CategorizationService  (keyword rules from appsettings)    │
-│  AnalyticsService │ TransactionValidator                    │
-└──────────────┬──────────────────────────┬───────────────────┘
-               │ Domain types             │ Interfaces
-┌──────────────▼────────────┐  ┌──────────▼───────────────────┐
-│  Domain Layer             │  │  Infrastructure Layer         │
-│  Transaction              │  │  BogusTransactionSource       │
-│  Customer                 │  │  StaticDataTransactionSource  │
-│  Account                  │  │  TransactionAggregator        │
-│  Money / TransactionId /  │  │  RedisCacheService            │
-│  AccountId  (Value Objs)  │  │  TransactionSyncBackground-   │
-│  Domain Events            │  │    Service (scheduled worker) │
-└──────────────┬────────────┘  └──────────┬───────────────────┘
-               │                          │
-┌──────────────▼──────────────────────────▼───────────────────┐
-│           TransactionAggregation.Persistence                │
-│  EF Core 10 + PostgreSQL (Npgsql)                           │
-│  Migrations │ Entity Configurations │ Composite Indexes     │
-└─────────────────────────────────────────────────────────────┘
-
-Supporting Services (docker-compose)
-  PostgreSQL  │  Redis  │  Seq  │  PgAdmin  │  Redis Commander
+Banks ─────webhook──▶ API ─┐
+         ──Kafka────▶ Worker ─┴─▶ inbox (PostgreSQL) ──▶ Worker: normalize, categorize, store
+                                                            │   ledger INSERT + outbox + inbox mark
+                                                            │   + audit rows in one database transaction
+                                                            ▼
+                                        outbox ──▶ Kafka transaction-events, cache invalidation, alerts
+Staff/admin ─JWT─▶ API ──▶ PostgreSQL (source of truth), Redis (cache and rate limits only)
 ```
 
-**Layer responsibilities:**
-
-| Project | Responsibility |
+| Module | Owns |
 |---|---|
-| `Domain` | Entities, value objects, domain events, business rules |
-| `Application` | CQRS handlers, pipeline behaviors, service interfaces |
-| `Infrastructure` | External source adapters, aggregator, cache, background worker |
-| `Persistence` | EF Core context, configurations, migrations |
-| `TransactionAggregationAPI` | HTTP endpoints, middleware, DI wiring |
+| Transactions | ingestion pipeline, the insert-only ledger, queries and aggregates, the `TransactionRecorded` contract |
+| WebhookSources | the banks: one source per bank, its API key, display name and Kafka signing key |
+| Audit | the append-only audit trail of deliveries, ledger entries and admin changes |
+
+Each module has its own PostgreSQL schema and migrations. Modules talk to each other only
+through `*.Contracts` interfaces, and architecture tests enforce that.
+
+**Key decisions:**
+
+- Modular monolith, not microservices.
+- PostgreSQL is the system of record; Redis is never authoritative (cache and rate limits only).
+- Polling inbox/outbox tables in PostgreSQL rather than an internal broker.
+- Kafka as an additional inbound channel, with signed records.
+- No saga; no partitioning yet.
+- Least-privilege database roles: a schema-owning migrator and a DML-only application role.
+- Cursor (keyset) pagination for every list.
+- Staff-only aggregation: no customers or bank links.
+- Each bank is a source; its key decides the bank.
+- Insert-only ledger of posted transactions.
+- Any ISO 4217 currency, one currency per aggregate.
+- Untracked `secrets.json` locally, rendered by Vault in clusters.
+- Staff see only their assigned institutions.
+- `TransactionRecorded` integration events on Kafka.
+- Migrations never change data, drop, or block writes.
 
 ---
 
-## Tech Stack
+## Quick start
 
-| Concern | Choice | Rationale |
-|---|---|---|
-| Web framework | ASP.NET Core 10 Minimal APIs | Low ceremony, fast startup, CQRS-friendly endpoint mapping |
-| Mediator / CQRS | MediatR 14 | Clean command/query separation; composable pipeline behaviors for cross-cutting concerns |
-| ORM | EF Core 10 + Npgsql | First-class PostgreSQL support, owned entities for value objects, automatic migrations |
-| Database | PostgreSQL | ACID, JSONB for metadata, strong index options |
-| Cache | Redis via StackExchange.Redis | Shared cache for idempotency keys and read-query results |
-| Mapping | Mapster | Faster than AutoMapper; source-generator friendly |
-| Validation | FluentValidation | Declarative, testable rules; wired into MediatR pipeline automatically |
-| Logging | Serilog + Seq | Structured logs with correlation IDs; Seq makes them searchable |
-| Observability | OpenTelemetry | Traces and metrics exportable to any OTLP backend |
-| Resilience | Polly | Exponential-backoff retry on external source failures |
-| Mock data | Bogus | Realistic fake transactions for BogusBank source |
-| Testing | xUnit + FluentAssertions + NSubstitute + WebApplicationFactory | Unit + integration coverage with readable assertions |
-| Containerization | Docker + docker-compose | One-command startup, health checks, service ordering |
+Requires Docker Desktop. From `TransactionAggregationAPI/`:
 
----
+```bash
+cp .env.template .env                           # once: fill in the credentials (git-ignored)
+docker compose up --build                       # the system
+docker compose --profile tools up --build       # + pgAdmin, Redis Commander, Kafka UI
+docker compose --profile monitoring up --build  # + Prometheus, Grafana
+docker compose down -v                          # stop and wipe all data
+```
 
-## Quick Start
+In Development the API applies migrations and seeds demo accounts on start. Elsewhere, a gated
+migration Job applies them before the API rolls out.
 
-### Prerequisites
-
-| Tool | Version |
+| Service | URL |
 |---|---|
-| Docker Desktop | 24+ |
-| Docker Compose | v2 |
-| .NET SDK *(local dev only)* | 10.0 |
+| UI | http://localhost:7200 |
+| API | http://localhost:5001 (`/api/v1/...`) |
+| API reference (Scalar, Development only) | http://localhost:5001/scalar/v1 |
+| Health | `/liveness` (process), `/readiness` (PostgreSQL reachable), `/health` |
+| Keycloak | http://localhost:8081 |
+| Mock bank aggregator | http://localhost:5090 |
+| Seq (logs) | http://localhost:5341 |
 
-### Run with Docker (recommended)
+Demo logins and seed data are described in the detailed guide. No credential is committed:
+compose reads them from `.env`, the hosts from a git-ignored `secrets.json` (Vault renders the
+same file in clusters). For breakpoints and the Aspire dashboard, run
+`TransactionAggregationAPI.AppHost`. For Kubernetes, use `deploy-k8s.sh`, which refuses to run
+while `k8s/secrets.yaml` still holds placeholders. Both are covered in the detailed guide.
 
-```bash
-git clone <repo-url>
-cd TransactionAggregationAPI-main/TransactionAggregationAPI
-
-docker compose up --build
-```
-
-| Service | URL | Notes |
-|---|---|---|
-| API | http://localhost:8080 | |
-| OpenAPI / Scalar | http://localhost:8080/scalar/v1 | Development only |
-| Health check | http://localhost:8080/health | |
-| Liveness | http://localhost:8080/alive | |
-| Seq (logs) | http://localhost:5341 | |
-| pgAdmin | http://localhost:5050 | admin@transaction.com / admin |
-| Redis Commander | http://localhost:8081 | |
+## Tests
 
 ```bash
-# Stop
-docker compose down
-
-# Wipe all volumes (reset DB + cache)
-docker compose down -v
-```
-
-### Run locally
-
-```bash
-# 1. Start only infrastructure
-docker compose up postgres redis seq -d
-
-# 2. Configure connection strings
-#    Create TransactionAggregationAPI/appsettings.Development.json:
-{
-  "ConnectionStrings": {
-    "transactiondb": "Host=localhost;Port=5432;Database=transactiondb;Username=postgres;Password=postgres",
-    "redis": "localhost:6379",
-    "seq": "http://localhost:5341"
-  }
-}
-
-# 3. Run the API
 cd TransactionAggregationAPI
-dotnet run --project TransactionAggregationAPI/TransactionAggregationAPI.csproj
-```
-
-On startup the API automatically:
-- Applies any pending EF Core migrations
-- Seeds sample customers and transactions if the database is empty
-
----
-
-## Running Tests
-
-```bash
-cd TransactionAggregationAPI-main/TransactionAggregationAPI
-
-# All tests (unit + integration)
 dotnet test
-
-# Single test project
-dotnet test TransactionAggregation.Tests/TransactionAggregation.Tests.csproj
-
-# With coverage
-dotnet test --collect:"XPlat Code Coverage"
 ```
 
-**Test coverage breakdown:**
+684 test cases: unit, architecture, contract, API (in-process host), and integration against
+real PostgreSQL, Redis and Kafka through Testcontainers, so Docker must be running.
 
-| Area | Type |
-|---|---|
-| Domain entities (`Transaction`, `Customer`, `Money`) | Unit |
-| Categorization service | Unit |
-| Transaction aggregator | Unit |
-| Query handlers | Unit |
-| API endpoints (health, customers, transactions) | Integration (WebApplicationFactory + in-memory DB) |
+CI (`.github/workflows/ci-cd.yml`) runs formatting, a warnings-as-errors build, a dependency scan,
+a migration drift check, the tests, gitleaks, image builds with a non-root check, Trivy, an SBOM,
+manifest validation and a compose smoke test.
 
----
+## API
 
-## API Reference
+Every route is under `/api/v1`. Reads need the `staff` or `admin` realm role; changes and the
+admin routes need `admin`; staff are confined to their banks. Every list returns
+`{ items, pageSize, nextCursor, hasMore, totalCount, totalCountCapped }`; pass `nextCursor` back
+as `cursor`. Endpoints and schemas are in the OpenAPI document (`/openapi/v1.json`, browsable
+through Scalar in Development). The webhook payload, the Kafka record format (including how to
+sign a record) and the `TransactionRecorded` event are in the detailed guide.
 
-All endpoints are versioned under `/api/v1/`.
+## Categorization
 
-### Customers
+Rules live in `TransactionAggregation.Hosting/categorization-rules.json`, so adding a keyword
+needs no code change. A keyword matches whole words in the description, and the longest matching
+keyword wins. If nothing matches, the bank's own category is used. Failing that, positive amounts
+are `Income` and the rest `Uncategorized`. The category is decided once, when the transaction is
+stored, and never changes afterwards.
 
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/customers` | List all (paginated, searchable) |
-| `GET` | `/api/v1/customers/{id}` | Get by ID |
-| `GET` | `/api/v1/customers/email/{email}` | Get by email |
-| `POST` | `/api/v1/customers` | Create |
-| `PUT` | `/api/v1/customers/{id}` | Update |
-| `DELETE` | `/api/v1/customers/{id}` | Delete |
+## Known limitations
 
-### Customer Transactions
-
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/customers/{id}/transactions` | Customer + transactions with aggregated totals |
-| `GET` | `/api/v1/customers/{id}/transactions/filter` | **Rich filtered, paginated list** |
-| `GET` | `/api/v1/customers/{id}/transactions/summary` | **Spend per category + monthly breakdowns** |
-| `POST` | `/api/v1/customers/{id}/transactions` | Create a transaction manually |
-| `POST` | `/api/v1/customers/{id}/transactions/sync` | Pull & sync from all external sources (idempotent) |
-
-### Transactions
-
-| Method | Route | Description |
-|---|---|---|
-| `GET` | `/api/v1/transactions/{id}` | Get single transaction |
-| `PATCH` | `/api/v1/transactions/{id}/categorize` | Override category |
-
-### Filter parameters (`/transactions/filter`)
-
-| Param | Type | Default | Description |
-|---|---|---|---|
-| `pageNumber` | int | 1 | Page number |
-| `pageSize` | int | 20 | Items per page (max 100) |
-| `category` | enum | — | Filter by category |
-| `status` | enum | — | Filter by status |
-| `fromDate` | DateTime | — | Date range start |
-| `toDate` | DateTime | — | Date range end |
-| `minAmount` | decimal | — | Minimum absolute amount |
-| `maxAmount` | decimal | — | Maximum absolute amount |
-| `searchTerm` | string | — | Description or source text search |
-| `source` | string | — | Exact source name match |
-| `sortBy` | string | date | `date`, `amount`, `category`, `status`, `description` |
-| `sortDescending` | bool | true | Sort direction |
-
-### curl examples
-
-```bash
-# Create customer
-curl -X POST http://localhost:8080/api/v1/customers \
-  -H "Content-Type: application/json" \
-  -d '{"email":"jane@example.com","name":"Jane Doe"}'
-
-# Sync from external sources
-curl -X POST "http://localhost:8080/api/v1/customers/{id}/transactions/sync?idempotencyKey=my-key-1"
-
-# Filter: groceries in March, sorted by amount
-curl "http://localhost:8080/api/v1/customers/{id}/transactions/filter?category=1&fromDate=2026-03-01&toDate=2026-03-31&sortBy=amount&sortDescending=true"
-
-# Spend summary for last 3 months
-curl "http://localhost:8080/api/v1/customers/{id}/transactions/summary?startDate=2026-01-01&endDate=2026-03-31"
-
-# Re-categorize a transaction (Housing = 6)
-curl -X PATCH http://localhost:8080/api/v1/transactions/{txId}/categorize \
-  -H "Content-Type: application/json" \
-  -d '{"category":6}'
-```
-
-### Transaction Categories
-
-| Value | Name | Value | Name |
-|---|---|---|---|
-| 0 | Uncategorized | 7 | Healthcare |
-| 1 | Groceries | 8 | Income |
-| 2 | Dining | 9 | Transfer |
-| 3 | Transportation | 10 | Shopping |
-| 4 | Entertainment | 11 | Subscriptions |
-| 5 | Utilities | | |
-| 6 | Housing | | |
-
----
-
-## Categorization Rules
-
-Rules live in `appsettings.json` under `CategorizationRules.Keywords` — no code changes needed to add or modify them.
-
-```json
-"CategorizationRules": {
-  "Keywords": {
-    "walmart":   "Groceries",
-    "uber":      "Transportation",
-    "netflix":   "Entertainment",
-    "rent":      "Housing",
-    "starbucks": "Dining"
-  }
-}
-```
-
-**Algorithm:** case-insensitive substring match on the transaction description. First matching keyword wins. Positive-amount transactions default to `Income` if no keyword matches.
-
-**Extensibility:** the `ITransactionCategorizationStrategy` interface allows swapping or chaining categorizers (e.g., plug in an ML model) without touching existing code.
-
----
-
-## Background Sync
-
-`TransactionSyncBackgroundService` is an `IHostedService` that wakes up every `TransactionSync:IntervalMinutes` minutes (default 60), iterates every customer, and pulls from all registered `ITransactionSource` providers.
-
-- **Duplicate safety:** new transactions are filtered by `SourceExternalId` before inserting. A unique index at the DB level enforces this as a hard constraint.
-- **Fault isolation:** a failure for one customer does not abort the others; each customer sync is wrapped in its own try/catch.
-- **Graceful shutdown:** the worker respects `CancellationToken` and drains cleanly on SIGTERM.
-
-Configure interval:
-
-```json
-"TransactionSync": {
-  "IntervalMinutes": 60
-}
-```
-
----
-
-## Trade-offs & Assumptions
-
-| Decision | Rationale |
-|---|---|
-| PostgreSQL over SQL Server | JSONB metadata column, open source, excellent EF Core support |
-| Minimal APIs over controllers | Less boilerplate; pairs naturally with CQRS endpoint handlers |
-| In-memory dedup + DB unique index | HashSet for fast sync-time check; the index is the authoritative guard |
-| Keyword scan (O(n) per transaction) | Fast enough for the current rule set size; Aho-Corasick trie would be needed at >1 000 rules |
-| `Money` value object disallows zero amount | Every transaction must have economic value; `Account.Balance` stores plain `decimal` |
-| Redis handles both idempotency and query caching | One external dependency for two purposes; TTLs are independent |
-| Background service polls all customers | Simple and reliable; a message queue scales better for millions of customers |
-| Mock sources use same DTO format | Keeps the demo clean; real integration would add a per-source adapter/normalizer |
-| EF Core migrations applied at startup | Zero-ops deployment; acceptable trade-off is a brief startup delay on first run |
-
----
-
-## What I Would Improve With More Time
-
-1. **Third mock source with deliberately inconsistent formats** — a source that returns amounts as strings, dates in different timezones, and missing fields to demonstrate a robust adapter/normalizer pattern.
-
-2. **Message queue for async ingestion** — replace the polling worker with RabbitMQ or Kafka. Each sync request becomes a message; worker pool processes them concurrently and scales horizontally.
-
-3. **ML-ready categorization pipeline** — `ITransactionCategorizationStrategy` is in place. Adding an `MLTransactionCategorizationStrategy` (ML.NET or Azure Cognitive Services) would slot in without changing other code.
-
-4. **Account balance mutations** — `Account` entity is modelled with `Credit`/`Debit` methods but not yet wired to transaction approval events. A domain service responding to `TransactionApprovedDomainEvent` would complete this.
-
-5. **Cursor-based pagination** — current offset pagination degrades at large offsets. Keyset pagination using `(CreatedAt, Id)` as the cursor would be O(log n) on the composite index.
-
-6. **Outbox pattern for domain events** — domain events are currently dispatched synchronously inside `SaveChangesAsync`. An outbox table would guarantee at-least-once delivery across transaction failures.
-
-7. **CI/CD pipeline** — GitHub Actions workflow for build, test (with coverage gate), Docker image build and push, and rolling deploy to a container platform.
-
-8. **Per-API-key rate limiting** — current limiter partitions by username/host. Integrating API key authentication and per-key rate limits would be appropriate for a multi-tenant production service.
+- A Redis outage longer than about a minute dead-letters `TransactionRecorded` outbox messages:
+  the handler invalidates the cache before publishing, and a Redis failure spends the message's
+  retry budget. The ledger is unaffected; the dead-lettered messages must be requeued once Redis
+  is back.
+- The CI deploy stage is a notice, not an automated deployment.
+- Third-party images are pinned by tag, not digest.
+- Staff institution scope is enforced in the application, not by PostgreSQL row-level security
+  (it would need the caller's banks set on every pooled transaction).
+- No foreign-exchange conversion: aggregates never mix currencies, by design.

@@ -1,0 +1,15 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: transaction-worker-pdb
+  namespace: transaction-aggregation
+  labels:
+    app.kubernetes.io/name: transaction-worker
+    app.kubernetes.io/component: worker
+    app.kubernetes.io/part-of: transaction-aggregation
+spec:
+  # Keep at least one worker draining the inbox/outbox during node drains.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: transaction-worker

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.WebhookSources.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Published cross-module contracts (IWebhookSourceAuthenticator). -->
+
+</Project>

@@ -1,0 +1,44 @@
+@* Everything recorded for one audit event: identifiers first, then the channel-specific metadata. *@
+<div class="audit-metadata">
+    @if (!string.IsNullOrEmpty(Event.Detail))
+    {
+        <div class="mb-2">@Event.Detail</div>
+    }
+    <dl class="row mb-0 small">
+        @foreach (var (label, value) in Fields())
+        {
+            <dt class="col-sm-3 col-lg-2 text-muted fw-normal">@label</dt>
+            <dd class="col-sm-9 col-lg-10 font-monospace text-break mb-1">@value</dd>
+        }
+    </dl>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public AuditEventModel Event { get; set; } = null!;
+
+    private IEnumerable<(string Label, string Value)> Fields()
+    {
+        yield return ("Event id", Event.Id.ToString());
+        yield return ("Event type", Event.EventType);
+        yield return ("Recorded", Lag());
+
+        if (Event.InboxMessageId is { } inbox) yield return ("Delivery (inbox id)", inbox.ToString());
+        if (!string.IsNullOrEmpty(Event.IdempotencyKey)) yield return ("Idempotency key", Event.IdempotencyKey);
+        if (Event.TransactionId is { } transaction) yield return ("Transaction id", transaction.ToString());
+        if (!string.IsNullOrEmpty(Event.ExternalTransactionId)) yield return ("Bank's transaction id", Event.ExternalTransactionId);
+        if (!string.IsNullOrEmpty(Event.TraceId)) yield return ("Trace id (Seq)", Event.TraceId);
+        if (!string.IsNullOrEmpty(Event.Actor)) yield return ("Changed by (user id)", Event.Actor);
+
+        foreach (var (key, value) in Event.Metadata.OrderBy(m => m.Key, StringComparer.OrdinalIgnoreCase))
+            yield return (key, value);
+    }
+
+    // OccurredAt is when it happened at the source; RecordedAt when the row was written. A gap means
+    // the write was retried, e.g. after a transient database failure.
+    private string Lag()
+    {
+        var lag = Event.RecordedAt - Event.OccurredAt;
+        var at = DateTime.SpecifyKind(Event.RecordedAt, DateTimeKind.Utc).ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+        return lag.TotalSeconds >= 1 ? $"{at} (+{lag.TotalSeconds:0}s after it happened)" : at;
+    }
+}

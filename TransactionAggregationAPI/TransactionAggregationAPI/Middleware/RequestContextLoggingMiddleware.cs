@@ -1,32 +1,46 @@
-using Microsoft.Extensions.Primitives;
+using BuildingBlocks.Messaging.Observability;
+using BuildingBlocks.Web;
 using Serilog.Context;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
 
-namespace TransactionAggregationAPI.Middleware;
-
-public class RequestContextLoggingMiddleware(
-    RequestDelegate next,
-    ILogger<RequestContextLoggingMiddleware> logger)
+namespace TransactionAggregationAPI.Middleware
 {
-    private const string CorrelationIdHeaderName = "X-Correlation-Id";
-
-    public Task Invoke(HttpContext context)
+    public partial class RequestContextLoggingMiddleware(
+        RequestDelegate next,
+        ILogger<RequestContextLoggingMiddleware> logger)
     {
-        var correlationId = GetCorrelationId(context);
+        public const string CorrelationIdHeaderName = CorrelationContext.HeaderName;
 
-        using var serilogProp = LogContext.PushProperty("CorrelationId", correlationId);
+        [GeneratedRegex("^[A-Za-z0-9._-]{1,64}$")]
+        private static partial Regex SafeCorrelationId();
 
-        using var scope = logger.BeginScope(
-            new Dictionary<string, object> { ["CorrelationId"] = correlationId });
+        public async Task Invoke(HttpContext context)
+        {
+            var correlationId = GetCorrelationId(context);
+            CorrelationContext.Set(context, correlationId);
+            // Baggage carries it into the inbox and outbox rows this request writes, and to their processing.
+            Activity.Current?.SetBaggage(MessagingTelemetry.CorrelationBaggageKey, correlationId);
 
-        return next.Invoke(context);
-    }
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers[CorrelationIdHeaderName] = correlationId;
+                return Task.CompletedTask;
+            });
 
-    private static string GetCorrelationId(HttpContext context)
-    {
-        context.Request.Headers.TryGetValue(
-            CorrelationIdHeaderName,
-            out StringValues correlationId);
+            using var serilogProp = LogContext.PushProperty("CorrelationId", correlationId);
+            using var scope = logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId });
 
-        return correlationId.FirstOrDefault() ?? context.TraceIdentifier;
+            await next(context);
+        }
+
+        private static string GetCorrelationId(HttpContext context)
+        {
+            var supplied = context.Request.Headers[CorrelationIdHeaderName].FirstOrDefault();
+
+            return supplied is not null && SafeCorrelationId().IsMatch(supplied)
+                ? supplied
+                : Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+        }
     }
 }

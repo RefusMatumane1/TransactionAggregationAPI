@@ -78,7 +78,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.15.0" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0" />
     <!-- Security pins for transitive dependencies (CI fails the build on NU1902/NU1903):
          Microsoft.OpenApi 2.0.0 via Microsoft.AspNetCore.OpenApi - GHSA-v5pm-xwqc-g5wc (high);
          MessagePack 2.5.192 via Aspire.Hosting (AppHost only) - GHSA-hv8m-jj95-wg3x, GHSA-vh6j-jc39-fggf (high) and others.

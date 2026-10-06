@@ -3,8 +3,6 @@ using System.Diagnostics;
 
 namespace BuildingBlocks.Messaging.Outbox
 {
-    // Work committed with the business change that caused it. Attempts counts claims, as for the
-    // inbox. TraceParent and CorrelationId carry the producing request's trace to the dispatch.
     public sealed class OutboxMessage
     {
         public const int MaxErrorLength = 2000;
@@ -29,7 +27,7 @@ namespace BuildingBlocks.Messaging.Outbox
         public static OutboxMessage Create(string type, string payload, int schemaVersion = 1) =>
             Create(type, _ => payload, schemaVersion);
 
-        // For payloads that embed their own message id (integration events deduplicated by it).
+        // For payloads that carry their own message id (deduplicated by it).
         public static OutboxMessage Create(string type, Func<Guid, string> payloadFor, int schemaVersion = 1)
         {
             var id = OutboxMessageId.Create();
@@ -48,7 +46,6 @@ namespace BuildingBlocks.Messaging.Outbox
             };
         }
 
-        // The state change MessagingDbContext.ClaimOutboxMessagesAsync applies set-wise in SQL.
         public void Claim(DateTime now)
         {
             Status = OutboxMessageStatus.Processing;

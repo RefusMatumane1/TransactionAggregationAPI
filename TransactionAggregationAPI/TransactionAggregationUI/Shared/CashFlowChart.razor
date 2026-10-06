@@ -1,7 +1,4 @@
 @using System.Globalization
-@* Monthly income vs expenses as paired columns. Two series, so the legend is always shown; the
-   tooltip carries exact values and the table view (in the parent card) is the accessible fallback.
-   Mark specs: bars <= 24px, 4px rounded data-end, square at the baseline, 2px gap between a pair. *@
 
 <div class="chart-legend mb-2" aria-hidden="true">
     <span><span class="kpi-swatch" style="background:var(--series-income)"></span>Income</span>
@@ -86,7 +83,6 @@
             _active = null;
     }
 
-    // 1, 2, 2.5 or 5 times a power of ten: ticks read as round numbers.
     private static decimal NiceStep(decimal rough)
     {
         if (rough <= 0)
@@ -99,7 +95,6 @@
 
     private double Y(decimal value) => Top + PlotHeight * (1 - (double)(value / _max));
 
-    // A column from the baseline up, rounded only at the data end.
     private string Column(double x, decimal value)
     {
         if (value <= 0)
@@ -111,7 +106,6 @@
         return $"M{F(x)},{F(bottom)}V{F(top + r)}Q{F(x)},{F(top)} {F(x + r)},{F(top)}H{F(x + w - r)}Q{F(x + w)},{F(top)} {F(x + w)},{F(top + r)}V{F(bottom)}Z";
     }
 
-    // At most ~12 month labels, so they never collide on long ranges.
     private bool ShowLabel(int index) => index % Math.Max(1, (int)Math.Ceiling(Points.Count / 12.0)) == 0;
 
     private static string F(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);

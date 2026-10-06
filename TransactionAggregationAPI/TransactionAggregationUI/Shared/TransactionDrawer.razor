@@ -105,7 +105,6 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        // Move focus into the dialog once, so Escape and Tab work from the start.
         if (!_focused)
         {
             _focused = true;
@@ -128,7 +127,7 @@
         }
         catch (JSException)
         {
-            // Clipboard access can be refused (e.g. insecure origin); the id stays selectable.
+            // Clipboard can be refused (insecure origin); the id stays selectable.
         }
     }
 }

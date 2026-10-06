@@ -5,6 +5,7 @@
 	DTOs are always mapped to a response type here rather than serialized directly.
 	The webhook endpoint also reaches two other modules, through their published
 	contracts only: WebhookSources (API-key authentication) and Audit (refused deliveries).
+	The customer views resolve a customer to its linked accounts through Customers.Contracts.
 	-->
 	<PropertyGroup>
 		<RootNamespace>Modules.Transactions.Presentation</RootNamespace>
@@ -23,5 +24,6 @@
 		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
 		<ProjectReference Include="..\..\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
 		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+		<ProjectReference Include="..\..\Customers\Customers.Contracts\Customers.Contracts.csproj" />
 	</ItemGroup>
 </Project>

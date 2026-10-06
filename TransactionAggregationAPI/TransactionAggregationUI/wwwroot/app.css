@@ -1,4 +1,3 @@
-/* ── Tokens ────────────────────────────────── */
 :root {
     --surface: #ffffff;
     --page: #f8fafc;
@@ -63,7 +62,6 @@ body {
 .text-good { color: var(--good) !important; }
 .text-bad { color: var(--bad) !important; }
 
-/* ── Layout ────────────────────────────────── */
 .app-wrapper {
     display: flex;
     height: 100vh;
@@ -184,7 +182,6 @@ body {
     }
 }
 
-/* ── Page header ───────────────────────────── */
 .page-header {
     display: flex;
     flex-wrap: wrap;
@@ -207,7 +204,6 @@ body {
     margin-top: .15rem;
 }
 
-/* ── Cards & panels ────────────────────────── */
 .card {
     border-color: var(--hairline);
     border-radius: var(--radius);
@@ -262,7 +258,6 @@ body {
     transition: opacity .15s;
 }
 
-/* ── KPI tiles ─────────────────────────────── */
 .kpi {
     background: var(--surface);
     border: 1px solid var(--hairline);
@@ -299,7 +294,6 @@ body {
     display: inline-block;
 }
 
-/* ── Segmented control (date presets) ──────── */
 .segmented {
     display: inline-flex;
     flex-wrap: wrap;
@@ -329,7 +323,6 @@ body {
     box-shadow: var(--shadow-1);
 }
 
-/* ── Chart ─────────────────────────────────── */
 .chart {
     position: relative;
 }
@@ -409,7 +402,6 @@ body {
     background: var(--series-income);
 }
 
-/* ── Tables ────────────────────────────────── */
 .table {
     --bs-table-bg: transparent;
 }
@@ -470,7 +462,6 @@ tr.clickable {
     cursor: pointer;
 }
 
-/* ── Filters ───────────────────────────────── */
 .filter-chip {
     display: inline-flex;
     align-items: center;
@@ -495,7 +486,6 @@ tr.clickable {
     background: rgba(55, 48, 163, .12);
 }
 
-/* ── Skeletons & empty states ──────────────── */
 .skeleton {
     display: block;
     background: linear-gradient(90deg, #eef2f6 25%, #f8fafc 37%, #eef2f6 63%);
@@ -527,7 +517,6 @@ tr.clickable {
     margin: .5rem 0 .25rem;
 }
 
-/* ── Detail drawer ─────────────────────────── */
 .drawer-backdrop {
     position: fixed;
     inset: 0;
@@ -578,7 +567,7 @@ tr.clickable {
     word-break: break-word;
 }
 
-/* ── Badges (white text: every fill clears WCAG AA 4.5:1) ── */
+/* White text on every badge fill: each clears WCAG AA 4.5:1. */
 .badge-Uncategorized  { background-color: #64748b; color: #fff; }
 .badge-Groceries      { background-color: #15803d; color: #fff; }
 .badge-Dining         { background-color: #c2410c; color: #fff; }
@@ -596,12 +585,10 @@ tr.clickable {
 .badge-Settled   { background-color: #047857; color: #fff; }
 .badge-Expired   { background-color: #cbd5e1; color: #334155; }
 
-/* ── Blazor error UI ───────────────────────── */
 #blazor-error-ui {
     display: none;
 }
 
-/* ── Audit trail (admin) ───────────────────── */
 .audit-badge   { font-weight: 500; }
 .audit-good    { background-color: #15803d; color: #fff; }
 .audit-info    { background-color: #2563eb; color: #fff; }
@@ -622,7 +609,6 @@ tr.clickable {
     background: #fff; border: 2px solid #94a3b8;
 }
 
-/* ── Banks ─────────────────────────────────── */
 .bank-badge {
     display: inline-flex;
     align-items: center;

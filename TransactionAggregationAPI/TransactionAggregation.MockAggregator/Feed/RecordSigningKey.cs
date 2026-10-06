@@ -4,9 +4,7 @@ using System.Text;
 
 namespace TransactionAggregation.MockAggregator.Feed
 {
-    // The provider's Kafka signing key. Generated on first use and kept in the data directory (a
-    // volume in compose, git- and docker-ignored), so the public half registered with the platform
-    // stays valid across restarts. Signs the platform's canonical record format (KafkaRecordSignature).
+    // Generated on first use and kept in the data directory, so the registered public key survives restarts.
     public sealed class RecordSigningKey : IDisposable
     {
         public const string FileName = "kafka-signing-key.pem";

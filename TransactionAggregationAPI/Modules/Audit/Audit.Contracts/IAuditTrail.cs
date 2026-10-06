@@ -6,13 +6,12 @@ namespace Modules.Audit.Contracts
     {
         Task RecordAsync(IReadOnlyCollection<AuditEventRecord> events, CancellationToken cancellationToken = default);
 
-        // Writes the events inside the caller's open transaction, so they commit or roll back with
-        // the caller's own changes. The transaction must be on the scoped connection the module shares.
+        // Writes inside the caller's open transaction, on the shared scoped connection.
         Task RecordWithinAsync(
             IReadOnlyCollection<AuditEventRecord> events, DbTransaction transaction, CancellationToken cancellationToken = default);
     }
 
-    // For design-time tooling (EF migrations), which builds contexts but never saves through them.
+    // For EF design-time tooling, which never saves.
     public sealed class UnavailableAuditTrail : IAuditTrail
     {
         public Task RecordAsync(IReadOnlyCollection<AuditEventRecord> events, CancellationToken cancellationToken = default) =>

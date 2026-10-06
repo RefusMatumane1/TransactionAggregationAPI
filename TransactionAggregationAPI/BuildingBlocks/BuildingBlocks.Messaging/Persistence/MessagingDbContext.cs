@@ -8,8 +8,7 @@ namespace BuildingBlocks.Messaging.Persistence
 {
     public class MessagingDbContext : AppDbContextBase, IMessagingDbContext, IMessageArchive
     {
-        // A claim that expired with no attempts left: the worker died while processing the message
-        // on every attempt, so the message itself is the likely cause.
+        // Claim expired with no attempts left: the message itself likely kills the worker.
         public const string AbandonedClaimError =
             "Claim expired with no attempts left: processing never completed, so the message is likely what stops the worker";
 

@@ -6,39 +6,28 @@ namespace TransactionAggregationAPI.Development
     {
         public sealed record AccountDefinition(string ExternalAccountId, string Institution, SeedAccountType Type, int VariablePerMonth);
 
-        // One household's spending pattern spread over the accounts it holds; there is no owner record.
         public sealed record HouseholdDefinition(SeedProfile Profile, AccountDefinition[] Accounts);
 
         public static readonly HouseholdDefinition[] Households =
         [
-            // Household 1
             new(new(32000, 38000, false, 8500, 11000, 25, 1, ["Shoprite groceries", "Pick n Pay groceries"], ["Nandos dinner", "KFC meal"], []),
                 [new("ZA0010000001", "FNB", SeedAccountType.Checking, 5), new("ZA0010000002", "FNB", SeedAccountType.Savings, 2)]),
-            // Household 2
             new(new(45000, 52000, false, 12000, 15000, 28, 1, ["Woolworths food", "Food Lovers Market"], ["Tashas restaurant", "Ocean Basket dinner"], [0, 1, 2]),
                 [new("ZA0020000001", "StandardBank", SeedAccountType.Checking, 6), new("ZA0020000002", "Capitec", SeedAccountType.CreditCard, 7)]),
-            // Household 3
             new(new(58000, 68000, true, 14000, 18000, 25, 1, ["Woolworths food", "Pick n Pay groceries"], ["The Hussar Grill", "Mugg & Bean breakfast"], []),
                 [new("ZA0030000001", "FNB", SeedAccountType.Checking, 5), new("ZA0030000002", "FNB", SeedAccountType.Savings, 2), new("ZA0030000003", "Absa", SeedAccountType.Investment, 2)]),
-            // Household 4
             new(new(18000, 24000, false, 5500, 7500, 25, 1, ["Shoprite groceries", "Checkers weekly shop"], ["Steers restaurant", "KFC meal"], []),
                 [new("ZA0040000001", "StandardBank", SeedAccountType.Checking, 4)]),
-            // Household 5
             new(new(15000, 45000, false, 6000, 8000, 15, 3, ["Pick n Pay groceries", "Shoprite groceries"], ["Mugg & Bean breakfast", "Nandos dinner"], [0, 1, 4]),
                 [new("ZA0050000001", "FNB", SeedAccountType.Savings, 2), new("ZA0050000002", "Absa", SeedAccountType.CreditCard, 8)]),
-            // Household 6
             new(new(26000, 31000, false, 7000, 9500, 25, 1, ["Shoprite groceries", "Checkers weekly shop"], ["Steers restaurant", "KFC meal"], []),
                 [new("ZA0060000001", "StandardBank", SeedAccountType.Checking, 5), new("ZA0060000002", "StandardBank", SeedAccountType.Savings, 2)]),
-            // Household 7
             new(new(52000, 62000, true, 13000, 16000, 28, 1, ["Woolworths food", "Pick n Pay groceries"], ["The Hussar Grill", "Ocean Basket dinner"], []),
                 [new("ZA0070000001", "FNB", SeedAccountType.Checking, 5), new("ZA0070000002", "Absa", SeedAccountType.Investment, 2)]),
-            // Household 8
             new(new(35000, 48000, false, 9000, 13000, 20, 3, ["Food Lovers Market", "Woolworths food"], ["Tashas restaurant", "Sushi King dinner"], [0, 2, 4]),
                 [new("ZA0080000001", "StandardBank", SeedAccountType.Checking, 6), new("ZA0080000002", "Capitec", SeedAccountType.CreditCard, 8), new("ZA0080000003", "StandardBank", SeedAccountType.Savings, 3)]),
-            // Household 9
             new(new(15000, 20000, false, 4500, 6000, 25, 1, ["Shoprite groceries", "Checkers weekly shop"], ["KFC meal", "Steers restaurant"], []),
                 [new("ZA0090000001", "FNB", SeedAccountType.Checking, 4)]),
-            // Household 10
             new(new(40000, 55000, false, 10000, 14000, 28, 1, ["Checkers weekly shop", "Food Lovers Market"], ["Mugg & Bean breakfast", "Ocean Basket dinner"], [1, 2, 3]),
                 [new("ZA0100000001", "StandardBank", SeedAccountType.Checking, 5), new("ZA0100000002", "StandardBank", SeedAccountType.Savings, 2), new("ZA0100000003", "Capitec", SeedAccountType.CreditCard, 6)]),
         ];

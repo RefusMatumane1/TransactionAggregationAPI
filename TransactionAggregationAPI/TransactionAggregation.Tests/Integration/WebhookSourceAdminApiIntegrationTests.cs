@@ -24,7 +24,6 @@ namespace TransactionAggregation.Tests.Integration
         private record CreateResponse(Guid Id, string Code, string DisplayName, string Color, string ApiKey);
         private record RotateResponse(string ApiKey);
 
-        // Bank codes are letters, digits, '-' or '_' and at most 50 characters.
         private static string NewCode(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 
         private static object Bank(string code, string? displayName = null, string color = "#0033A1") =>
@@ -209,7 +208,7 @@ namespace TransactionAggregation.Tests.Integration
             var code = NewCode("staffview");
             var created = await CreateAsync(admin, code, "Staff View Bank", "#00A3AD");
             await admin.PostAsync($"{BasePath}/{created.Id}/deactivate", null);
-            using var staff = AsRole("staff");
+            using var staff = _factory.CreateClient().SignedInAsStaffFor(code);
 
             var response = await staff.GetAsync(BanksPath);
 
@@ -220,6 +219,23 @@ namespace TransactionAggregation.Tests.Integration
             bank.GetProperty("color").GetString().Should().Be("#00A3AD");
             bank.GetProperty("isActive").GetBoolean().Should().BeFalse("inactive banks stay listed so their history still has a name");
             bank.TryGetProperty("id", out _).Should().BeFalse("staff get the look of a bank, not handles to manage it");
+        }
+
+        [Fact]
+        public async Task Banks_ListOnlyTheBanksAStaffMemberMayRead_AndEveryBankForAdmins()
+        {
+            using var admin = AsAdmin();
+            var mine = NewCode("mine");
+            var other = NewCode("other");
+            await CreateAsync(admin, mine);
+            await CreateAsync(admin, other);
+            using var staff = _factory.CreateClient().SignedInAsStaffFor(mine);
+
+            var staffCodes = (await staff.GetFromJsonAsync<JsonElement>(BanksPath)).EnumerateArray().Select(b => b.GetProperty("code").GetString()).ToList();
+            var adminCodes = (await admin.GetFromJsonAsync<JsonElement>(BanksPath)).EnumerateArray().Select(b => b.GetProperty("code").GetString()).ToList();
+
+            staffCodes.Should().Contain(mine).And.NotContain(other, "a staff member never sees another bank's data, so its card would only show zeros");
+            adminCodes.Should().Contain([mine, other]);
         }
 
         [Fact]
@@ -267,7 +283,7 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
 
-        // Other tests add sources to the same host, so a given source may be on any page.
+        // Other tests add sources, so a source may be on any page.
         private static async Task<List<JsonElement>> ListAllSourcesAsync(HttpClient admin)
         {
             var sources = new List<JsonElement>();

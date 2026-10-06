@@ -39,4 +39,6 @@ RUN dotnet publish "./TransactionAggregation.MockAggregator.csproj" -c $BUILD_CO
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /liveness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'Healthy' <&3"]
 ENTRYPOINT ["dotnet", "TransactionAggregation.MockAggregator.dll"]

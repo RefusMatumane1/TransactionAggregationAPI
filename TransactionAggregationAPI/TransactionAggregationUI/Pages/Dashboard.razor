@@ -18,7 +18,6 @@
     </Actions>
 </PageHeader>
 
-@* Filters: one row above everything they drive. *@
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
     <div class="segmented" role="group" aria-label="Period">
         @foreach (var (key, label) in ReportRange.Presets)
@@ -41,7 +40,6 @@
     }
 </div>
 
-@* One card per bank: the main way to move between sources. Clicking narrows everything below. *@
 <div class="bank-strip" role="group" aria-label="Bank">
     <button type="button" class="bank-card" style="--bank-color:#334155" aria-pressed="@(_filter.Institution is null ? "true" : "false")"
             @onclick="() => SelectBank(null)">
@@ -354,7 +352,7 @@ else
     private AccountSort _accountSort = AccountSort.Count;
     private int _loadVersion;
 
-    // The URL is the state: back/forward, refresh and shared links all show the same report.
+    // The URL is the state: back/forward, refresh and shared links show the same report.
     protected override async Task OnParametersSetAsync()
     {
         var today = Format.TodayInSouthAfrica();
@@ -385,7 +383,6 @@ else
         _banks = await BankService.GetBanksAsync();
         _selectedBank = _filter.Institution is { } code ? BankDirectory.Find(_banks, code) : null;
 
-        // The bank cards always show every bank, whichever one is selected below.
         var allBanks = new ReportFilter { From = _filter.From, To = _filter.To };
         var institutions = Aggregates.GetInstitutionsAsync(allBanks);
         var categories = Aggregates.GetCategoriesAsync(_filter);
@@ -393,7 +390,7 @@ else
         var comparison = Aggregates.GetComparisonAsync(_filter);
         await Task.WhenAll(institutions, categories, cashFlow, comparison);
 
-        // A newer filter started while this one was in flight: its results win.
+        // A newer filter started: its results win.
         if (version != _loadVersion)
             return;
 
@@ -412,8 +409,6 @@ else
         _allBanksCount = rows.Sum(i => i.TransactionCount);
         _allBanksAccounts = rows.Sum(i => i.AccountCount);
 
-        // Registered banks first (by name), then any code that only appears in the data. A switched-off
-        // bank only gets a card while it still has money in the period (or is the one selected).
         _bankCards = _banks.Values
             .Where(b => b.IsActive || _institutionTotals.ContainsKey(b.Code) || Same(_filter.Institution, b.Code))
             .OrderBy(b => b.DisplayName)
@@ -429,7 +424,7 @@ else
         _cashFlow = cashFlow.Result.Value;
         _comparison = comparison.Result.Value;
 
-        // Every report reads the same scheduled rebuild; the oldest stamp is the honest one.
+        // The oldest stamp is the honest one.
         _asOf = new[] { _institutions?.AsOf, _categories?.AsOf, _cashFlow?.AsOf, _comparison?.AsOf }
             .Where(a => a is not null)
             .Min();
@@ -440,7 +435,6 @@ else
     {
         if (key == ReportRange.Custom)
         {
-            // Start the custom range from what is on screen, so switching loses nothing.
             Navigate(ReportRange.Custom, _filter.From, _filter.To, _filter.Institution);
             return;
         }

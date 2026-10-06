@@ -29,6 +29,13 @@
     <Project Path="Modules/Transactions/Transactions.Infrastructure/Transactions.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />
     <Project Path="Modules/Transactions/Transactions.Presentation/Transactions.Presentation.csproj" />
   </Folder>
+  <Folder Name="/Modules/Customers/">
+    <Project Path="Modules/Customers/Customers.Application/Customers.Application.csproj" />
+    <Project Path="Modules/Customers/Customers.Contracts/Customers.Contracts.csproj" />
+    <Project Path="Modules/Customers/Customers.Domain/Customers.Domain.csproj" />
+    <Project Path="Modules/Customers/Customers.Infrastructure/Customers.Infrastructure.csproj" />
+    <Project Path="Modules/Customers/Customers.Presentation/Customers.Presentation.csproj" />
+  </Folder>
   <Folder Name="/Modules/WebhookSources/">
     <Project Path="Modules/WebhookSources/WebhookSources.Application/WebhookSources.Application.csproj" />
     <Project Path="Modules/WebhookSources/WebhookSources.Contracts/WebhookSources.Contracts.csproj" />

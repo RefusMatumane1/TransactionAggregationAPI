@@ -24,7 +24,8 @@ namespace TransactionAggregationUI.Services
                 ("externalAccountId", f.ExternalAccountId),
                 ("sortBy", f.SortBy));
 
-            return api.GetAsync<CursorPage<TransactionModel>>($"api/v1/transactions?{query}");
+            var path = f.CustomerId is { } customer ? $"api/v1/customers/{customer}/transactions" : "api/v1/transactions";
+            return api.GetAsync<CursorPage<TransactionModel>>($"{path}?{query}");
         }
 
         public Task<(TransactionDetailModel? Value, string? Error)> GetAsync(Guid id) =>

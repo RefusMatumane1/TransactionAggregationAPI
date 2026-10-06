@@ -1,0 +1,582 @@
+@page "/customers/{CustomerId:guid}"
+@attribute [Authorize(Roles = "staff,admin")]
+@inject CustomerService CustomerService
+@inject AggregateService Aggregates
+@inject TransactionService TransactionService
+@inject BankService BankService
+@inject NavigationManager Nav
+
+<PageTitle>@(_customer?.Name ?? "Customer") · Transaction Aggregation</PageTitle>
+
+<nav aria-label="Breadcrumb" class="small mb-2">
+    <a href="/customers"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Customers</a>
+</nav>
+
+@if (_customer is null)
+{
+    @if (_customerError is not null)
+    {
+        <PageHeader Title="Customer" />
+        <ErrorPanel Message="@_customerError" OnRetry="LoadAllAsync" />
+    }
+    else
+    {
+        <Skeleton Height="2rem" Width="16rem" Class="mb-2" />
+        <Skeleton Width="10rem" Class="mb-4" />
+        <Skeleton Height="12rem" />
+    }
+}
+else
+{
+    var banks = _customer.Accounts.Select(a => a.Institution).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+
+    <PageHeader Title="@_customer.Name">
+        <Subtitle>
+            <span class="font-monospace">@_customer.Reference</span>
+            · @_customer.Accounts.Count account@(_customer.Accounts.Count == 1 ? "" : "s") at @banks bank@(banks == 1 ? "" : "s")
+        </Subtitle>
+        <Actions>
+            <span class="freshness" title="Totals are rebuilt on a schedule (about hourly). The transaction list below is live.">
+                <i class="bi bi-clock-history" aria-hidden="true"></i>
+                @(_asOf is { } asOf ? $"Totals as of {Format.Timestamp(asOf)}" : "Totals not built yet")
+            </span>
+        </Actions>
+    </PageHeader>
+
+    <div class="row g-3 mb-3">
+        <div class="col-xl-4 order-xl-2">
+            <section class="card h-100" aria-labelledby="accounts-title">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2 id="accounts-title" class="panel-title">Linked accounts</h2>
+                    <span class="small text-muted">@_customer.Accounts.Count</span>
+                </div>
+                @if (_customer.Accounts.Count == 0)
+                {
+                    <EmptyState Title="No accounts linked yet" Icon="bi-link-45deg">
+                        Link the customer's bank accounts to see their transactions and totals.
+                    </EmptyState>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var account in _customer.Accounts)
+                        {
+                            var key = Key(account);
+                            <li class="list-group-item d-flex align-items-center gap-2">
+                                <div class="me-auto">
+                                    <BankBadge Bank="@BankDirectory.Find(_banks, account.Institution)" />
+                                    <div class="small font-monospace text-muted">@account.ExternalAccountId</div>
+                                </div>
+                                <AuthorizeView Roles="admin">
+                                    @if (_confirmUnlink == key)
+                                    {
+                                        <span class="small">Unlink?</span>
+                                        <button type="button" class="btn btn-sm btn-danger" disabled="@_saving" @onclick="() => UnlinkAsync(account)">Unlink</button>
+                                        <button type="button" class="btn btn-sm btn-link" @onclick="() => _confirmUnlink = null">Cancel</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="() => _confirmUnlink = key"
+                                                aria-label="@($"Unlink {account.Institution} account {account.ExternalAccountId}")">
+                                            <i class="bi bi-x-lg" aria-hidden="true"></i>
+                                        </button>
+                                    }
+                                </AuthorizeView>
+                            </li>
+                        }
+                    </ul>
+                }
+                <AuthorizeView Roles="admin">
+                    <form class="card-footer bg-transparent" @onsubmit="LinkAsync" @onsubmit:preventDefault>
+                        <div class="small fw-semibold mb-2">Link an account</div>
+                        @if (_linkMessage is not null)
+                        {
+                            <div class="alert @(_linkFailed ? "alert-danger" : "alert-success") py-1 px-2 small" role="status">@_linkMessage</div>
+                        }
+                        <div class="d-flex flex-wrap gap-2">
+                            <label class="visually-hidden" for="link-bank">Bank</label>
+                            <select id="link-bank" class="form-select form-select-sm" style="width:auto" @bind="_linkBank">
+                                <option value="">Bank…</option>
+                                @foreach (var bank in _banks.Values.OrderBy(b => b.DisplayName))
+                                {
+                                    <option value="@bank.Code">@bank.DisplayName</option>
+                                }
+                            </select>
+                            <label class="visually-hidden" for="link-account">Account id</label>
+                            <input id="link-account" class="form-control form-control-sm font-monospace" style="flex:1 1 9rem"
+                                   placeholder="Account id at that bank" @bind="_linkAccount" @bind:event="oninput" autocomplete="off" />
+                            <button type="submit" class="btn btn-sm btn-primary"
+                                    disabled="@(_saving || string.IsNullOrEmpty(_linkBank) || string.IsNullOrWhiteSpace(_linkAccount))">Link</button>
+                        </div>
+                        <div class="form-text">Exactly as the bank sends it. The account's past and future transactions join this customer.</div>
+                    </form>
+                </AuthorizeView>
+            </section>
+        </div>
+
+        <div class="col-xl-8 order-xl-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                <div class="segmented" role="group" aria-label="Period">
+                    @foreach (var (key, label) in ReportRange.Presets)
+                    {
+                        <button type="button" aria-pressed="@(_range == key ? "true" : "false")" @onclick="() => SetRange(key)">@label</button>
+                    }
+                </div>
+                <span class="small text-muted">@Format.Day(_filter.From) – @Format.Day(_filter.To)</span>
+            </div>
+
+            @if (_reportError is not null)
+            {
+                <ErrorPanel Message="@_reportError" OnRetry="LoadReportsAsync" />
+            }
+            else if (_customer.Accounts.Count == 0)
+            {
+                <div class="card"><EmptyState Title="Nothing to total yet" Icon="bi-bar-chart">Totals appear once an account is linked.</EmptyState></div>
+            }
+            else if (_cashFlow is null)
+            {
+                <div class="row g-3">
+                    @for (var i = 0; i < 4; i++)
+                    {
+                        <div class="col-sm-6"><div class="kpi"><Skeleton Width="40%" /><Skeleton Height="1.8rem" Width="70%" Class="mt-2" /></div></div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="@(_reportsLoading ? "is-refreshing" : "")">
+                    <div class="row g-3">
+                        <div class="col-sm-6">
+                            <Kpi Label="Income" Value="@Format.Money(_cashFlow.TotalIncome)" Swatch="var(--series-income)"
+                                 Change="_comparison?.IncomeChangePercent" HigherIsBetter="true" HasComparison="_comparison is not null" />
+                        </div>
+                        <div class="col-sm-6">
+                            <Kpi Label="Expenses" Value="@Format.Money(_cashFlow.TotalExpenses)" Swatch="var(--series-expense)"
+                                 Change="_comparison?.ExpensesChangePercent" HigherIsBetter="false" HasComparison="_comparison is not null" />
+                        </div>
+                        <div class="col-sm-6">
+                            <Kpi Label="Net" Value="@Format.Money(_cashFlow.Net)" Note="Income minus expenses" />
+                        </div>
+                        <div class="col-sm-6">
+                            <Kpi Label="Transactions" Value="@Format.Count(_cashFlow.Points.Sum(p => p.TransactionCount))"
+                                 Note="@($"Across {banks} bank{(banks == 1 ? "" : "s")}")" />
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_cashFlow is not null && _customer.Accounts.Count > 0)
+    {
+        <div class="row g-3 mb-3 @(_reportsLoading ? "is-refreshing" : "")">
+            <div class="col-xl-8">
+                <section class="card h-100" aria-labelledby="cashflow-title">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h2 id="cashflow-title" class="panel-title">Monthly cash flow</h2>
+                        <div class="segmented" role="group" aria-label="Cash flow view">
+                            <button type="button" aria-pressed="@(!_asTable ? "true" : "false")" @onclick="() => _asTable = false">
+                                <i class="bi bi-bar-chart" aria-hidden="true"></i> Chart
+                            </button>
+                            <button type="button" aria-pressed="@(_asTable ? "true" : "false")" @onclick="() => _asTable = true">
+                                <i class="bi bi-table" aria-hidden="true"></i> Table
+                            </button>
+                        </div>
+                    </div>
+                    @if (_cashFlow.Points.All(p => p.TransactionCount == 0))
+                    {
+                        <EmptyState Title="No transactions in this period" Icon="bi-bar-chart">Try a longer period.</EmptyState>
+                    }
+                    else if (_asTable)
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th scope="col" class="ps-3">Month</th>
+                                        <th scope="col" class="text-end">Income</th>
+                                        <th scope="col" class="text-end">Expenses</th>
+                                        <th scope="col" class="text-end pe-3">Net</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var point in _cashFlow.Points)
+                                    {
+                                        <tr>
+                                            <th scope="row" class="ps-3 fw-normal">@Format.Month(point.PeriodStart)</th>
+                                            <td class="text-end num">@Format.Money(point.Income)</td>
+                                            <td class="text-end num">@Format.Money(point.Expenses)</td>
+                                            <td class="text-end num fw-semibold pe-3">@Format.Money(point.Net)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card-body"><CashFlowChart Points="_cashFlow.Points" /></div>
+                    }
+                </section>
+            </div>
+
+            <div class="col-xl-4">
+                <section class="card h-100" aria-labelledby="spend-title">
+                    <div class="card-header"><h2 id="spend-title" class="panel-title">Spending by category</h2></div>
+                    <div class="card-body">
+                        @if (_categories?.Categories is { Count: > 0 } categories)
+                        {
+                            @foreach (var category in categories)
+                            {
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between align-items-center small gap-2">
+                                        <CategoryBadge Category="@category.Category" />
+                                        <span class="num">@Format.Money(category.Amount) <span class="text-muted">· @Format.Percent(category.Share)</span></span>
+                                    </div>
+                                    <div class="share-track" aria-hidden="true">
+                                        <div class="share-fill" style="width:@Width(category.Share)"></div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <EmptyState Title="No spending in this period" Icon="bi-pie-chart" />
+                        }
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <section class="card mb-3 @(_reportsLoading ? "is-refreshing" : "")" aria-labelledby="bybank-title">
+            <div class="card-header"><h2 id="bybank-title" class="panel-title">By bank and account</h2></div>
+            @if (_institutions?.Institutions is { Count: > 0 } rows)
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="ps-3">Bank / account</th>
+                                <th scope="col" class="text-end">Income</th>
+                                <th scope="col" class="text-end">Expenses</th>
+                                <th scope="col" class="text-end">Net</th>
+                                <th scope="col" class="text-end pe-3">Txns</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var bank in rows)
+                            {
+                                <tr class="table-light">
+                                    <th scope="row" class="ps-3"><BankBadge Bank="@BankDirectory.Find(_banks, bank.Institution)" /></th>
+                                    <td class="text-end num fw-semibold">@Format.Money(bank.Income)</td>
+                                    <td class="text-end num fw-semibold">@Format.Money(bank.Expenses)</td>
+                                    <td class="text-end num fw-semibold">@Format.Money(bank.Net)</td>
+                                    <td class="text-end num pe-3">@Format.Count(bank.TransactionCount)</td>
+                                </tr>
+                                @foreach (var account in bank.Accounts)
+                                {
+                                    <tr>
+                                        <th scope="row" class="ps-4 fw-normal small font-monospace">@account.ExternalAccountId</th>
+                                        <td class="text-end num small">@Format.Money(account.Income)</td>
+                                        <td class="text-end num small">@Format.Money(account.Expenses)</td>
+                                        <td class="text-end num small">@Format.Money(account.Net)</td>
+                                        <td class="text-end num small pe-3">@Format.Count(account.TransactionCount)</td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <EmptyState Title="No transactions in this period" Icon="bi-bank" />
+            }
+        </section>
+    }
+
+    @if (_customer.Accounts.Count > 0)
+    {
+        <section class="card" aria-labelledby="tx-title">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h2 id="tx-title" class="panel-title">Transactions</h2>
+                <span class="small text-muted" aria-live="polite">
+                    @if (_txTotal is { } total)
+                    {
+                        @($"{Format.Count(total)}{(_txTotalCapped ? "+" : "")} in this period")
+                    }
+                </span>
+            </div>
+            @if (_txError is not null)
+            {
+                <div class="card-body"><ErrorPanel Message="@_txError" OnRetry="ReloadTransactionsAsync" /></div>
+            }
+            else if (_transactions.Count == 0 && _txLoading)
+            {
+                <div class="card-body">
+                    @for (var i = 0; i < 5; i++)
+                    {
+                        <Skeleton Height="1.5rem" Class="mb-2" />
+                    }
+                </div>
+            }
+            else if (_transactions.Count == 0)
+            {
+                <EmptyState Title="No transactions in this period" Icon="bi-receipt" />
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th scope="col" class="ps-3">Date</th>
+                                <th scope="col">Description</th>
+                                <th scope="col" class="d-none d-md-table-cell">Category</th>
+                                <th scope="col" class="d-none d-lg-table-cell">Bank</th>
+                                <th scope="col" class="text-end pe-3">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var tx in _transactions)
+                            {
+                                var bank = BankDirectory.Find(_banks, tx.Source);
+                                <tr class="clickable" @onclick="() => _openId = tx.Id">
+                                    <td class="ps-3 text-nowrap small">@Format.BookingDate(tx.Date)</td>
+                                    <td>
+                                        <button type="button" class="row-link" @onclick="() => _openId = tx.Id" @onclick:stopPropagation>@tx.Description</button>
+                                        <div class="small text-muted d-md-none">@tx.Category · @bank.DisplayName</div>
+                                    </td>
+                                    <td class="d-none d-md-table-cell"><CategoryBadge Category="@tx.Category" /></td>
+                                    <td class="d-none d-lg-table-cell small"><BankBadge Bank="@bank" /></td>
+                                    <td class="text-end pe-3 num fw-semibold @(tx.Amount > 0 ? "text-good" : "")">@Format.SignedMoney(tx.Amount, tx.Currency)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (_txNextCursor is not null)
+                {
+                    <div class="card-footer bg-transparent text-center">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" disabled="@_txLoading" @onclick="LoadMoreTransactionsAsync">
+                            @if (_txLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                            }
+                            Load more
+                        </button>
+                    </div>
+                }
+            }
+        </section>
+    }
+
+    @if (_openId is { } openId)
+    {
+        <TransactionDrawer Id="openId" Banks="_banks" OnClose="() => _openId = null" />
+    }
+}
+
+@code {
+    [Parameter] public Guid CustomerId { get; set; }
+    [SupplyParameterFromQuery(Name = "range")] public string? Range { get; set; }
+
+    private const int TransactionPageSize = 20;
+
+    private CustomerModel? _customer;
+    private string? _customerError;
+    private IReadOnlyDictionary<string, BankModel> _banks = new Dictionary<string, BankModel>();
+
+    private ReportFilter _filter = new();
+    private string _range = ReportRange.Default;
+    private CashFlowSeriesModel? _cashFlow;
+    private CategoryBreakdownModel? _categories;
+    private InstitutionBreakdownModel? _institutions;
+    private PeriodComparisonModel? _comparison;
+    private DateTime? _asOf;
+    private string? _reportError;
+    private bool _reportsLoading;
+    private bool _asTable;
+
+    private List<TransactionModel> _transactions = [];
+    private string? _txNextCursor;
+    private int? _txTotal;
+    private bool _txTotalCapped;
+    private bool _txLoading;
+    private string? _txError;
+    private Guid? _openId;
+
+    private string? _linkBank;
+    private string? _linkAccount;
+    private string? _linkMessage;
+    private bool _linkFailed;
+    private string? _confirmUnlink;
+    private bool _saving;
+
+    private int _loadVersion;
+    private (Guid Customer, string Range)? _loaded;
+
+    // The period is in the URL; a new customer or period reloads everything.
+    protected override async Task OnParametersSetAsync()
+    {
+        _range = ReportRange.Resolve(Range, Format.TodayInSouthAfrica()) is null ? ReportRange.Default : Range!;
+        if (_loaded == (CustomerId, _range))
+            return;
+
+        if (_loaded?.Customer != CustomerId)
+        {
+            _customer = null;
+            _cashFlow = null;
+            _transactions = [];
+        }
+        _loaded = (CustomerId, _range);
+
+        var (from, to) = ReportRange.Resolve(_range, Format.TodayInSouthAfrica())!.Value;
+        _filter = new ReportFilter { From = from, To = to, CustomerId = CustomerId };
+        await LoadAllAsync();
+    }
+
+    private async Task LoadAllAsync()
+    {
+        _customerError = null;
+        _banks = await BankService.GetBanksAsync();
+        var (customer, error) = await CustomerService.GetAsync(CustomerId);
+        _customer = customer;
+        _customerError = error;
+        if (customer is null || customer.Accounts.Count == 0)
+            return;
+
+        await Task.WhenAll(LoadReportsAsync(), ReloadTransactionsAsync());
+    }
+
+    private async Task LoadReportsAsync()
+    {
+        var version = ++_loadVersion;
+        _reportsLoading = true;
+        _reportError = null;
+
+        var cashFlow = Aggregates.GetMonthlyCashFlowAsync(_filter);
+        var categories = Aggregates.GetCategoriesAsync(_filter);
+        var institutions = Aggregates.GetInstitutionsAsync(_filter);
+        var comparison = Aggregates.GetComparisonAsync(_filter);
+        await Task.WhenAll(cashFlow, categories, institutions, comparison);
+        if (version != _loadVersion)
+            return;
+
+        _reportError = new[] { cashFlow.Result.Error, categories.Result.Error, institutions.Result.Error, comparison.Result.Error }
+            .FirstOrDefault(e => e is not null);
+        if (_reportError is null)
+        {
+            _cashFlow = cashFlow.Result.Value;
+            _categories = categories.Result.Value;
+            _institutions = institutions.Result.Value;
+            _comparison = comparison.Result.Value;
+            _asOf = new[] { _cashFlow?.AsOf, _categories?.AsOf, _institutions?.AsOf, _comparison?.AsOf }.Where(a => a is not null).Min();
+        }
+        _reportsLoading = false;
+    }
+
+    private Task ReloadTransactionsAsync()
+    {
+        _transactions = [];
+        _txNextCursor = null;
+        _txTotal = null;
+        return LoadTransactionsAsync(cursor: null);
+    }
+
+    private Task LoadMoreTransactionsAsync() => LoadTransactionsAsync(_txNextCursor);
+
+    private async Task LoadTransactionsAsync(string? cursor)
+    {
+        _txLoading = true;
+        _txError = null;
+        var (page, error) = await TransactionService.FilterTransactionsAsync(new TransactionFilterParams
+        {
+            CustomerId = CustomerId,
+            Cursor = cursor,
+            PageSize = TransactionPageSize,
+            FromDate = _filter.From.ToDateTime(TimeOnly.MinValue),
+            ToDate = _filter.To.ToDateTime(TimeOnly.MaxValue)
+        });
+
+        _txError = error;
+        if (page is not null)
+        {
+            _transactions.AddRange(page.Items);
+            _txNextCursor = page.NextCursor;
+            if (page.TotalCount is { } total)
+            {
+                _txTotal = total;
+                _txTotalCapped = page.TotalCountCapped;
+            }
+        }
+        _txLoading = false;
+    }
+
+    private void SetRange(string key) =>
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["range"] = key == ReportRange.Default ? null : key
+        }));
+
+    private async Task LinkAsync()
+    {
+        if (string.IsNullOrEmpty(_linkBank) || string.IsNullOrWhiteSpace(_linkAccount))
+            return;
+
+        _saving = true;
+        var before = _customer?.Accounts.Count ?? 0;
+        var (updated, error) = await CustomerService.LinkAsync(CustomerId, _linkBank, _linkAccount.Trim());
+        _saving = false;
+
+        _linkFailed = updated is null;
+        if (updated is null)
+        {
+            _linkMessage = error;
+            return;
+        }
+
+        _linkMessage = updated.Accounts.Count > before ? "Account linked." : "That account was already linked.";
+        _linkAccount = null;
+        await ApplyCustomerChangeAsync(updated);
+    }
+
+    private async Task UnlinkAsync(LinkedAccountModel account)
+    {
+        _saving = true;
+        var error = await CustomerService.UnlinkAsync(CustomerId, account.Institution, account.ExternalAccountId);
+        _saving = false;
+        _confirmUnlink = null;
+
+        if (error is not null)
+        {
+            _linkFailed = true;
+            _linkMessage = error;
+            return;
+        }
+
+        _linkFailed = false;
+        _linkMessage = "Account unlinked. Its transactions stay in the ledger.";
+        var (updated, _) = await CustomerService.GetAsync(CustomerId);
+        if (updated is not null)
+            await ApplyCustomerChangeAsync(updated);
+    }
+
+    // A link change takes effect on the next read: the reports and the list are reloaded.
+    private async Task ApplyCustomerChangeAsync(CustomerModel updated)
+    {
+        _customer = updated;
+        if (updated.Accounts.Count == 0)
+        {
+            _cashFlow = null;
+            _transactions = [];
+            return;
+        }
+        await Task.WhenAll(LoadReportsAsync(), ReloadTransactionsAsync());
+    }
+
+    private static string Key(LinkedAccountModel account) => $"{account.Institution}/{account.ExternalAccountId}";
+
+    private static string Width(decimal share) =>
+        (share * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

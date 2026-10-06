@@ -2,6 +2,7 @@ using BuildingBlocks.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 
@@ -26,13 +27,11 @@ namespace TransactionAggregation.Tests.Helpers
                 InMemoryDb.Options<TransactionsDbContext>(dbName),
                 messagingDbContext ?? InMemoryMessagingDbContextFactory.Create(), auditTrail ?? new RecordingAuditTrail());
 
-        // Audit events the context has committed, when it was created with the default RecordingAuditTrail.
         public static List<AuditEventRecord> RecordedAudit(this TransactionsDbContext context) =>
             ((RecordingAuditTrail)((InMemoryTransactionsDbContext)context).AuditTrail).Recorded;
     }
 
-    // The InMemory provider has no transactions, so the base unit of work saves the contexts and the
-    // audit events one after another; the atomic commit itself is covered by the Postgres suites.
+    // InMemory has no transactions: contexts and audit events save one after another.
     internal sealed class InMemoryTransactionsDbContext(
         DbContextOptions<TransactionsDbContext> options, MessagingDbContext messaging, IAuditTrail auditTrail)
         : TransactionsDbContext(options, messaging, auditTrail)
@@ -63,6 +62,12 @@ namespace TransactionAggregation.Tests.Helpers
     public static class InMemoryAuditDbContextFactory
     {
         public static AuditDbContext Create(string? dbName = null) => InMemoryDb.Create<AuditDbContext>(dbName);
+    }
+
+    public static class InMemoryCustomersDbContextFactory
+    {
+        public static CustomersDbContext Create(string? dbName = null, IAuditTrail? auditTrail = null) =>
+            new(InMemoryDb.Options<CustomersDbContext>(dbName), auditTrail ?? new RecordingAuditTrail());
     }
 
     public static class InMemoryWebhookSourcesDbContextFactory

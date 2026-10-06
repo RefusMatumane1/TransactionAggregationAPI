@@ -22,9 +22,8 @@ using System.Text.Json;
 
 namespace Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions
 {
-    // Turns one inbox delivery into ledger entries. Only posted transactions are recorded, each once:
-    // the unique key (institution, account, bank transaction id) over booked rows is the guarantee,
-    // and the existence check below only spares the database a predictable conflict.
+    // The unique key (institution, account, bank transaction id) over booked rows is the guarantee;
+    // the existence check only spares the database a predictable conflict.
     internal sealed class ProcessInboundTransactionsCommandHandler(
         ITransactionsDbContext context,
         IMessagingDbContext messaging,

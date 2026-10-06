@@ -9,8 +9,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
 {
-    // There are no customer accounts: every signed-in user is staff or admin. Staff read transactions
-    // and aggregates; only admins change data or reach the admin areas.
     public class RoleAccessTests : IClassFixture<IntegrationTestWebAppFactory>
     {
         private readonly IntegrationTestWebAppFactory _factory;
@@ -28,7 +26,8 @@ namespace TransactionAggregation.Tests.Integration
             "/api/v1/transactions/aggregates/cash-flow",
             "/api/v1/transactions/aggregates/institutions",
             "/api/v1/banks",
-            "/api/v1/transactions/aggregates/comparison"
+            "/api/v1/transactions/aggregates/comparison",
+            "/api/v1/customers"
         };
 
         public static TheoryData<string> AdminEndpoints => new()

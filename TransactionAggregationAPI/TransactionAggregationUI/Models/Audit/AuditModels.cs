@@ -17,7 +17,6 @@ namespace TransactionAggregationUI.Models.Audit
         public Dictionary<string, string> Metadata { get; set; } = new();
         public string? TraceId { get; set; }
 
-        // Subject id of the user behind an administrative change.
         public string? Actor { get; set; }
     }
 
@@ -83,7 +82,6 @@ namespace TransactionAggregationUI.Models.Audit
             ("Administration", "admin.source_signing_key_registered", "Signing key registered")
         ];
 
-        // Event types written before the ledger became insert-only; labelled so history stays readable.
         private static readonly IReadOnlyDictionary<string, string> HistoricalLabels = new Dictionary<string, string>
         {
             ["transaction.settled"] = "Transaction settled (historical)",

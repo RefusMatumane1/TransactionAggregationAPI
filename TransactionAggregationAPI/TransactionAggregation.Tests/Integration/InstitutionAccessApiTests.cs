@@ -9,8 +9,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
 {
-    // Object-level authorization (BOLA/IDOR): a staff member reads only the institutions assigned
-    // to them, through every read path, and cannot widen that by changing ids or filters.
     public class InstitutionAccessApiTests(IntegrationTestWebAppFactory factory) : IClassFixture<IntegrationTestWebAppFactory>
     {
         private async Task<(Guid Fnb, Guid Capitec, string Account)> SeedAsync()
@@ -24,7 +22,6 @@ namespace TransactionAggregation.Tests.Integration
             context.Transactions.AddRange(fnb, capitec);
             await context.SaveChangesAsync();
 
-            // What the worker's scheduled refresh does. (No cache to clear: this host runs without Redis.)
             await InMemoryDailyTotals.BuildAsync(context);
             return (fnb.Id.Value, capitec.Id.Value, account);
         }

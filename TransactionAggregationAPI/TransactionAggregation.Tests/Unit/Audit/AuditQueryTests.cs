@@ -12,7 +12,6 @@ namespace TransactionAggregation.Tests.Unit.Audit
 {
     public class AuditQueryTests
     {
-        // Written by the lifecycle that preceded the insert-only ledger; lineage still shows such history.
         private const string HistoricalSettledEventType = "transaction.settled";
 
         private static readonly DateTime T0 = new(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);

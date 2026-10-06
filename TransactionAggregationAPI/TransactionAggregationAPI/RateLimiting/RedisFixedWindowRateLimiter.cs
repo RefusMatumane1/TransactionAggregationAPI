@@ -3,7 +3,6 @@ using System.Threading.RateLimiting;
 
 namespace TransactionAggregationAPI.RateLimiting
 {
-    // A fixed window counted in Redis, so every API replica shares one limit per caller.
     internal sealed class RedisFixedWindowRateLimiter(
         IConnectionMultiplexer redis,
         string scope,
@@ -54,9 +53,7 @@ namespace TransactionAggregationAPI.RateLimiting
             }
         }
 
-        // The rate-limiting middleware tries AttemptAcquire first and falls back to AcquireAsync when
-        // it is not granted. Answering "not acquired" here without touching Redis makes every request
-        // take the asynchronous path: one counted increment, and no thread blocked on network I/O.
+        // Answering "not acquired" here forces the async path: one counted increment, no thread blocked on network I/O.
         protected override RateLimitLease AttemptAcquireCore(int permitCount) => DeferredLease.Instance;
 
         private RateLimitLease LeaseFor(RedisResult result)

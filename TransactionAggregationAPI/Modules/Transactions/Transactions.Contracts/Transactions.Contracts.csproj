@@ -3,5 +3,4 @@
 		<RootNamespace>Modules.Transactions.Contracts</RootNamespace>
 	</PropertyGroup>
 
-	<!-- Integration events the Transactions module publishes. No dependencies, so any consumer can reference it. -->
 </Project>

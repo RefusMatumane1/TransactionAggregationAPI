@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
@@ -44,6 +45,7 @@ namespace TransactionAggregation.Tests.Integration
                 ReplaceWithInMemory<MessagingDbContext>(services);
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
                 ReplaceWithInMemory<AuditDbContext>(services);
+                ReplaceWithInMemory<CustomersDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 

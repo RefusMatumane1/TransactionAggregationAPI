@@ -34,7 +34,7 @@ namespace TransactionAggregation.Tests.Integration.Kafka
 
         public async Task InitializeAsync()
         {
-            // The broker advertises the host port clients use, so it must be known before start.
+            // The broker advertises the host port clients use, so it is known before start.
             var hostPort = FreeTcpPort();
             _container = new ContainerBuilder("confluentinc/confluent-local:8.1.1")
                 .WithPortBinding(hostPort, 9092)
@@ -57,9 +57,6 @@ namespace TransactionAggregation.Tests.Integration.Kafka
         }
     }
 
-    // The real consumer against a real broker: header read, signature check, offset storage and
-    // dead-letter publishing. Only the inbox write behind ISender is stubbed; the Postgres suites
-    // cover it.
     public class KafkaConsumerBrokerTests(KafkaContainerFixture broker) : IClassFixture<KafkaContainerFixture>
     {
         private const string Source = "broker-test-provider";
@@ -194,7 +191,7 @@ namespace TransactionAggregation.Tests.Integration.Kafka
                 Arg.Is<IReadOnlyCollection<AuditEventRecord>>(events => events.Single().SourceName == AuditSources.Unauthenticated),
                 Arg.Any<CancellationToken>());
 
-            // Same consumer group again: committed offsets mean nothing is redelivered.
+            // Same group: committed offsets mean nothing is redelivered.
             var restarted = Consumer(harness);
             await restarted.StartAsync(CancellationToken.None);
             await Task.Delay(TimeSpan.FromSeconds(8));

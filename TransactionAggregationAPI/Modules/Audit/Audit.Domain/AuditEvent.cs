@@ -25,7 +25,6 @@ namespace Modules.Audit.Domain
         public Dictionary<string, string> Metadata { get; private set; } = new();
         public string? TraceId { get; private set; }
 
-        // The signed-in user (identity-provider subject id) behind an administrative change.
         public string? Actor { get; private set; }
 
         public static AuditEvent Create(

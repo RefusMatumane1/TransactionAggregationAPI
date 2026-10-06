@@ -2,16 +2,16 @@ using TransactionAggregationUI.Models.Transactions;
 
 namespace TransactionAggregationUI.Models.Aggregates
 {
-    // Narrows every report; empty values mean "all". Days are South African calendar days, inclusive.
     public class ReportFilter
     {
         public DateOnly From { get; set; }
         public DateOnly To { get; set; }
         public string? Institution { get; set; }
         public string? ExternalAccountId { get; set; }
+
+        public Guid? CustomerId { get; set; }
     }
 
-    // The ranges people actually ask for, so a report is one click instead of two date pickers.
     public static class ReportRange
     {
         public const string ThisMonth = "month";
@@ -45,7 +45,6 @@ namespace TransactionAggregationUI.Models.Aggregates
         public DateOnly To { get; set; }
     }
 
-    // AsOf on every report: when the server last rebuilt its totals (UTC); null before the first build.
     public class InstitutionBreakdownModel
     {
         public PeriodModel Period { get; set; } = new();

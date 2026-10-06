@@ -65,8 +65,7 @@ namespace Modules.Audit.Application.Contracts
             if (toAdd.Count == 0)
                 return;
 
-            // No conflict retry here: a failed statement aborts the caller's Postgres transaction,
-            // so the caller retries the whole unit instead.
+            // No conflict retry: a failed statement aborts the caller's transaction, so the caller retries the whole unit.
             await context.Database.UseTransactionAsync(transaction, cancellationToken);
             try
             {

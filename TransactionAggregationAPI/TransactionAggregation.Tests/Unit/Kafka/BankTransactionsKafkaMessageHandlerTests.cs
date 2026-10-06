@@ -40,7 +40,6 @@ namespace TransactionAggregation.Tests.Unit.Kafka
                 KafkaRecordSignature.SignedContent(source, idempotencyKey, value),
                 HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation));
 
-        // Signed by RegisteredSource's key over exactly the fields sent, unless a test overrides it.
         private static KafkaInboundRecord Record(
             string? value = ValidMessage, string? idempotencyKey = null, long offset = 42, string? source = RegisteredSource,
             string? signature = null, bool unsigned = false) =>

@@ -4,7 +4,7 @@ namespace Modules.Transactions.Application.Common.Interfaces
 {
     public interface ITransactionCategorizationService
     {
-        // Decided once, when the transaction is recorded; a ledger entry's category never changes.
+        // Decided once, at recording; a category never changes.
         TransactionCategory Categorize(string description, decimal amount, TransactionCategory? bankCategory);
     }
 }

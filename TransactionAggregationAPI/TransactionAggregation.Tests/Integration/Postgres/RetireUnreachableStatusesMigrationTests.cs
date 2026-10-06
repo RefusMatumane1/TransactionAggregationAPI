@@ -23,7 +23,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var migrator = context.GetService<IMigrator>();
             await migrator.MigrateAsync(migrations[migrations.IndexOf(retire) - 1]);
 
-            // One row per status value that ever existed (0-8), each with a distinct amount.
             var rows = Enumerable.Range(0, 9).Select(status => (Status: status, Id: Guid.NewGuid())).ToList();
             foreach (var (status, id) in rows)
                 await LegacyTransactionRows.InsertAsync(

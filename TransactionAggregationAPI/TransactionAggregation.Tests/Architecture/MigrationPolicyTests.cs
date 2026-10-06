@@ -7,9 +7,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture
 {
-    // Migrations from the insert-only ledger onwards change the schema only: no row is updated or
-    // deleted, no column or table dropped (expand/contract: a later release may drop what an
-    // earlier one stopped using, after an ADR), and every index is built CONCURRENTLY.
+    // From the insert-only ledger on, migrations only change the schema (expand/contract) and build every index CONCURRENTLY.
     public partial class MigrationPolicyTests
     {
         private const string PolicyStart = "20261003000000";
@@ -19,7 +17,8 @@ namespace TransactionAggregation.Tests.Architecture
             typeof(Modules.Transactions.Infrastructure.Persistence.TransactionsDbContext).Assembly,
             typeof(BuildingBlocks.Messaging.Persistence.MessagingDbContext).Assembly,
             typeof(Modules.WebhookSources.Infrastructure.Persistence.WebhookSourcesDbContext).Assembly,
-            typeof(Modules.Audit.Infrastructure.Persistence.AuditDbContext).Assembly
+            typeof(Modules.Audit.Infrastructure.Persistence.AuditDbContext).Assembly,
+            typeof(Modules.Customers.Infrastructure.Persistence.CustomersDbContext).Assembly
         ];
 
         [GeneratedRegex(@"\b(UPDATE|DELETE\s+FROM|TRUNCATE)\b\s+(transactions|messaging|audit|webhooksources)\.", RegexOptions.IgnoreCase)]

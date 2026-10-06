@@ -1,38 +1,40 @@
 using BuildingBlocks.Application.Caching;
 using BuildingBlocks.Messaging.Outbox;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace TransactionAggregation.Worker.Outbox
 {
-    // One handler per outbox message type. A message whose SchemaVersion is newer than the handler
-    // reads is dead-lettered rather than misread; an unknown type is dead-lettered too.
+    // A newer SchemaVersion than the handler reads, or an unknown type, is dead-lettered.
     public interface IOutboxMessageHandler
     {
         string MessageType { get; }
 
         int HighestReadableSchemaVersion { get; }
 
-        // Throws on failure; the dispatcher classifies the exception as transient or permanent.
         Task HandleAsync(OutboxMessage message, OutboxDispatchRun run, CancellationToken cancellationToken);
     }
 
-    // State shared by the handlers within one dispatch cycle. Handlers run concurrently.
-    public sealed class OutboxDispatchRun(ICacheService cache)
+    public sealed class OutboxDispatchRun(ICacheService cache, ILogger? logger = null)
     {
-        private readonly HashSet<string> _invalidatedScopes = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _attemptedScopes = new(StringComparer.Ordinal);
         private readonly SemaphoreSlim _gate = new(1, 1);
+        private readonly ILogger _logger = logger ?? NullLogger.Instance;
 
-        // Every message claimed in this cycle was committed before the claim, so one version bump
-        // per scope covers them all. A failed bump is not remembered: the next caller tries again.
+        // One version bump per scope covers the whole cycle. Best effort: the cache isn't authoritative, so an
+        // unreachable Redis must not stop the event being published.
         public async Task InvalidateCacheScopeOnceAsync(string scope, CancellationToken cancellationToken)
         {
             await _gate.WaitAsync(cancellationToken);
             try
             {
-                if (_invalidatedScopes.Contains(scope))
+                if (!_attemptedScopes.Add(scope))
                     return;
 
                 await cache.InvalidateScopeAsync(scope, cancellationToken);
-                _invalidatedScopes.Add(scope);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning(ex, "Cache scope {CacheScope} could not be invalidated; publishing anyway, cached reads expire on their own", scope);
             }
             finally
             {

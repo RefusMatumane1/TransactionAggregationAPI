@@ -23,7 +23,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             appliedMigrations.Should().NotBeEmpty("MigrateAsync() must actually run pending migrations, not just log that it did");
 
             string[] expectedTables =
-                ["Transactions", "WebhookSources", "InboxMessages", "OutboxMessages", "AuditEvents"];
+                ["Transactions", "WebhookSources", "InboxMessages", "OutboxMessages", "AuditEvents", "Customers", "CustomerAccounts"];
 
             foreach (var table in expectedTables)
             {
@@ -40,6 +40,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [InlineData("InboxMessages", "messaging")]
         [InlineData("OutboxMessages", "messaging")]
         [InlineData("AuditEvents", "audit")]
+        [InlineData("Customers", "customerdirectory")]
+        [InlineData("CustomerAccounts", "customerdirectory")]
         public async Task Migrations_PlaceEachTable_InItsOwningModulesSchema(string table, string expectedSchema)
         {
             using var context = _fixture.CreateContext();

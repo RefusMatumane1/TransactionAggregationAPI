@@ -2,8 +2,7 @@ using System.Globalization;
 
 namespace TransactionAggregationUI.Shared
 {
-    // One way to show money, dates and changes everywhere in the app. Booking dates are shown on the
-    // South African calendar (UTC+2, no DST), the same days the server aggregates by.
+    // Booking dates use the South African calendar (UTC+2, no DST), matching the server's aggregation days.
     public static class Format
     {
         private static readonly CultureInfo Zar = CreateZar();
@@ -12,8 +11,7 @@ namespace TransactionAggregationUI.Shared
         private static CultureInfo CreateZar()
         {
             var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-ZA").Clone();
-            // en-ZA groups with a non-breaking space and uses a decimal comma; a decimal point and
-            // comma groups read unambiguously next to the ISO amounts banks send.
+            // en-ZA groups with a non-breaking space and a decimal comma, which reads unambiguously next to ISO amounts.
             culture.NumberFormat.CurrencyDecimalSeparator = ".";
             culture.NumberFormat.CurrencyGroupSeparator = ",";
             culture.NumberFormat.NumberDecimalSeparator = ".";
@@ -29,11 +27,9 @@ namespace TransactionAggregationUI.Shared
                 ? amount.ToString("C2", Zar)
                 : $"{(amount < 0 ? "-" : "")}{currency} {Math.Abs(amount).ToString("N2", Zar)}";
 
-        // An amount whose direction matters (a transaction): always signed, credits with "+".
         public static string SignedMoney(decimal amount, string currency = "ZAR") =>
             amount > 0 ? "+" + Money(amount, currency) : Money(amount, currency);
 
-        // Axis ticks and tight spaces: R12.5k, R1.2m.
         public static string CompactMoney(decimal amount)
         {
             var abs = Math.Abs(amount);

@@ -84,7 +84,7 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
             foreach (var message in messages)
                 message.Claim(DateTime.UtcNow);
 
-            // Each publish waits until all three are in flight: a one-at-a-time dispatcher never gets there.
+            // Each publish waits until all three are in flight: a sequential dispatcher never gets there.
             var started = 0;
             var allStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var publisher = Substitute.For<IIntegrationEventPublisher>();
@@ -104,6 +104,32 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
 
             messages.Should().OnlyContain(m => m.Status == OutboxMessageStatus.Processed);
             messaging.ChangeTracker.HasChanges().Should().BeFalse("the chunk's outcomes are saved once it completes");
+        }
+
+        [Fact]
+        public async Task RedisUnavailable_StillPublishesEveryEvent_AndTriesTheCacheOncePerRun()
+        {
+            var messaging = InMemoryMessagingDbContextFactory.Create();
+            var messages = new[] { Recorded(), Recorded(), Recorded() };
+            messaging.OutboxMessages.AddRange(messages);
+            await messaging.SaveChangesAsync();
+            foreach (var message in messages)
+                message.Claim(DateTime.UtcNow);
+
+            var cache = Substitute.For<ICacheService>();
+            cache.InvalidateScopeAsync(default!, default).ReturnsForAnyArgs<Task>(_ => throw new TimeoutException("redis unreachable"));
+            var publisher = Substitute.For<IIntegrationEventPublisher>();
+            var handlers = new Dictionary<string, IOutboxMessageHandler>
+            {
+                [TransactionRecorded.EventType] = new TransactionRecordedHandler(publisher)
+            };
+
+            await Dispatcher().DispatchAsync(messages, handlers, new OutboxDispatchRun(cache), messaging, CancellationToken.None);
+
+            messages.Should().OnlyContain(m => m.Status == OutboxMessageStatus.Processed,
+                "the cache is never authoritative: an outage must not dead-letter the ledger's events");
+            await publisher.ReceivedWithAnyArgs(3).PublishAsync(default!, default);
+            await cache.ReceivedWithAnyArgs(1).InvalidateScopeAsync(default!, default);
         }
 
         [Fact]

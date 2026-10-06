@@ -18,7 +18,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
         private readonly ILogger<OutboxDispatcherBackgroundService> _logger;
         private readonly OutboxOptions _options;
 
-        // While draining a backlog, the two COUNT queries run once per Interval, not once per batch.
+        // While draining, the COUNT queries run once per Interval, not per batch.
         private DateTime _backlogRecordedAt = DateTime.MinValue;
 
         public OutboxDispatcherBackgroundService(
@@ -40,7 +40,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
             var messaging = scope.ServiceProvider.GetRequiredService<IMessagingDbContext>();
             var handlers = scope.ServiceProvider.GetServices<IOutboxMessageHandler>()
                 .ToDictionary(h => h.MessageType, StringComparer.Ordinal);
-            var run = new OutboxDispatchRun(scope.ServiceProvider.GetRequiredService<ICacheService>());
+            var run = new OutboxDispatchRun(scope.ServiceProvider.GetRequiredService<ICacheService>(), _logger);
 
             var claimed = await messaging.ClaimOutboxMessagesAsync(
                 _options.BatchSize, TimeSpan.FromMinutes(_options.ClaimTimeoutMinutes), _options.MaxAttempts, cancellationToken);
@@ -61,10 +61,8 @@ namespace TransactionAggregation.Worker.BackgroundServices
             return more;
         }
 
-        // Messages are published MaxConcurrency at a time and each chunk's outcomes are committed
-        // together, so a crash re-sends at most one chunk (consumers dedupe on message-id). Messages
-        // within a chunk may reach the broker in any order. A shutdown commits what finished and
-        // hands the rest of the claims back instead of leaving them to expire.
+        // Published MaxConcurrency at a time, committed per chunk: a crash re-sends at most one chunk (consumers dedupe),
+        // and order within a chunk is not guaranteed.
         internal async Task DispatchAsync(
             IReadOnlyList<OutboxMessage> claimed,
             IReadOnlyDictionary<string, IOutboxMessageHandler> handlers,

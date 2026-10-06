@@ -9,7 +9,8 @@ metadata:
     app.kubernetes.io/part-of: transaction-aggregation
 data:
   # nginx proxies /api/ to this upstream — uses in-cluster service DNS
-  API_UPSTREAM: "http://transaction-api"
+  # Fully qualified: nginx re-resolves it per request and its resolver ignores search domains.
+  API_UPSTREAM: "http://transaction-api.transaction-aggregation.svc.cluster.local"
   # Baked into wwwroot/appsettings.json at container start (see
   # docker-entrypoint.d/20-keycloak-authority.sh) — must be reachable from the browser, so this
   # is the ingress hostname, not the in-cluster service DNS.

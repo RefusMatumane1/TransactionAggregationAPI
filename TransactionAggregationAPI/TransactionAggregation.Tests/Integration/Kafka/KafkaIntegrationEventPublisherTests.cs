@@ -10,7 +10,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Kafka
 {
-    // The outbound adapter against a real broker: what a consumer of the integration events sees.
     public class KafkaIntegrationEventPublisherTests(KafkaContainerFixture broker) : IClassFixture<KafkaContainerFixture>
     {
         [Fact]

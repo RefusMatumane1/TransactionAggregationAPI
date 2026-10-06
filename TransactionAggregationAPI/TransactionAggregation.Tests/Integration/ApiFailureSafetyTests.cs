@@ -12,9 +12,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
 {
-    // What a caller sees when things go wrong: hostile input is answered with a 400 or an empty
-    // result, an internal failure with a ProblemDetails that names nothing inside the system, and
-    // a lost database with readiness failing while liveness stays up.
     public class ApiFailureSafetyTests(IntegrationTestWebAppFactory factory) : IClassFixture<IntegrationTestWebAppFactory>
     {
         [Theory]

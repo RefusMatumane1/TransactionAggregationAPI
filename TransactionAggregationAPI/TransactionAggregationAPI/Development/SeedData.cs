@@ -8,8 +8,6 @@ namespace TransactionAggregationAPI.Development
     {
         public const string RandomSeedKey = "Seed:RandomSeed";
 
-        // Tops every demo account up to "now": a first run backfills HistoryMonths of history, later
-        // runs add only what happened since the account's latest seeded transaction.
         public static async Task SeedDatabaseAsync(IServiceProvider serviceProvider, IConfiguration configuration)
         {
             using var scope = serviceProvider.CreateScope();

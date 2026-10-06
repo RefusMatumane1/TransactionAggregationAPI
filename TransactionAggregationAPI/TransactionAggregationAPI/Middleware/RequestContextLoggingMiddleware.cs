@@ -19,7 +19,6 @@ namespace TransactionAggregationAPI.Middleware
         {
             var correlationId = GetCorrelationId(context);
             CorrelationContext.Set(context, correlationId);
-            // Baggage carries it into the inbox and outbox rows this request writes, and to their processing.
             Activity.Current?.SetBaggage(MessagingTelemetry.CorrelationBaggageKey, correlationId);
 
             context.Response.OnStarting(() =>

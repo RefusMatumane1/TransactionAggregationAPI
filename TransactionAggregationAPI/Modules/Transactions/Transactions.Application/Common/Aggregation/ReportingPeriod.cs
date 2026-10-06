@@ -4,10 +4,6 @@ namespace Modules.Transactions.Application.Common.Aggregation
     {
         public const int MaxDays = 3_660;
 
-        public DateTime FromUtc => SouthAfricanCalendar.StartOfDayUtc(From);
-
-        public DateTime ToUtcExclusive => SouthAfricanCalendar.StartOfDayUtc(To.AddDays(1));
-
         public int Days => To.DayNumber - From.DayNumber + 1;
 
         public bool IsValid => From <= To && Days <= MaxDays;

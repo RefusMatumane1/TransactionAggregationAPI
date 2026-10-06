@@ -13,8 +13,6 @@ namespace Modules.WebhookSources
         {
             services.AddWebhookSourcesApplication();
 
-            // On the scoped shared connection so an administrative change and its audit row can
-            // commit in one transaction.
             services.AddDbContext<WebhookSourcesDbContext>((sp, options) =>
                 options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(),
                     npgsql => npgsql.UseModuleDefaults<WebhookSourcesDbContext>()));

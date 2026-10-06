@@ -4,21 +4,16 @@ using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Infrastructure.Persistence
 {
-    // Rebuilds the daily read model from the ledger, set-based and in one transaction:
-    //   1. the account-days touched by entries recorded since the checkpoint (minus the overlap, for
-    //      rows whose transaction committed after a previous refresh had already read past them);
-    //   2. those account-days' rows are deleted and recomputed in full from the ledger;
-    //   3. the checkpoint moves to this run's start.
-    // Recomputing whole account-days (never adding to existing totals) makes a re-run or an
-    // overlapping window harmless, and a backdated entry lands on the day it was booked.
+    // Rebuilds the touched account-days (entries recorded since the checkpoint, minus the overlap for late commits)
+    // in full from the ledger and moves the checkpoint, so a re-run or overlapping window is harmless.
     internal sealed class PostgresDailyTotalsRefresher(TransactionsDbContext context, TimeProvider time) : IDailyTotalsRefresher
     {
-        // pg_try_advisory_xact_lock key: one refresher at a time across all worker replicas.
+        // pg_try_advisory_xact_lock key: one refresher across all replicas.
         internal const long LockKey = 0x5441_4747_5245_4731; // "TAGGREG1"
 
         private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(10);
 
-        // Before any ledger row: the first refresh rebuilds every account-day.
+        // Before any ledger row: the first refresh rebuilds everything.
         private static readonly DateTime Beginning = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public async Task<DailyTotalsRefresh?> RefreshAsync(TimeSpan overlap, CancellationToken cancellationToken)
@@ -57,7 +52,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
             return locked;
         }
 
-        // Interpolated values become SQL parameters (ExecuteSqlAsync); nothing is spliced into the text.
         private async Task<int> RecomputeTouchedAccountDaysAsync(DateTime since, CancellationToken cancellationToken)
         {
             var booked = (int)TransactionStatus.Booked;
@@ -71,7 +65,7 @@ namespace Modules.Transactions.Infrastructure.Persistence
                 WHERE "Status" = {booked} AND "CreatedAt" > {since};
                 """, cancellationToken);
 
-            // CREATE TABLE AS reports no row count, so the touched account-days are counted here.
+            // CREATE TABLE AS reports no row count, so the account-days are counted here.
             var touched = await context.Database
                 .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM touched_account_days")
                 .SingleAsync(cancellationToken);
@@ -84,7 +78,7 @@ namespace Modules.Transactions.Infrastructure.Persistence
                   AND d."Day" = t."Day";
                 """, cancellationToken);
 
-            // The day's bounds are written as ranges on "Date" so the ledger's account index serves them.
+            // Ranges on "Date" let the ledger's account index serve them.
             await context.Database.ExecuteSqlAsync($"""
                 INSERT INTO transactions."DailyTotals"
                     ("SourceName", "ExternalAccountId", "Day", "Category", "Currency",

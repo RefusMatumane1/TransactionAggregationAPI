@@ -5,7 +5,7 @@
                 <NotAuthorized>
                     @if (context.User.Identity?.IsAuthenticated == true)
                     {
-                        @* Signed in, but without the staff or admin realm role: redirecting to login would loop. *@
+                        @* Signed in without the staff or admin role: redirecting to login would loop. *@
                         <div class="alert alert-warning m-4">
                             <h5 class="alert-heading">No access</h5>
                             <p class="mb-0">Your account needs the <strong>staff</strong> or <strong>admin</strong> role.

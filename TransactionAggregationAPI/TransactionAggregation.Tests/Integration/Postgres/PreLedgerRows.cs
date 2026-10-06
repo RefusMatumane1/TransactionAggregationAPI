@@ -3,9 +3,7 @@ using Modules.Transactions.Domain.Enums;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Rows in the current schema with a status only the lifecycle before the insert-only ledger could
-    // produce (Pending, Expired). The domain can no longer create them, so tests seed them with SQL to
-    // prove every read leaves them out.
+    // Pending/Expired rows the domain can no longer create, seeded with SQL to prove reads leave them out.
     internal static class PreLedgerRows
     {
         public static Task<int> InsertAsync(

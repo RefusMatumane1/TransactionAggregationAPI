@@ -34,5 +34,6 @@ builder.Services.AddScoped<TransactionService>();
 builder.Services.AddScoped<AggregateService>();
 builder.Services.AddScoped<BankService>();
 builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<CustomerService>();
 
 await builder.Build().RunAsync();

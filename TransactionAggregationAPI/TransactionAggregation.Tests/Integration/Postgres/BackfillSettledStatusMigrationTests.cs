@@ -39,7 +39,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var ingestedRejected = Guid.NewGuid();
             await LegacyTransactionRows.InsertAsync(context, ingestedPending, $"bank-{suffix}", -10m, status: 0);
             await LegacyTransactionRows.InsertAsync(context, seedPending, $"seed-{suffix}", -10m, status: 0);
-            // 2 was "Rejected" at this point in the schema's history; the enum no longer has it.
+            // 2 was "Rejected" at this point in the schema's history.
             await LegacyTransactionRows.InsertAsync(context, ingestedRejected, $"bank-rejected-{suffix}", -10m, status: 2);
 
             await migrator.MigrateAsync();

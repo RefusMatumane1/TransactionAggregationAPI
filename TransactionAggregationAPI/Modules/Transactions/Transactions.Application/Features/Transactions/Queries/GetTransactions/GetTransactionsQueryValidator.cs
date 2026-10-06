@@ -21,7 +21,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
             RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
             RuleFor(x => x.Currency!).IsoCurrency().When(x => x.Currency is not null);
 
-            // The trigram index serves patterns of three characters or more.
+            // The trigram index serves 3+ characters.
             RuleFor(x => x.SearchTerm!.Trim())
                 .Length(MinSearchLength, MaxSearchLength)
                 .When(x => !string.IsNullOrWhiteSpace(x.SearchTerm))

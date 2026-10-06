@@ -1,8 +1,6 @@
 namespace SharedKernel.Common.ValueObjects
 {
-    // ISO 4217 active currency codes (funds, precious metals and testing codes excluded): the
-    // currencies a bank account can be denominated in. Amounts in different currencies are never
-    // summed together; every aggregate is computed for one currency.
+    // ISO 4217 active codes (no funds, metals or test codes). Amounts in different currencies are never summed.
     public static class SupportedCurrency
     {
         public const string Default = "ZAR";

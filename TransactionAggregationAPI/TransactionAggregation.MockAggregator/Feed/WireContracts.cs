@@ -2,7 +2,6 @@ using TransactionAggregation.MockAggregator.Catalog;
 
 namespace TransactionAggregation.MockAggregator.Feed
 {
-    // Schema v2 of the bank-transactions contract: the institution travels with every delivery.
     public sealed record DeliveryPayload(
         string ExternalAccountId, string Institution, IReadOnlyList<DeliveryItem> Transactions, int SchemaVersion = 2);
 

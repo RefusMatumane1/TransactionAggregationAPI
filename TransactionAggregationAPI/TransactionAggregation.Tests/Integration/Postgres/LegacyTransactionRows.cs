@@ -2,8 +2,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Inserts rows in the pre-RemoveCustomerOwnership shape (CustomerId/AccountId columns). The
-    // current EF model can't write that shape, so tests of older migrations seed with raw SQL.
+    // Raw SQL: the current EF model can't write the pre-RemoveCustomerOwnership shape.
     internal static class LegacyTransactionRows
     {
         public static Task<int> InsertAsync(

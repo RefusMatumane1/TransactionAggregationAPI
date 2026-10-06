@@ -6,7 +6,6 @@ using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Presentation.Requests
 {
-    // Every aggregate is computed in one currency: amounts in different currencies are never summed.
     public sealed record CategoryBreakdownRequest(
         DateOnly? From = null,
         DateOnly? To = null,

@@ -1,13 +1,24 @@
+using Prometheus;
+
 namespace TransactionAggregation.Worker.BackgroundServices
 {
     public abstract class PollingBackgroundService(ILogger logger) : BackgroundService
     {
+        // A job failing run after run is otherwise visible only in logs; liveness stays green.
+        internal static readonly Counter FailedRuns = Metrics.CreateCounter(
+            "background_job_failed_runs_total",
+            "Runs of a polling background job that threw, by job.",
+            new CounterConfiguration { LabelNames = ["job"] });
+
+        private int _consecutiveFailures;
+
         protected abstract TimeSpan Interval { get; }
 
         protected virtual TimeSpan InitialDelay => TimeSpan.Zero;
 
-        // Returns true when the run found a full batch, so more work is likely waiting: the next run
-        // starts at once instead of after Interval. A failed run always waits.
+        protected virtual TimeSpan DelayAfterFailure(int consecutiveFailures) => Interval;
+
+        // True on a full batch: the next run starts at once.
         protected abstract Task<bool> RunOnceAsync(CancellationToken cancellationToken);
 
         protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -19,9 +30,12 @@ namespace TransactionAggregation.Worker.BackgroundServices
 
             while (!stoppingToken.IsCancellationRequested)
             {
+                var delay = Interval;
                 try
                 {
-                    if (await RunOnceAsync(stoppingToken))
+                    var more = await RunOnceAsync(stoppingToken);
+                    _consecutiveFailures = 0;
+                    if (more)
                         continue;
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -30,10 +44,14 @@ namespace TransactionAggregation.Worker.BackgroundServices
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "{Job} run failed; retrying next interval", GetType().Name);
+                    _consecutiveFailures++;
+                    delay = DelayAfterFailure(_consecutiveFailures);
+                    FailedRuns.WithLabels(GetType().Name).Inc();
+                    logger.LogError(ex, "{Job} run failed ({ConsecutiveFailures} in a row); retrying in {RetryDelay}",
+                        GetType().Name, _consecutiveFailures, delay);
                 }
 
-                if (!await DelayAsync(Interval, stoppingToken))
+                if (!await DelayAsync(delay, stoppingToken))
                     return;
             }
         }

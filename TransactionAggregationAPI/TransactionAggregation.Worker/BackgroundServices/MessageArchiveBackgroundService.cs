@@ -33,7 +33,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
                     "Archived {InboxCount} inbox and {OutboxCount} outbox messages processed before {Cutoff:O}",
                     inbox, outbox, cutoff);
 
-            // DrainAsync already loops up to MaxBatchesPerRun; archiving is not latency-sensitive.
             return false;
         }
 

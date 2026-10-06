@@ -10,7 +10,7 @@
     <Subtitle>Every ledger entry, live: new transactions appear here as soon as they are recorded.</Subtitle>
 </PageHeader>
 
-@* Filters edit a draft; Enter or "Apply" puts it in the URL, which is what the list follows. *@
+@* Filters edit a draft; "Apply" puts it in the URL, which the list follows. *@
 <form class="card mb-3" @onsubmit="ApplyDraft" @onsubmit:preventDefault>
     <div class="card-body">
         <div class="row g-2 align-items-end">
@@ -260,7 +260,6 @@
 
         public Query Copy() => (Query)MemberwiseClone();
 
-        // Everything that changes which rows match (not the open drawer).
         public string Key => string.Join('|', Search, Bank, Account, Category, From, To, Min, Max, Sort, Descending, Size);
     }
 
@@ -333,7 +332,6 @@
             Institution = _applied.Bank,
             ExternalAccountId = _applied.Account,
             Category = Enum.TryParse<TransactionCategory>(_applied.Category, out var category) ? category : null,
-            // Whole days, inclusive of the "to" day.
             FromDate = _applied.From?.ToDateTime(TimeOnly.MinValue),
             ToDate = _applied.To?.ToDateTime(TimeOnly.MaxValue),
             MinAmount = _applied.Min,
@@ -454,7 +452,6 @@
         await LoadPageAsync();
     }
 
-    // The open transaction lives in the URL: it can be shared, and Back closes it.
     private void Open(Guid id) => Navigate(_applied, id);
 
     private void Close() => Navigate(_applied);

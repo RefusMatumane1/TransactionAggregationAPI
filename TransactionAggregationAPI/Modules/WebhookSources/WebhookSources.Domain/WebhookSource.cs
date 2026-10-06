@@ -13,14 +13,11 @@ namespace Modules.WebhookSources.Domain
 
         public WebhookSourceId Id { get; private set; } = null!;
 
-        // The bank's code (e.g. "FNB", "StandardBank"). It is the source's identity everywhere: the
-        // inbox and audit SourceName, the Kafka `source` header, and the institution on every
-        // transaction it delivers. Immutable once created.
+        // The bank's identity everywhere: inbox/audit SourceName, Kafka `source` header, transaction institution. Immutable.
         public string Name { get; private set; } = null!;
 
         public string DisplayName { get; private set; } = null!;
 
-        // "#RRGGBB", used by the UI to tell banks apart.
         public string Color { get; private set; } = null!;
         public string KeyHash { get; private set; } = null!;
         public bool IsActive { get; private set; }
@@ -131,8 +128,7 @@ namespace Modules.WebhookSources.Domain
 
         public static readonly TimeSpan UsageRecordingInterval = TimeSpan.FromMinutes(1);
 
-        // LastUsedAt is accurate to UsageRecordingInterval: writing it on every delivery would make
-        // the source's row a write hot spot on the ingestion path.
+        // Throttled: writing it on every delivery would make the row a write hot spot.
         public bool RecordUsage(DateTime now)
         {
             if (LastUsedAt is { } last && now - last < UsageRecordingInterval)

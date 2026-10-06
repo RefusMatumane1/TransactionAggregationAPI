@@ -1,19 +1,12 @@
 import http from 'k6/http';
 import { check, sleep, fail } from 'k6';
 
-// Performance test for the read-heavy staff endpoints: the transaction list (the
-// cursor-paginated, index-backed hot path), the
-// transaction summary, and the source and category aggregates. See ../README.md for the
-// assumptions and target thresholds this script's `options.thresholds` encode, and for how
-// to run it.
-//
-// Run with, e.g.:
-//   k6 run -e BASE_URL=http://localhost:5001 -e KEYCLOAK_URL=http://localhost:8081 -e STAFF_PASSWORD=<from .env> perf/k6/transactions-read.js
+// Read-heavy staff endpoints. Thresholds and assumptions: see ../README.md.
+// Run: k6 run -e STAFF_PASSWORD=<from .env> [-e BASE_URL=... -e KEYCLOAK_URL=...] perf/k6/transactions-read.js
 
 const BASE_URL = __ENV.BASE_URL || 'http://localhost:5001';
 const KEYCLOAK_URL = __ENV.KEYCLOAK_URL || 'http://localhost:8081';
 const KEYCLOAK_REALM = __ENV.KEYCLOAK_REALM || 'transaction-aggregation';
-// The dev realm's staff user; its password is never committed (see .env.template).
 const STAFF_EMAIL = __ENV.STAFF_EMAIL || 'staff@test.com';
 const STAFF_PASSWORD = __ENV.STAFF_PASSWORD;
 if (!STAFF_PASSWORD) {
@@ -33,8 +26,6 @@ export const options = {
     },
   },
   thresholds: {
-    // Targets, not aspirations pulled from nowhere — see perf/README.md
-    // "Assumptions and targets" for the reasoning behind each number.
     http_req_failed: ['rate<0.01'],
     'http_req_duration{endpoint:list_transactions}': ['p(95)<300'],
     'http_req_duration{endpoint:transaction_summary}': ['p(95)<400'],

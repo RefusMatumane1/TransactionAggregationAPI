@@ -4,7 +4,6 @@ using Modules.Transactions.Domain.Entities;
 
 namespace Modules.Transactions.Infrastructure.Persistence
 {
-    // ILIKE '%term%' on Description, served by IX_Transactions_Description_Trgm (pg_trgm GIN).
     internal sealed class PostgresTransactionSearch : ITransactionSearch
     {
         private const string EscapeCharacter = "\\";

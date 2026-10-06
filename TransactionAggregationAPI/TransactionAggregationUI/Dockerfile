@@ -32,11 +32,11 @@ USER root
 RUN chown 101:0 /usr/share/nginx/html
 USER 101
 COPY --from=build --chown=101:0 /app/publish/wwwroot /usr/share/nginx/html
-# nginx.conf uses ${API_UPSTREAM} — processed at startup by the entrypoint script below
+# nginx.conf is a template: the image's entrypoint renders it at startup, filling in
+# ${API_UPSTREAM} and the container's DNS servers (so the API's address is re-resolved).
+ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 COPY --chown=101:0 TransactionAggregationUI/nginx.conf /etc/nginx/templates/default.conf.template
-# Entrypoint scripts: run envsubst on the nginx template and on the published
-# appsettings.json (Keycloak authority) before nginx starts.
-COPY --chown=101:0 --chmod=0755 TransactionAggregationUI/docker-entrypoint.d/10-api-upstream.sh /docker-entrypoint.d/10-api-upstream.sh
+# Rewrites the published appsettings.json (Keycloak authority) before nginx starts.
 COPY --chown=101:0 --chmod=0755 TransactionAggregationUI/docker-entrypoint.d/20-keycloak-authority.sh /docker-entrypoint.d/20-keycloak-authority.sh
 USER 101
 EXPOSE 8080

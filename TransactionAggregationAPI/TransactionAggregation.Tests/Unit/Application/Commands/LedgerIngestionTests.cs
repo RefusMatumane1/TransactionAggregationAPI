@@ -17,7 +17,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Commands
 {
-    // The ledger records posted transactions once and never changes them.
     public class LedgerIngestionTests
     {
         private static readonly DateTime PendingDate = new(2026, 9, 1, 10, 0, 0, DateTimeKind.Utc);

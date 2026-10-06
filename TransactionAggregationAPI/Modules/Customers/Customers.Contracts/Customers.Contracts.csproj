@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Customers.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Published cross-module contracts (ICustomerAccounts). -->
+
+</Project>

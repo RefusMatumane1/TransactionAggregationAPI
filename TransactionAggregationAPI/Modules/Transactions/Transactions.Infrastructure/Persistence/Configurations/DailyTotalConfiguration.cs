@@ -10,15 +10,14 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
     {
         public const string TableName = "DailyTotals";
 
-        // Sums of up to a day's entries for one account: wider than one ledger amount.
+        // Wider than one ledger amount.
         private const int TotalPrecision = 28;
 
         public void Configure(EntityTypeBuilder<DailyTotal> builder)
         {
             builder.ToTable(TableName);
 
-            // Account first, so a bank- or account-filtered read is a key range scan; the day index
-            // for unfiltered reads is built CONCURRENTLY in the migration.
+            // Account first, so bank- or account-filtered reads are key range scans.
             builder.HasKey(d => new { d.SourceName, d.ExternalAccountId, d.Day, d.Category, d.Currency });
 
             builder.Property(d => d.SourceName).HasMaxLength(TransactionSource.MaxNameLength);

@@ -90,7 +90,8 @@ namespace TransactionAggregation.Tests.Architecture
                     "Modules.Transactions.Application",
                     "Modules.Transactions.Infrastructure",
                     "Modules.Transactions.Infrastructure.Persistence",
-                    "Modules.WebhookSources")
+                    "Modules.WebhookSources",
+                    "Modules.Customers")
                 .GetResult();
 
             result.IsSuccessful.Should().BeTrue(

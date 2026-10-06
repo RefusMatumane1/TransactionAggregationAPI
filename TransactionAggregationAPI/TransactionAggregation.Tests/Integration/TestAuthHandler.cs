@@ -49,7 +49,6 @@ namespace TransactionAggregation.Tests.Integration
 
     public static class TestClientExtensions
     {
-        // Signs the client in as a fresh user holding the given realm roles ("staff", "admin").
         public static HttpClient SignedInAs(this HttpClient client, params string[] roles)
         {
             client.DefaultRequestHeaders.Add(TestAuthHandler.UserIdHeaderName, Guid.NewGuid().ToString());
@@ -58,7 +57,6 @@ namespace TransactionAggregation.Tests.Integration
             return client;
         }
 
-        // A staff member who may read only the given institutions (the Keycloak "institutions" claim).
         public static HttpClient SignedInAsStaffFor(this HttpClient client, params string[] institutions)
         {
             client.SignedInAs("staff");

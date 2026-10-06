@@ -1,6 +1,5 @@
 namespace TransactionAggregationUI.Models.Transactions
 {
-    // GET /api/v1/transactions/{id}: one ledger entry with where it came from.
     public class TransactionDetailModel
     {
         public Guid Id { get; set; }
@@ -14,7 +13,7 @@ namespace TransactionAggregationUI.Models.Transactions
         public TransactionCategory Category { get; set; }
         public DateTime RecordedAt { get; set; }
 
-        // The bank's own wording before normalisation ("bankDescription", "bankCategory"), when it differed.
+        // The bank's own wording before normalisation, when it differed.
         public Dictionary<string, string> Metadata { get; set; } = [];
 
         public const string BankDescriptionKey = "bankDescription";

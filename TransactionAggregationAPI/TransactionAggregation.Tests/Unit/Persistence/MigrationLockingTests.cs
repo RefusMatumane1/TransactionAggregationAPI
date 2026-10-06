@@ -17,7 +17,8 @@ namespace TransactionAggregation.Tests.Unit.Persistence
             typeof(TransactionsDbContext).Assembly,
             typeof(MessagingDbContext).Assembly,
             typeof(AuditDbContext).Assembly,
-            typeof(WebhookSourcesDbContext).Assembly
+            typeof(WebhookSourcesDbContext).Assembly,
+            typeof(Modules.Customers.Infrastructure.Persistence.CustomersDbContext).Assembly
         ];
 
         public static TheoryData<string> MigrationsThatValidateConstraints()

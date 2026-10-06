@@ -2,9 +2,7 @@ using BuildingBlocks.Messaging.ValueObjects;
 
 namespace BuildingBlocks.Messaging.Inbox
 {
-    // A delivery waiting to be (or already) processed. Attempts counts claims: a claim is an attempt
-    // whether it ends in success, a recorded failure, or a crash that leaves the claim to expire, so a
-    // message that keeps killing its worker still runs out of attempts and is dead-lettered.
+    // Attempts counts every claim, crashes included, so a message that keeps killing its worker still dead-letters.
     public sealed class InboxMessage
     {
         public const int MaxCorrelationIdLength = 64;
@@ -54,7 +52,6 @@ namespace BuildingBlocks.Messaging.Inbox
         public bool HasSamePayloadAs(string payloadHash) =>
             PayloadHash is null || string.Equals(PayloadHash, payloadHash, StringComparison.Ordinal);
 
-        // The state change MessagingDbContext.ClaimInboxMessagesAsync applies set-wise in SQL.
         public void Claim(DateTime now)
         {
             Status = InboxMessageStatus.Processing;
@@ -62,7 +59,7 @@ namespace BuildingBlocks.Messaging.Inbox
             Attempts++;
         }
 
-        // Hands back a claim that was never worked on (shutdown), without spending an attempt.
+        // Returns an unworked claim (shutdown) without spending an attempt.
         public void ReleaseClaim()
         {
             if (Status != InboxMessageStatus.Processing)
@@ -104,7 +101,7 @@ namespace BuildingBlocks.Messaging.Inbox
             Status = InboxMessageStatus.DeadLettered;
         }
 
-        // A sender redelivering a dead-lettered message gets a fresh retry budget.
+        // A redelivered dead letter gets a fresh retry budget.
         public bool RequeueIfDeadLettered()
         {
             if (Status != InboxMessageStatus.DeadLettered)

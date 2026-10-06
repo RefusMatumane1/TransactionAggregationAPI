@@ -6,12 +6,10 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture
 {
-    // All background processing runs in TransactionAggregation.Worker; the API only serves HTTP.
     public class WorkerHostTests
     {
         private static readonly Assembly WorkerAssembly = typeof(PollingBackgroundService).Assembly;
 
-        // Everything the API host loads: its own assembly and every project it references, transitively.
         private static IEnumerable<Assembly> ApiAssemblies()
         {
             var seen = new Dictionary<string, Assembly>();
@@ -32,6 +30,7 @@ namespace TransactionAggregation.Tests.Architecture
             || name.Name.StartsWith("SharedKernel", StringComparison.Ordinal)
             || name.Name.StartsWith("Transactions.", StringComparison.Ordinal)
             || name.Name.StartsWith("WebhookSources.", StringComparison.Ordinal)
+            || name.Name.StartsWith("Customers.", StringComparison.Ordinal)
             || name.Name.StartsWith("Audit.", StringComparison.Ordinal)
             || name.Name.StartsWith("TransactionAggregation", StringComparison.Ordinal);
 

@@ -7,8 +7,6 @@ using System.Text.Json;
 
 namespace TransactionAggregation.Worker.Outbox
 {
-    // Makes a new ledger entry visible: cached reads are invalidated, then the event is published
-    // for other systems. Both are idempotent, so a retry after a partial success is safe.
     internal sealed class TransactionRecordedHandler(IIntegrationEventPublisher publisher) : IOutboxMessageHandler
     {
         public string MessageType => TransactionRecorded.EventType;

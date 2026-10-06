@@ -4,9 +4,7 @@ using Modules.Transactions.Application.Common.Outbox;
 
 namespace TransactionAggregation.Worker.Notifications
 {
-    // Sends the duplicate-delivery alert to an incoming-webhook URL (a chat or paging integration).
-    // Failures propagate to the outbox, which retries transient ones and dead-letters a refusal.
-    // The URL embeds the hook's credential, so it comes from the secrets file and is never logged.
+    // The URL embeds the hook's credential: it comes from secrets and is never logged.
     public sealed class NotificationService(
         ILogger<NotificationService> logger,
         IHttpClientFactory httpClientFactory,
@@ -48,8 +46,7 @@ namespace TransactionAggregation.Worker.Notifications
 
             using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
 
-            // Throws HttpRequestException carrying the status; the classifier treats 4xx (other than
-            // 408/429) as permanent and everything else as transient.
+            // 4xx other than 408/429 is permanent; the rest is transient.
             response.EnsureSuccessStatusCode();
         }
     }

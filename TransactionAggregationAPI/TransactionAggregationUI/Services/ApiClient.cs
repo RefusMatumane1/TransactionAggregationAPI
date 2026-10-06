@@ -23,8 +23,7 @@ namespace TransactionAggregationUI.Services
 
         public const int MaxPagesPerList = 20;
 
-        // Follows nextCursor for small lists the UI shows whole (webhook sources). The cap stops a
-        // server fault from turning into an endless loop in the browser.
+        // Capped, so a server fault can't turn into an endless loop in the browser.
         public async Task<List<T>> GetAllPagesAsync<T>(string url)
         {
             var items = new List<T>();
@@ -91,11 +90,24 @@ namespace TransactionAggregationUI.Services
             }
         }
 
-        private static async Task<string> DescribeFailureAsync(HttpResponseMessage response)
+        internal static async Task<string> DescribeFailureAsync(HttpResponseMessage response)
         {
             try
             {
                 using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                if (json.RootElement.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Object)
+                {
+                    var messages = errors.EnumerateObject()
+                        .SelectMany(field => field.Value.ValueKind == JsonValueKind.Array
+                            ? field.Value.EnumerateArray().Select(m => m.GetString())
+                            : [field.Value.GetString()])
+                        .Where(m => !string.IsNullOrWhiteSpace(m))
+                        .Distinct()
+                        .ToList();
+                    if (messages.Count > 0)
+                        return string.Join(" ", messages);
+                }
+
                 if (json.RootElement.TryGetProperty("detail", out var detail) && detail.GetString() is { Length: > 0 } text)
                     return text;
             }

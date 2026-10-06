@@ -9,7 +9,6 @@ namespace BuildingBlocks.Messaging.Observability
 
         public static readonly ActivitySource ActivitySource = new(ActivitySourceName);
 
-        // W3C baggage key carrying the caller's correlation id across the inbox and outbox hops.
         public const string CorrelationBaggageKey = "correlation.id";
 
         private static readonly double[] LatencyBuckets = [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 300, 900, 3600];

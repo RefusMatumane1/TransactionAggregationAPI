@@ -57,7 +57,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 query = query.Where(t => t.Date <= to);
             }
 
-            // Magnitude filters. Amount is INCLUDEd in the date index, so they are evaluated on index tuples.
+            // Amount is INCLUDEd in the date index, so these evaluate on index tuples.
             if (request.MinAmount.HasValue)
                 query = query.Where(t => Math.Abs(t.Amount.Amount) >= request.MinAmount.Value);
 

@@ -1,8 +1,6 @@
 namespace BuildingBlocks.Application.Abstractions.Authentication
 {
-    // Which institutions' data a caller may read. Admins read every institution; staff read only the
-    // institutions assigned to them in the identity provider, and nothing when none are assigned.
-    // Carried on every scoped query, so it is part of the query's cache key.
+    // Admins read every institution; staff only their assigned ones. Part of the query cache key.
     public sealed record InstitutionAccess
     {
         private InstitutionAccess(bool allInstitutions, IReadOnlyList<string> institutions)

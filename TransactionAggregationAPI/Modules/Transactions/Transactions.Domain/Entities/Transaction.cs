@@ -4,8 +4,7 @@ using SharedKernel.Exceptions;
 
 namespace Modules.Transactions.Domain.Entities
 {
-    // A ledger entry: a transaction the bank has posted. It is recorded once and never changed or
-    // deleted; the database rejects UPDATE and DELETE on its table as well.
+    // Recorded once, never changed or deleted; the database rejects UPDATE and DELETE too.
     public sealed class Transaction
     {
         public const int MaxDescriptionLength = 500;
@@ -48,20 +47,17 @@ namespace Modules.Transactions.Domain.Entities
 
         public TransactionId Id { get; private set; } = null!;
 
-        // The bank account as the bank identifies it: unique only within its institution.
+        // Unique only within its institution.
         public string ExternalAccountId { get; private set; } = null!;
         public Money Amount { get; private set; } = null!;
         public string Description { get; private set; } = null!;
         public TransactionCategory Category { get; private set; }
 
-        // Institution (Name) and the bank's own transaction id (ExternalId).
         public TransactionSource Source { get; private set; } = null!;
 
-        // When the bank booked it (UTC).
         public DateTime Date { get; private set; }
         public TransactionStatus Status { get; private set; }
 
-        // When this platform recorded it (UTC).
         public DateTime CreatedAt { get; private set; }
 
         public IReadOnlyDictionary<string, string> Metadata => _metadata;

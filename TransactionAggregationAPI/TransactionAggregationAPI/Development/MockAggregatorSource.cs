@@ -4,8 +4,6 @@ using Modules.WebhookSources.Infrastructure.Persistence;
 
 namespace TransactionAggregationAPI.Development
 {
-    // Development only: registers the banks the mock aggregator plays, one source per bank, each with
-    // its own API key. The mock derives the same keys from the shared base key (MockBanks.KeyFor).
     public static class MockAggregatorSource
     {
         public const string ConfigurationSection = "MockAggregator";

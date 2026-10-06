@@ -12,7 +12,6 @@ namespace TransactionAggregation.Worker.Kafka
 
         public string DeadLetterTopic { get; set; } = "bank-transactions.dlq";
 
-        // Outbound integration events (Transactions.Contracts), published by the outbox dispatcher.
         public string IntegrationEventsTopic { get; set; } = "transaction-events";
 
         public string GroupId { get; set; } = "transaction-aggregation-api";

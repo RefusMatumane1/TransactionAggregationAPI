@@ -4,9 +4,7 @@ using Serilog.Events;
 
 namespace TransactionAggregationAPI.Middleware
 {
-    // Request completion events log the matched route pattern ("/api/v1/transactions/{id:guid}"),
-    // never the raw path (its segments are caller-supplied values), and the caller's subject id so
-    // every data access is attributable.
+    // Logs the route pattern, never the raw path (caller-supplied values), plus the subject id for attribution.
     internal static class RequestLoggingSetup
     {
         public const string UnmatchedRoute = "(unmatched)";

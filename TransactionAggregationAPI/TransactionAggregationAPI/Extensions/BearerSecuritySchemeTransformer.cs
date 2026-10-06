@@ -65,16 +65,8 @@ namespace TransactionAggregationAPI.Extensions
         private static readonly Regex RouteConstraintSuffix = new(@"\{([^:}]+):[^}]+\}", RegexOptions.Compiled);
 
         /// <summary>
-        /// ApiDescription.RelativePath has no leading slash, can carry a
-        /// "?param=value" suffix for [FromQuery]-bound endpoints, keeps route
-        /// constraints like "{id:guid}" verbatim from the C# route
-        /// template, and — for a group-root endpoint mapped as MapGet("/", ...) —
-        /// keeps the group prefix's own trailing slash (".../transactions/"). None of
-        /// that survives into the OpenAPI document's own Paths keys ("{id}",
-        /// no trailing slash). Without normalizing all of it, the lookup below
-        /// misses for most real endpoints and silently leaves the operation with no
-        /// security requirement at all — the exact failure this transformer exists
-        /// to prevent.
+        /// Normalizes ApiDescription.RelativePath (leading slash, query suffix, route constraints, group-root trailing
+        /// slash) to OpenAPI Paths keys; a miss silently leaves the operation without a security requirement.
         /// </summary>
         private static string NormalizeRoutePath(string? relativePath)
         {

@@ -9,8 +9,7 @@ using TransactionAggregation.Worker.Outbox;
 
 namespace TransactionAggregation.Tests.Helpers
 {
-    // Unit tests drive the dispatchers message by message. A message is processed only after a claim,
-    // which counts the attempt; these helpers claim it the way MessagingDbContext's SQL does.
+    // A message is processed only after a claim (which counts the attempt); these helpers claim it as the SQL does.
     internal static class DispatcherTestExtensions
     {
         public static Task ProcessMessageAsync(

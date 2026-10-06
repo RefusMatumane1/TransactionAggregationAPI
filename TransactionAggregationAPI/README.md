@@ -1,13 +1,20 @@
 # Transaction Aggregation API
 
-A production-grade .NET 10 system that records the posted transactions banks push to it (each
-bank is a source with its own API key) in an insert-only ledger, categorises them automatically,
-and exposes aggregate views (by bank, account, category and period, in one currency at a time)
-through a versioned REST API. Nothing in the ledger is ever edited or deleted.
-There are no customer accounts: the people who sign in are staff, who see the banks they are
-assigned, and administrators. It comes with a Blazor WASM frontend and ships
-with Docker Compose, .NET Aspire, and Kubernetes manifests for three different
-ways to run it locally.
+The detailed guide to the Transaction Aggregation API: how to run it, what is in the repository,
+and the full API and configuration reference. For an overview of what the system does and why it
+is built this way, start with the [root README](../README.md).
+
+A .NET 10 system that records the posted transactions banks push to it (each bank is a source with
+its own API key) in an insert-only ledger, categorises them automatically, and exposes aggregate
+views (by customer, bank, account, category and period, in one currency at a time) through a
+versioned REST API. Nothing in the ledger is ever edited or deleted.
+
+A customer is the person whose money it is: administrators link each customer's bank accounts,
+across banks, and every view can be narrowed to one customer. Customers don't sign in; the people
+who do are staff, who see the banks they are assigned, and administrators.
+
+It comes with a Blazor WASM frontend and three ways to run it locally: Docker Compose, .NET Aspire
+and Kubernetes manifests.
 
 ---
 
@@ -80,7 +87,7 @@ TransactionAggregationAPI/              ← solution root
 │   └── secrets.json                    ← Your local secrets (git-ignored; Vault renders it in clusters)
 │
 ├── TransactionAggregationUI/           ← Blazor WASM frontend
-│   ├── Pages/                          ← Dashboard (aggregates), Transactions, Admin (webhook sources, audit trail) …
+│   ├── Pages/                          ← Dashboard (aggregates), Customers (cross-bank view, account linking), Transactions, Admin (webhook sources, audit trail) …
 │   ├── Services/                       ← HTTP clients for each API resource
 │   ├── Auth/                           ← Claims helper for the OIDC-issued principal
 │   ├── wwwroot/appsettings.json        ← ApiBaseUrl, Keycloak:Authority (templated at container start)
@@ -208,7 +215,7 @@ import (`keycloak/realm-export.json`) creates one of each for local use:
 
 | User | Realm role | Can | Password |
 |---|---|---|---|
-| `staff@test.com` | `staff` | Dashboard, aggregates and transaction list for FNB and StandardBank (its `institutions` attribute) | `TRANSACTION_APP_STAFF_PASSWORD` in `.env` (compose) or `app-staff-password` in the AppHost's `secrets.json` (Aspire) |
+| `staff@test.com` | `staff` | Dashboard, customers, aggregates and transaction list for FNB and StandardBank (its `institutions` attribute) | `TRANSACTION_APP_STAFF_PASSWORD` in `.env` (compose) or `app-staff-password` in the AppHost's `secrets.json` (Aspire) |
 | `admin@test.com` | `admin` | Every bank, plus managing the banks and the audit trail | `TRANSACTION_APP_ADMIN_PASSWORD` / `app-admin-password` |
 
 No password is committed. Keycloak substitutes them into the realm when it first imports it into
@@ -596,6 +603,43 @@ requires `institution`).
 Aggregate periods are South African calendar days (`from`, `to`; default the last 12 months).
 Every aggregate is computed in one currency, `currency` (ISO 4217, default `ZAR`), so amounts in
 different currencies are never added together.
+
+Aggregates are never computed on the request path. The worker rebuilds a daily read model
+(`transactions."DailyTotals"`: one row per day, bank, account, category and currency) every
+`Aggregation:IntervalMinutes` (60 by default). Each rebuild recomputes, in full, every account-day
+that received entries since the last one, so a backdated or re-delivered transaction can't be
+double counted. Every aggregate response carries `asOf`, the time of the last rebuild; a
+transaction recorded since then is in the transaction list but not yet in the totals.
+`/transactions/summary` reads the same model, so its `startDate`/`endDate` are rounded to the South
+African days they fall on (both inclusive).
+
+#### Customers
+
+A customer groups bank accounts across banks: a link is the same (bank, account id) pair every
+transaction carries, so linking an account brings in its past and future transactions, and
+unlinking removes them from the customer's view without touching the ledger. Links are resolved
+on every read. Staff see a customer only through accounts at their banks, and only those
+accounts; a customer with none of them is a `404`, exactly like a missing one.
+
+| Method | Path | Role | Description |
+|---|---|---|---|
+| `GET` | `/customers` | staff | Customers the caller can see, by name, cursor-paginated; `search` matches name or reference |
+| `GET` | `/customers/{id}` | staff | The customer and the linked accounts the caller may read |
+| `GET` | `/customers/{id}/transactions` | staff | The customer's transactions across banks; same filters and paging as `/transactions` |
+| `GET` | `/customers/{id}/aggregates/cash-flow` | staff | As `/transactions/aggregates/cash-flow`, for the customer |
+| `GET` | `/customers/{id}/aggregates/categories` | staff | As `/transactions/aggregates/categories`, for the customer |
+| `GET` | `/customers/{id}/aggregates/institutions` | staff | The customer's totals per bank, then per account |
+| `GET` | `/customers/{id}/aggregates/comparison` | staff | As `/transactions/aggregates/comparison`, for the customer |
+| `POST` | `/customers` | admin | Register a customer: `{ "reference": "CUST-0001", "name": "Thandi Nkosi" }` → `201` |
+| `POST` | `/customers/{id}/accounts` | admin | Link an account: `{ "institution": "FNB", "externalAccountId": "62001001001" }` → `201`, or `200` if it was already linked |
+| `DELETE` | `/customers/{id}/accounts?institution=FNB&externalAccountId=62001001001` | admin | Unlink → `204`, `404` if it wasn't linked |
+
+`institution` must be a registered bank (`400` otherwise) and is stored in the bank's registered
+spelling, so `fnb` links to `FNB`. A customer has at most 50 linked accounts. Every create, link
+and unlink is audited with the acting admin, by customer id and reference; the name stays out of
+the audit trail and the logs. In Development the API seeds a customer per demo household, and
+three customers holding the mock aggregator's live-feed accounts at several banks (`CUST-0101` to
+`CUST-0103`).
 
 #### Webhooks
 

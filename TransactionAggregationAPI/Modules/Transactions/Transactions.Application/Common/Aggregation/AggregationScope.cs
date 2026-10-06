@@ -2,11 +2,12 @@ using BuildingBlocks.Application.Abstractions.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Services;
+using System.Linq.Expressions;
 
 namespace Modules.Transactions.Application.Common.Aggregation
 {
-    // The single specification every read applies: ledger entries (or their daily totals) only,
-    // restricted to the institutions the caller may read, then narrowed by the request's own filter.
+    // The one specification every read applies: ledger entries only, restricted to the caller's institutions,
+    // then narrowed by the filter.
     internal static class AggregationScope
     {
         public static IQueryable<Transaction> Ledger(this IQueryable<Transaction> transactions, TransactionFilter filter) =>
@@ -16,7 +17,6 @@ namespace Modules.Transactions.Application.Common.Aggregation
                 .VisibleTo(filter.Access)
                 .Matching(filter);
 
-        // The same specification over the daily read model the aggregate queries use.
         public static IQueryable<DailyTotal> Within(
             this IQueryable<DailyTotal> totals, DateOnly from, DateOnly to, TransactionFilter filter, string currency)
         {
@@ -32,6 +32,8 @@ namespace Modules.Transactions.Application.Common.Aggregation
                 totals = totals.Where(d => d.SourceName == institution);
             if (filter.ExternalAccountId is { Length: > 0 } account)
                 totals = totals.Where(d => d.ExternalAccountId == account);
+            if (filter.Accounts is { } accounts)
+                totals = totals.Where(AnyAccount<DailyTotal>(accounts, d => d.SourceName, d => d.ExternalAccountId));
             return totals;
         }
 
@@ -39,7 +41,6 @@ namespace Modules.Transactions.Application.Common.Aggregation
             this IQueryable<DailyTotal> totals, ReportingPeriod period, TransactionFilter filter, string currency) =>
             totals.Within(period.From, period.To, filter, currency);
 
-        // When the totals were last rebuilt; null until the first refresh has run.
         public static Task<DateTime?> AsOfAsync(this IQueryable<AggregationCheckpoint> checkpoints, CancellationToken cancellationToken) =>
             checkpoints
                 .AsNoTracking()
@@ -62,7 +63,39 @@ namespace Modules.Transactions.Application.Common.Aggregation
                 transactions = transactions.Where(t => t.Source.Name == institution);
             if (filter.ExternalAccountId is { Length: > 0 } account)
                 transactions = transactions.Where(t => t.ExternalAccountId == account);
+            if (filter.Accounts is { } accounts)
+                transactions = transactions.Where(AnyAccount<Transaction>(accounts, t => t.Source.Name, t => t.ExternalAccountId));
             return transactions;
+        }
+
+        // (bank = b1 AND account = a1) OR ...: equality seeks on the (bank, account, ...) indexes; values stay
+        // SQL parameters, so the plan is shared across customers.
+        private static Expression<Func<T, bool>> AnyAccount<T>(
+            IReadOnlyList<AccountKey> accounts,
+            Expression<Func<T, string>> institution,
+            Expression<Func<T, string>> externalAccountId)
+        {
+            var row = Expression.Parameter(typeof(T), "row");
+            var bank = new Rebind(institution.Parameters[0], row).Visit(institution.Body);
+            var accountId = new Rebind(externalAccountId.Parameters[0], row).Visit(externalAccountId.Body);
+
+            Expression match = Expression.Constant(false);
+            foreach (var key in accounts)
+            {
+                var captured = Expression.Constant(new Captured(key.Institution, key.ExternalAccountId));
+                match = Expression.OrElse(match, Expression.AndAlso(
+                    Expression.Equal(bank, Expression.Property(captured, nameof(Captured.Institution))),
+                    Expression.Equal(accountId, Expression.Property(captured, nameof(Captured.ExternalAccountId)))));
+            }
+
+            return Expression.Lambda<Func<T, bool>>(match, row);
+        }
+
+        private sealed record Captured(string Institution, string ExternalAccountId);
+
+        private sealed class Rebind(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+        {
+            protected override Expression VisitParameter(ParameterExpression node) => node == from ? to : node;
         }
     }
 }

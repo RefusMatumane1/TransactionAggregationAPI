@@ -15,7 +15,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
             GetTransactionSummaryQuery request,
             CancellationToken cancellationToken)
         {
-            // The read model is daily, so the bounds are the South African days they fall on (both inclusive).
+            // The read model is daily: bounds round to the South African days they fall on (both inclusive).
             var from = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc));
             var to = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.EndDate, DateTimeKind.Utc));
 

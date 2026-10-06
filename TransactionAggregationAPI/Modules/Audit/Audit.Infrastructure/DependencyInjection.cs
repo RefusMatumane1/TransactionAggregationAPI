@@ -13,7 +13,6 @@ namespace Modules.Audit
         {
             services.AddAuditApplication();
 
-            // On the scoped shared connection so RecordWithinAsync can join a producer's transaction.
             services.AddDbContext<AuditDbContext>((sp, options) =>
                 options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(),
                     npgsql => npgsql.UseModuleDefaults<AuditDbContext>()));

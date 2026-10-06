@@ -1,7 +1,9 @@
+extern alias ui;
+
 using FluentAssertions;
 using System.Globalization;
-using TransactionAggregationUI.Models.Transactions;
-using TransactionAggregationUI.Services;
+using ui::TransactionAggregationUI.Models.Transactions;
+using ui::TransactionAggregationUI.Services;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Ui

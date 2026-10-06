@@ -1,8 +1,6 @@
 namespace TransactionAggregation.Worker.BackgroundServices
 {
-    // On shutdown, claims that were never worked on are handed back so another replica picks them up
-    // straight away instead of after the claim timeout. Best effort: if the database is unreachable
-    // the claims simply expire and are reclaimed later.
+    // On shutdown, unworked claims go back so another replica takes them at once; best effort, else they expire.
     internal static class ClaimRelease
     {
         private static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);

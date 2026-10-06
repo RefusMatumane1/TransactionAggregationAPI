@@ -12,8 +12,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // The scheduled refresh of the daily read model. Each test gets its own database: the refresh
-    // and its checkpoint are global, so tests sharing one would see each other's checkpoints.
+    // A database per test: the refresh and its checkpoint are global.
     [Collection(PostgresCollection.Name)]
     public class DailyTotalsRefresherPostgresTests(PostgresContainerFixture fixture)
     {
@@ -83,7 +82,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var db = await fixture.CreateIsolatedDatabaseAsync();
             var first = await fixture.RefreshDailyTotalsAsync(db);
 
-            // Recorded (CreatedAt) before the checkpoint, but only visible after it: a slow commit.
+            // Recorded before the checkpoint but visible only after it: a slow commit.
             await RecordAsync(db, Entry(-60m, Utc(2, 3, 9), recordedAt: first!.AsOf.AddMinutes(-3)));
             await fixture.RefreshDailyTotalsAsync(db, overlap: TimeSpan.FromMinutes(10));
 

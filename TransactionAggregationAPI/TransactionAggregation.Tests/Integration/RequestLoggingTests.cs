@@ -52,7 +52,6 @@ namespace TransactionAggregation.Tests.Integration
 
             var logEvent = await RequestCompletionFor($"/api/v1/lookup/email/{Uri.EscapeDataString(email)}");
 
-            // Unknown API paths reach the 404 fallback, which logs its pattern, never the path.
             Everything(logEvent).Should().NotContain("jane.doe").And.Contain("api/{**path}");
         }
     }

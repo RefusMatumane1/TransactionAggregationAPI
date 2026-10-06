@@ -77,8 +77,7 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
             builder.Property(t => t.CreatedAt)
                 .IsRequired();
 
-            // Set only on rows changed by the lifecycle that preceded the insert-only ledger; kept so
-            // those values survive, never written now.
+            // Legacy lifecycle values: kept, never written now.
             builder.Property<DateTime?>("UpdatedAt");
 
             builder.Ignore(t => t.Metadata);
@@ -95,13 +94,11 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                         c => c == null ? new() : new Dictionary<string, string>(c)))
                 .HasColumnType("jsonb");
 
-            // The unique ledger key, the date/amount keyset indexes and the description trigram index
-            // are created by raw SQL in migrations (CONCURRENTLY, partial, INCLUDE, GIN); EF cannot
-            // express them on owned-type columns. SchemaContractTests pins their exact definitions.
+            // Indexes are raw SQL in migrations (CONCURRENTLY, partial, INCLUDE, GIN): EF can't express them on owned
+            // columns. SchemaContractTests pins them.
         }
 
-        // Contiguous values stay a BETWEEN; values with gaps (retired statuses) must be listed, or the
-        // constraint would still admit the retired ones.
+        // Statuses with gaps must be listed, or the constraint admits retired ones.
         private static string EnumRange<TEnum>(string column) where TEnum : struct, Enum
         {
             var values = Enum.GetValues<TEnum>().Select(v => Convert.ToInt32(v)).Order().ToList();

@@ -22,5 +22,15 @@ namespace Modules.WebhookSources.Application.Contracts
                 ? SignatureVerification.Valid
                 : SignatureVerification.Invalid;
         }
+
+        public Task<string?> FindBankCodeAsync(string code, CancellationToken cancellationToken = default)
+        {
+            var lowered = code.Trim().ToLowerInvariant();
+            return context.WebhookSources
+                .AsNoTracking()
+                .Where(s => s.Name.ToLower() == lowered)
+                .Select(s => s.Name)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
     }
 }

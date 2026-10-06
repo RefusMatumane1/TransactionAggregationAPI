@@ -117,11 +117,11 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /liveness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -qE 'Healthy' <&3"]
       interval: 10s
       timeout: 5s
-      retries: 30
-      start_period: 20s
+      retries: 3
+      start_period: 60s
     networks:
       - transaction-network
     restart: unless-stopped
@@ -159,9 +159,6 @@ services:
       - transaction-network
     restart: unless-stopped
 
-  # Single-node KRaft broker — the same image and listener layout Aspire's AddKafka uses.
-  #   kafka:9093      in-network clients (worker, kafka-ui)
-  #   localhost:9092  clients on the host (e.g. a local producer script)
   kafka:
     image: confluentinc/confluent-local:8.1.1
     container_name: transactionaggregation-kafka-1
@@ -170,7 +167,6 @@ services:
       KAFKA_LISTENERS: PLAINTEXT://localhost:29092,CONTROLLER://localhost:29093,PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT_INTERNAL://0.0.0.0:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092,PLAINTEXT_HOST://localhost:9092,PLAINTEXT_INTERNAL://kafka:9093
-      # The image logs to /tmp by default — point it at the mounted volume or topics vanish on recreate.
       KAFKA_LOG_DIRS: /var/lib/kafka/data
     ports:
       - "9092:9092"
@@ -186,9 +182,6 @@ services:
       - transaction-network
     restart: unless-stopped
 
-  # ── Optional tooling ─────────────────────────────────────────────────────────
-  # Not needed to run the system; start with `docker compose --profile tools up`
-  # (kafka-ui, pgadmin, redis-commander) and/or `--profile monitoring` (prometheus, grafana).
   kafka-ui:
     profiles: ["tools"]
     image: kafbat/kafka-ui:v1.4.2
@@ -212,11 +205,7 @@ services:
       dockerfile: TransactionAggregationUI/Dockerfile
     container_name: transactionaggregation-ui-1
     environment:
-      # nginx proxies /api/ to this upstream — must be reachable from inside the container network
       - API_UPSTREAM=http://api:8080
-      # Baked into wwwroot/appsettings.json at container start (see
-      # docker-entrypoint.d/20-keycloak-authority.sh) — must be reachable from the browser, same
-      # address as Keycloak__PublicIssuer above minus the /realms/... suffix.
       - KEYCLOAK_AUTHORITY=http://localhost:8081/realms/transaction-aggregation
     ports:
       - "7200:8080"
@@ -245,6 +234,7 @@ services:
       retries: 5
     networks:
       - transaction-network
+    restart: unless-stopped
 
   redis:
     image: redis:8.6
@@ -261,6 +251,7 @@ services:
       retries: 5
     networks:
       - transaction-network
+    restart: unless-stopped
 
   seq:
     image: datalust/seq:2025.2
@@ -281,6 +272,7 @@ services:
       start_period: 20s
     networks:
       - transaction-network
+    restart: unless-stopped
 
   pgadmin:
     profiles: ["tools"]

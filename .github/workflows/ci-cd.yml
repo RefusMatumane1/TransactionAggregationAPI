@@ -86,6 +86,7 @@ jobs:
           check Modules/Transactions/Transactions.Infrastructure TransactionsDbContext
           check Modules/WebhookSources/WebhookSources.Infrastructure WebhookSourcesDbContext
           check Modules/Audit/Audit.Infrastructure AuditDbContext
+          check Modules/Customers/Customers.Infrastructure CustomersDbContext
 
       # Includes the Testcontainers PostgreSQL suites (Docker is available on ubuntu-latest).
       - name: Test

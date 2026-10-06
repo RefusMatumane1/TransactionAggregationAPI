@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Customers.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<!-- ICustomersDbContext exposes DbSet<T>: EF Core is referenced for that type only. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+		<ProjectReference Include="..\Customers.Domain\Customers.Domain.csproj" />
+		<ProjectReference Include="..\Customers.Contracts\Customers.Contracts.csproj" />
+		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+		<!-- Linking checks the bank exists and takes its canonical code. -->
+		<ProjectReference Include="..\..\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+	</ItemGroup>
+</Project>

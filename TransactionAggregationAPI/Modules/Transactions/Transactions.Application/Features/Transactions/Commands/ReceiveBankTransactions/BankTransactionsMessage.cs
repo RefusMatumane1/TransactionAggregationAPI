@@ -8,8 +8,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
         IReadOnlyList<BankTransactionMessageItem> Transactions,
         int? SchemaVersion = null)
     {
-        // The bank is the source the delivery authenticated as. v2 added an optional
-        // Institution field, which must then name that same bank; v1 has no such field.
+        // v2 adds an optional Institution, which must name the source's bank.
         public const int CurrentSchemaVersion = 2;
 
         public static readonly IReadOnlySet<int> SupportedSchemaVersions = new HashSet<int> { 1, 2 };

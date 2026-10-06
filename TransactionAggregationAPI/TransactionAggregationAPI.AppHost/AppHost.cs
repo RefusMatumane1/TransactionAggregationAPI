@@ -2,7 +2,6 @@ using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Parameter values come from the git-ignored secrets.json next to this project (see secrets.template.json).
 builder.Configuration.AddJsonFile("secrets.json", optional: true, reloadOnChange: false);
 
 var pgPassword = builder.AddParameter("postgres-password", secret: true);
@@ -13,7 +12,7 @@ var appStaffPassword = builder.AddParameter("app-staff-password", secret: true);
 
 var postgres = builder
     .AddPostgres("transaction-db", password: pgPassword)
-    .WithImageTag("17.6") // the same major and minor as compose, Kubernetes and the tests
+    .WithImageTag("17.6")
     .WithPgAdmin()
     .WithDataVolume("transaction-postgres-data")
     .WithLifetime(ContainerLifetime.Persistent);
@@ -22,7 +21,8 @@ var transactionDb = postgres.AddDatabase("transactiondb");
 
 var redis = builder.AddRedis("redis")
     .WithDataVolume("transaction-redis-data")
-     .WithRedisInsight();
+     .WithRedisInsight()
+     .WithLifetime(ContainerLifetime.Persistent);
 
 var seq = builder.AddSeq("seq")
     .WithDataVolume("transaction-seq-data")
@@ -45,7 +45,6 @@ var keycloak = builder
     .WithArgs("start-dev", "--import-realm")
     .WithEnvironment("KEYCLOAK_ADMIN", "admin")
     .WithEnvironment("KEYCLOAK_ADMIN_PASSWORD", keycloakAdminPassword)
-    // The realm import substitutes ${TRANSACTION_APP_*_PASSWORD} for its dev users.
     .WithEnvironment("TRANSACTION_APP_ADMIN_PASSWORD", appAdminPassword)
     .WithEnvironment("TRANSACTION_APP_STAFF_PASSWORD", appStaffPassword)
     .WithEnvironment("KC_HOSTNAME", "http://localhost:8081")

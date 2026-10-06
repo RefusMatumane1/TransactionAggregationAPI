@@ -7,8 +7,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // The real row-value paginator against PostgreSQL, walking a list end to end. Transaction
-    // pages are covered by CursorPaginationPostgresTests.
     [Collection(PostgresCollection.Name)]
     public class ListPaginationPostgresTests(PostgresContainerFixture fixture)
     {

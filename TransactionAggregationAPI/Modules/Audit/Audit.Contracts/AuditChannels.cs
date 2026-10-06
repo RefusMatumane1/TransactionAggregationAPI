@@ -5,7 +5,6 @@ namespace Modules.Audit.Contracts
         public const string Webhook = "webhook";
         public const string Kafka = "kafka";
 
-        // A signed-in user acting through the API.
         public const string Admin = "admin";
 
         public const string Unknown = "unknown";

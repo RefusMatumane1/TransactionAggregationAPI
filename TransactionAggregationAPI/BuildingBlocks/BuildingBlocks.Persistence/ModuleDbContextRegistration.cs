@@ -3,8 +3,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
 namespace BuildingBlocks.Persistence
 {
-    // Every module context runs on the request's shared NpgsqlConnection (so their writes can join
-    // one transaction) with these defaults.
+    // Module contexts share the request's NpgsqlConnection so their writes join one transaction.
     public static class ModuleDbContextRegistration
     {
         public const string ConnectionStringName = "transactiondb";

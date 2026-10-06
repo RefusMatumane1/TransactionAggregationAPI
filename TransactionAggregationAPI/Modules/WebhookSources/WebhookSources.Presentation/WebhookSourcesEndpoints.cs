@@ -20,7 +20,6 @@ namespace Modules.WebhookSources
             group.MapUpdateWebhookSource();
             group.MapRegisterWebhookSourceSigningKey();
 
-            // The read-only view staff need to label transactions; no keys, no admin actions.
             var banks = app.MapApiGroup("banks", "Banks")
                            .RequireAuthorization(AuthorizationPolicies.Staff);
 

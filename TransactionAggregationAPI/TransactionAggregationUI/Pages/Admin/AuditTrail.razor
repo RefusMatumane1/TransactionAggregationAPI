@@ -292,8 +292,7 @@ else
 }
 
 @code {
-    // Filters live in the query string so a filtered view (or a delivery / lineage drill-down)
-    // is a shareable link and the browser's back button undoes a drill-down.
+    // Filters live in the query string: filtered views and drill-downs are shareable, and Back undoes a drill-down.
     [SupplyParameterFromQuery(Name = "channel")] public string? Channel { get; set; }
     [SupplyParameterFromQuery(Name = "event")] public string? EventType { get; set; }
     [SupplyParameterFromQuery(Name = "source")] public string? SourceName { get; set; }

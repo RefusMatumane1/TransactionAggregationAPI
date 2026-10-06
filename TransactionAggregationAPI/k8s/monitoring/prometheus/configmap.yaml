@@ -199,3 +199,25 @@ data:
             annotations:
               summary: "The bank-transactions Kafka consumer loop died and restarted its host"
               description: "Repeated crashes mean ingestion over Kafka is not progressing. Check worker logs for the LogCritical entry."
+
+      # The worker's scheduled and polling jobs. A job can fail on every run while its process stays
+      # up (liveness green), so failures and freshness are alerted on directly.
+      - name: background-jobs.rules
+        rules:
+          - alert: TransactionAggregatesStale
+            # max(): only the replica holding the refresh lock sets the timestamp; the others report 0.
+            expr: time() - max(transaction_aggregates_last_refresh_timestamp_seconds{job="transaction-worker"}) > 2 * 3600
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Aggregate totals have not been rebuilt for over 2 hours"
+              description: "Dashboards and every /aggregates endpoint show older totals than the hourly rebuild promises (asOf in each response says how old). Check the worker's DailyTotalsRefreshBackgroundService logs."
+
+          - alert: BackgroundJobFailing
+            expr: increase(background_job_failed_runs_total{job="transaction-worker"}[10m]) >= 3
+            labels:
+              severity: critical
+            annotations:
+              summary: "{{ $labels.job }} has failed 3+ runs in 10 minutes"
+              description: "The worker is up but this job is not making progress (often PostgreSQL unreachable; the worker's /readiness also turns unhealthy). Check its error logs."

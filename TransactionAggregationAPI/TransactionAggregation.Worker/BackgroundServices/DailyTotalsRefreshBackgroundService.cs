@@ -7,8 +7,6 @@ using System.Diagnostics;
 
 namespace TransactionAggregation.Worker.BackgroundServices
 {
-    // Rebuilds the daily read model on a schedule, so no aggregate is computed on the request path.
-    // Only one replica refreshes at a time (the refresher takes an advisory lock); the others skip.
     public sealed class DailyTotalsRefreshBackgroundService(
         IServiceScopeFactory scopeFactory,
         IOptions<AggregationOptions> options,
@@ -31,8 +29,18 @@ namespace TransactionAggregation.Worker.BackgroundServices
 
         protected override TimeSpan Interval => TimeSpan.FromMinutes(Math.Max(1, _options.IntervalMinutes));
 
-        // Soon after start, so a fresh deployment does not serve empty or hour-old totals.
         protected override TimeSpan InitialDelay => TimeSpan.FromSeconds(15);
+
+        internal static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(30);
+
+        // Failed refreshes retry after 30 s, 1 min, 2 min... capped at the interval.
+        protected override TimeSpan DelayAfterFailure(int consecutiveFailures) => RetryDelay(consecutiveFailures, Interval);
+
+        internal static TimeSpan RetryDelay(int consecutiveFailures, TimeSpan interval)
+        {
+            var backoff = FirstRetry * Math.Pow(2, Math.Clamp(consecutiveFailures - 1, 0, 16));
+            return backoff < interval ? backoff : interval;
+        }
 
         protected override async Task<bool> RunOnceAsync(CancellationToken cancellationToken)
         {
@@ -57,8 +65,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
             return false;
         }
 
-        // The totals are committed either way; if the cache cannot be cleared, entries expire on
-        // their own (Caching:ScopeExpirationMinutes), so a cache outage only delays fresh totals.
+        // Totals are committed; a cache failure only delays fresh totals until entries expire.
         private async Task InvalidateCachedAggregatesAsync(ICacheService cache, CancellationToken cancellationToken)
         {
             try

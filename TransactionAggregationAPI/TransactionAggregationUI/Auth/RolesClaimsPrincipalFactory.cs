@@ -5,9 +5,7 @@ using System.Text.Json;
 
 namespace TransactionAggregationUI.Auth
 {
-    // Keycloak sends realm roles as a JSON array ("roles": ["staff"]). The default factory turns that
-    // into one claim whose value is the array's text, so IsInRole("staff") fails; this splits it into
-    // one role claim per entry.
+    // Keycloak sends roles as a JSON array, which the default factory keeps as one claim; split it into one role claim per entry.
     public sealed class RolesClaimsPrincipalFactory(IAccessTokenProviderAccessor accessor)
         : AccountClaimsPrincipalFactory<RemoteUserAccount>(accessor)
     {

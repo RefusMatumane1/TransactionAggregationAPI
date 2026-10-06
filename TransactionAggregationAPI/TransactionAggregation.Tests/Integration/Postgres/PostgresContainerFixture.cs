@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Modules.Audit.Application.Contracts;
 using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
+using Modules.Customers.Infrastructure.Persistence;
 using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
@@ -43,6 +44,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             using var audit = CreateAuditContext();
             await audit.Database.MigrateAsync();
+
+            using var customers = CreateCustomersContext();
+            await customers.Database.MigrateAsync();
         }
 
         public async Task<string> CreateIsolatedDatabaseAsync()
@@ -65,6 +69,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await webhookSources.Database.MigrateAsync();
             using var audit = CreateAuditContext(connectionString);
             await audit.Database.MigrateAsync();
+            using var customers = CreateCustomersContext(connectionString);
+            await customers.Database.MigrateAsync();
 
             return connectionString;
         }
@@ -83,7 +89,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 await _container.DisposeAsync();
         }
 
-        // What the worker's scheduled job does: rebuild the daily read model the aggregate queries read.
         public async Task<DailyTotalsRefresh?> RefreshDailyTotalsAsync(string? connectionString = null, TimeSpan? overlap = null)
         {
             using var context = CreateContext(connectionString: connectionString);
@@ -104,8 +109,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return new TransactionsDbContext(options, messaging, CreateAuditTrail(messaging));
         }
 
-        // Built like production: both contexts on the messaging connection with the module retry
-        // strategy, so audit writes join the save's transaction exactly as they do in the app.
         public TransactionsDbContext CreateRetryingContext(MessagingDbContext messaging)
         {
             var options = new DbContextOptionsBuilder<TransactionsDbContext>()
@@ -116,7 +119,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return new TransactionsDbContext(options, messaging, CreateAuditTrail(messaging, retrying: true));
         }
 
-        // The audit trail must share the messaging connection to join the transactions context's transaction.
         public IAuditTrail CreateAuditTrail(MessagingDbContext messaging, bool retrying = false)
         {
             var connection = (NpgsqlConnection)messaging.Database.GetDbConnection();
@@ -147,6 +149,15 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .Options;
 
             return new WebhookSourcesDbContext(options, new UnavailableAuditTrail());
+        }
+
+        public CustomersDbContext CreateCustomersContext(string? connectionString = null)
+        {
+            var options = new DbContextOptionsBuilder<CustomersDbContext>()
+                .UseNpgsql(connectionString ?? ConnectionString)
+                .Options;
+
+            return new CustomersDbContext(options, new UnavailableAuditTrail());
         }
 
         public AuditDbContext CreateAuditContext(string? connectionString = null)

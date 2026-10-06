@@ -1,0 +1,276 @@
+@page "/customers"
+@attribute [Authorize(Roles = "staff,admin")]
+@inject CustomerService CustomerService
+@inject BankService BankService
+@inject NavigationManager Nav
+
+<PageTitle>Customers · Transaction Aggregation</PageTitle>
+
+<PageHeader Title="Customers">
+    <Subtitle>Each customer's accounts are linked across banks, so their money can be seen in one place.</Subtitle>
+    <Actions>
+        <AuthorizeView Roles="admin">
+            <button type="button" class="btn btn-primary btn-sm" @onclick="OpenCreate">
+                <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Add customer
+            </button>
+        </AuthorizeView>
+    </Actions>
+</PageHeader>
+
+<form class="d-flex flex-wrap align-items-start gap-2 mb-3" role="search" @onsubmit="ApplySearch" @onsubmit:preventDefault>
+    <div style="min-width:min(22rem,100%)">
+        <label class="visually-hidden" for="customer-search">Search customers</label>
+        <div class="input-group input-group-sm">
+            <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+            <input id="customer-search" type="search" class="form-control @(SearchTooShort ? "is-invalid" : "")"
+                   placeholder="Name or reference, e.g. CUST-0001" @bind="_draft" @bind:event="oninput" aria-describedby="customer-search-hint" />
+        </div>
+        @if (SearchTooShort)
+        {
+            <div id="customer-search-hint" class="form-text text-danger">Type at least 2 characters.</div>
+        }
+    </div>
+    <button type="submit" class="btn btn-sm btn-outline-primary" disabled="@SearchTooShort">Search</button>
+    @if (Q is not null)
+    {
+        <a class="btn btn-sm btn-link" href="/customers">Clear</a>
+    }
+</form>
+
+@if (_error is not null)
+{
+    <ErrorPanel Message="@_error" OnRetry="LoadAsync" />
+}
+
+<div class="card @(_loading && _customers.Count > 0 ? "is-refreshing" : "")">
+    @if (_loading && _customers.Count == 0)
+    {
+        <div class="card-body">
+            @for (var i = 0; i < 6; i++)
+            {
+                <Skeleton Height="1.75rem" Class="mb-2" />
+            }
+        </div>
+    }
+    else if (_customers.Count == 0 && _error is null)
+    {
+        @if (Q is not null)
+        {
+            <EmptyState Title="@($"No customers match “{Q}”")" Icon="bi-search">
+                <a href="/customers">Show all customers</a>
+            </EmptyState>
+        }
+        else
+        {
+            <EmptyState Title="No customers yet" Icon="bi-people">
+                <AuthorizeView Roles="admin">
+                    <Authorized>Add a customer, then link their bank accounts.</Authorized>
+                    <NotAuthorized>None of the customers have accounts at your banks.</NotAuthorized>
+                </AuthorizeView>
+            </EmptyState>
+        }
+    }
+    else if (_customers.Count > 0)
+    {
+        <div class="table-responsive">
+            <table class="table table-hover mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th scope="col" class="ps-3">Customer</th>
+                        <th scope="col">Banks</th>
+                        <th scope="col" class="text-end pe-3">Accounts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var customer in _customers)
+                    {
+                        <tr class="clickable" @onclick="() => Nav.NavigateTo(DetailLink(customer.Id))">
+                            <th scope="row" class="ps-3 fw-normal">
+                                <a class="fw-semibold" href="@DetailLink(customer.Id)" @onclick:stopPropagation>@customer.Name</a>
+                                <div class="small text-muted font-monospace">@customer.Reference</div>
+                            </th>
+                            <td>
+                                <div class="d-flex flex-wrap gap-2 small">
+                                    @foreach (var bank in customer.Institutions)
+                                    {
+                                        <BankBadge Bank="@BankDirectory.Find(_banks, bank)" />
+                                    }
+                                    @if (customer.Institutions.Count == 0)
+                                    {
+                                        <span class="text-muted">No accounts linked</span>
+                                    }
+                                </div>
+                            </td>
+                            <td class="text-end pe-3 num">@customer.AccountCount</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@if (_customers.Count > 0 && (_previousCursors.Count > 0 || _nextCursor is not null))
+{
+    <nav class="d-flex justify-content-end mt-3" aria-label="Pages">
+        <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary" disabled="@(_previousCursors.Count == 0 || _loading)" @onclick="PreviousPage">
+                <i class="bi bi-chevron-left" aria-hidden="true"></i> Previous
+            </button>
+            <button class="btn btn-outline-secondary" disabled="@(_nextCursor is null || _loading)" @onclick="NextPage">
+                Next <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+        </div>
+    </nav>
+}
+
+@if (_creating is not null)
+{
+    <div class="modal d-block" tabindex="-1" role="dialog" aria-modal="true" aria-labelledby="create-title" style="background:rgba(0,0,0,.5)">
+        <div class="modal-dialog">
+            <form class="modal-content" @onsubmit="CreateAsync" @onsubmit:preventDefault>
+                <div class="modal-header">
+                    <h2 id="create-title" class="modal-title h5">Add customer</h2>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="() => _creating = null"></button>
+                </div>
+                <div class="modal-body">
+                    @if (_createError is not null)
+                    {
+                        <div class="alert alert-danger py-2" role="alert">@_createError</div>
+                    }
+                    <div class="mb-3">
+                        <label class="form-label" for="customer-reference">Reference</label>
+                        <input id="customer-reference" class="form-control font-monospace" @bind="_creating.Reference" placeholder="e.g. CUST-0042" autocomplete="off" />
+                        <div class="form-text">Your organisation's customer number. Letters, digits, '-' or '_'; it can't be changed later.</div>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label" for="customer-name">Name</label>
+                        <input id="customer-name" class="form-control" @bind="_creating.Name" autocomplete="off" />
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="() => _creating = null">Cancel</button>
+                    <button type="submit" class="btn btn-primary" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>
+                        }
+                        Add and link accounts
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private const int MinSearchLength = 2;
+
+    private sealed class NewCustomer
+    {
+        public string Reference { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private List<CustomerSummaryModel> _customers = [];
+    private IReadOnlyDictionary<string, BankModel> _banks = new Dictionary<string, BankModel>();
+    private readonly Stack<string?> _previousCursors = new();
+    private string? _currentCursor;
+    private string? _nextCursor;
+    private string? _draft;
+    private string? _loadedQuery = "\0";
+    private bool _loading = true;
+    private string? _error;
+    private int _loadVersion;
+    private NewCustomer? _creating;
+    private string? _createError;
+    private bool _saving;
+
+    private bool SearchTooShort => _draft is { Length: > 0 } d && d.Trim().Length is > 0 and < MinSearchLength;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Q = string.IsNullOrWhiteSpace(Q) ? null : Q.Trim();
+        if (Q == _loadedQuery)
+            return;
+
+        _loadedQuery = Q;
+        _draft = Q;
+        _previousCursors.Clear();
+        _currentCursor = null;
+        _banks = await BankService.GetBanksAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var version = ++_loadVersion;
+        _loading = true;
+        _error = null;
+
+        var (page, error) = await CustomerService.ListAsync(Q, _currentCursor);
+        if (version != _loadVersion)
+            return;
+
+        _error = error;
+        _customers = page?.Items ?? [];
+        _nextCursor = page?.NextCursor;
+        _loading = false;
+    }
+
+    private void ApplySearch()
+    {
+        if (SearchTooShort)
+            return;
+        Nav.NavigateTo(Nav.GetUriWithQueryParameters("/customers", new Dictionary<string, object?>
+        {
+            ["q"] = string.IsNullOrWhiteSpace(_draft) ? null : _draft.Trim()
+        }));
+    }
+
+    private async Task NextPage()
+    {
+        if (_nextCursor is null)
+            return;
+        _previousCursors.Push(_currentCursor);
+        _currentCursor = _nextCursor;
+        await LoadAsync();
+    }
+
+    private async Task PreviousPage()
+    {
+        if (_previousCursors.Count == 0)
+            return;
+        _currentCursor = _previousCursors.Pop();
+        await LoadAsync();
+    }
+
+    private void OpenCreate()
+    {
+        _creating = new NewCustomer();
+        _createError = null;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_creating is null)
+            return;
+        _saving = true;
+        var (created, error) = await CustomerService.CreateAsync(_creating.Reference.Trim(), _creating.Name);
+        _saving = false;
+
+        if (created is null)
+        {
+            _createError = error;
+            return;
+        }
+
+        _creating = null;
+        // Straight to the new customer, where its accounts are linked.
+        Nav.NavigateTo(DetailLink(created.Id));
+    }
+
+    private static string DetailLink(Guid id) => $"/customers/{id}";
+}

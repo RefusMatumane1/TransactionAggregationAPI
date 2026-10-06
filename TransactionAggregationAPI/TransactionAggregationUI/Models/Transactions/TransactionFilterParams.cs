@@ -14,5 +14,7 @@ namespace TransactionAggregationUI.Models.Transactions
         public string? ExternalAccountId { get; set; }
         public string? SortBy { get; set; }
         public bool SortDescending { get; set; } = true;
+
+        public Guid? CustomerId { get; set; }
     }
 }

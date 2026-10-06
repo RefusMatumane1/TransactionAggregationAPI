@@ -32,7 +32,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             (await ScalarAsync(asApp, "SELECT count(*) FROM transactions.\"Transactions\"")).Should().Be(0L);
             (await ScalarAsync(asApp, "SELECT count(*) FROM messaging.\"InboxMessages\"")).Should().Be(0L);
 
-            // The worker's scheduled refresh rebuilds the daily read model through a temp table.
             await ExecuteAsync(asApp, "CREATE TEMP TABLE refresh_probe (id int)");
             await ExecuteAsync(asApp, "DELETE FROM transactions.\"DailyTotals\"");
 
@@ -63,6 +62,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await using (var transactions = _fixture.CreateContext(connectionString: asMigrator)) await transactions.Database.MigrateAsync();
             await using (var webhookSources = _fixture.CreateWebhookSourcesContext(asMigrator)) await webhookSources.Database.MigrateAsync();
             await using (var audit = _fixture.CreateAuditContext(asMigrator)) await audit.Database.MigrateAsync();
+            await using (var customers = _fixture.CreateCustomersContext(asMigrator)) await customers.Database.MigrateAsync();
 
             return (asMigrator, asApp);
         }
@@ -71,8 +71,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         private static partial Regex SqlBlock();
 
         /// <summary>
-        /// Executes the SQL heredoc from init-roles.yaml the way psql would: psql variables are
-        /// substituted and each "SELECT format(...) \gexec" runs the statements it generates.
+        /// Runs init-roles.yaml's SQL heredoc the way psql would (variables substituted, `\gexec` statements run).
         /// </summary>
         private static async Task RunInitRolesScriptAsync(string superuserConnectionString)
         {

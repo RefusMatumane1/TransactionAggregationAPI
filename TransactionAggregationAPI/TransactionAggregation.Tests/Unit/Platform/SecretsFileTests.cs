@@ -5,8 +5,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Platform
 {
-    // Secrets come from a git-ignored secrets.json locally and from a Vault-rendered file of the same
-    // shape in a cluster; both are merged after appsettings and before environment variables.
     public sealed class SecretsFileTests : IDisposable
     {
         private readonly string _root = Directory.CreateTempSubdirectory("secrets-test-").FullName;

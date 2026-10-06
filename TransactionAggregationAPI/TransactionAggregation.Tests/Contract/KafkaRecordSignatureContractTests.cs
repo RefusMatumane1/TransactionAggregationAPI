@@ -7,8 +7,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Contract
 {
-    // The sender (the mock banks) and the platform each build the signed bytes independently,
-    // as a real bank would from the published record format. They must agree byte for byte.
+    // Sender and platform build the signed bytes independently; they must agree byte for byte.
     public class KafkaRecordSignatureContractTests
     {
         private const string Source = "mock-aggregator";

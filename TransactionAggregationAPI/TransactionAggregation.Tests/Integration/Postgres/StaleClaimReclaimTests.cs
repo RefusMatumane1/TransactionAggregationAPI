@@ -111,7 +111,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var context = _fixture.CreateMessagingContext(database);
             var messageId = Guid.NewGuid();
 
-            // The worker died while processing this message on each of its five attempts.
             await context.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO "messaging"."InboxMessages"
                     ("Id", "SourceName", "Payload", "ReceivedAt", "Status", "Attempts", "ClaimedAt")

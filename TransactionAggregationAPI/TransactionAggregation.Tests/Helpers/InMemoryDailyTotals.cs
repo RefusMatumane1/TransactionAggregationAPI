@@ -5,9 +5,6 @@ using Modules.Transactions.Infrastructure.Persistence;
 
 namespace TransactionAggregation.Tests.Helpers
 {
-    // Builds the daily read model from an in-memory ledger the way PostgresDailyTotalsRefresher does
-    // in SQL (whose own behaviour the Postgres tests cover), so the aggregate query handlers can be
-    // tested without a database server.
     public static class InMemoryDailyTotals
     {
         public static async Task BuildAsync(TransactionsDbContext context, DateTime? asOf = null)

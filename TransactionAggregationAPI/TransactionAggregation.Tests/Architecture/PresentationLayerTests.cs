@@ -7,7 +7,7 @@ namespace TransactionAggregation.Tests.Architecture
 {
     public class PresentationLayerTests
     {
-        private static readonly string[] Modules = ["Audit", "Transactions", "WebhookSources"];
+        private static readonly string[] Modules = ["Audit", "Customers", "Transactions", "WebhookSources"];
 
         public static TheoryData<string> ModuleNames => new(Modules);
 

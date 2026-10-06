@@ -24,7 +24,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
         private readonly ILogger<InboxDispatcherBackgroundService> _logger;
         private readonly InboxOptions _options;
 
-        // While draining a backlog, the two COUNT queries run once per Interval, not once per batch.
+        // While draining, the COUNT queries run once per Interval, not per batch.
         private DateTime _backlogRecordedAt = DateTime.MinValue;
 
         public InboxDispatcherBackgroundService(
@@ -90,9 +90,8 @@ namespace TransactionAggregation.Worker.BackgroundServices
             }
         }
 
-        // Success: the handler commits the ledger rows, outbox rows, audit rows and this message's
-        // Processed mark in one transaction. Failure: the retry or dead-letter state and its audit
-        // row are committed here, before the next message, so no later rollback can discard them.
+        // Success: the handler commits everything with the Processed mark. Failure: the retry/dead-letter state
+        // commits here, before the next message, so no later rollback discards it.
         internal async Task ProcessMessageAsync(
             InboxMessage message, ISender sender, IMessagingDbContext messaging, ITransactionsDbContext context,
             CancellationToken cancellationToken)
@@ -120,7 +119,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
                     message.SourceName, payload.ExternalAccountId, payload.Institution, payload.Transactions, message.Id.Value,
                     message.Channel ?? AuditChannels.Unknown);
 
-                // Marked first so the handler's commit records it with the rows it writes.
+                // Marked first so the handler's commit records it.
                 message.MarkProcessed();
 
                 var result = await sender.Send(command, cancellationToken);
@@ -133,7 +132,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
                     return;
                 }
 
-                // Commits the Processed mark when the handler had nothing to write.
                 await context.SaveChangesAsync(cancellationToken);
 
                 MessagingTelemetry.ProcessingDuration.WithLabels(Queue, "processed").Observe(stopwatch.Elapsed.TotalSeconds);

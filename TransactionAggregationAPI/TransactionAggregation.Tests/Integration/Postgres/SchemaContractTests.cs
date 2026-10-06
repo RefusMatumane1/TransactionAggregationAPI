@@ -4,8 +4,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Several of these indexes are created by raw SQL because EF Core cannot index owned-type
-    // columns, so has-pending-model-changes cannot see them. This pins what migrations must produce.
+    // Raw-SQL indexes EF can't see; this pins what migrations must produce.
     [Collection(PostgresCollection.Name)]
     public class SchemaContractTests(PostgresContainerFixture fixture)
     {
@@ -37,6 +36,24 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                         """CREATE UNIQUE INDEX "PK_DailyTotals" ON transactions."DailyTotals" USING btree ("SourceName", "ExternalAccountId", "Day", "Category", "Currency")""",
                     ["IX_DailyTotals_Currency_Day"] =
                         """CREATE INDEX "IX_DailyTotals_Currency_Day" ON transactions."DailyTotals" USING btree ("Currency", "Day")"""
+                }
+            },
+            {
+                "customerdirectory", "Customers", new()
+                {
+                    ["PK_Customers"] =
+                        """CREATE UNIQUE INDEX "PK_Customers" ON customerdirectory."Customers" USING btree ("Id")""",
+                    ["IX_Customers_Reference"] =
+                        """CREATE UNIQUE INDEX "IX_Customers_Reference" ON customerdirectory."Customers" USING btree ("Reference")"""
+                }
+            },
+            {
+                "customerdirectory", "CustomerAccounts", new()
+                {
+                    ["PK_CustomerAccounts"] =
+                        """CREATE UNIQUE INDEX "PK_CustomerAccounts" ON customerdirectory."CustomerAccounts" USING btree ("CustomerId", "Institution", "ExternalAccountId")""",
+                    ["IX_CustomerAccounts_Institution_ExternalAccountId"] =
+                        """CREATE INDEX "IX_CustomerAccounts_Institution_ExternalAccountId" ON customerdirectory."CustomerAccounts" USING btree ("Institution", "ExternalAccountId")"""
                 }
             },
             {

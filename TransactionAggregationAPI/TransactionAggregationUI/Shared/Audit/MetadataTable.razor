@@ -1,4 +1,3 @@
-@* Everything recorded for one audit event: identifiers first, then the channel-specific metadata. *@
 <div class="audit-metadata">
     @if (!string.IsNullOrEmpty(Event.Detail))
     {
@@ -33,8 +32,7 @@
             yield return (key, value);
     }
 
-    // OccurredAt is when it happened at the source; RecordedAt when the row was written. A gap means
-    // the write was retried, e.g. after a transient database failure.
+    // A gap between OccurredAt and RecordedAt means the write was retried.
     private string Lag()
     {
         var lag = Event.RecordedAt - Event.OccurredAt;

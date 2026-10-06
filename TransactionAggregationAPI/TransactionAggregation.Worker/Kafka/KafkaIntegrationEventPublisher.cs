@@ -7,9 +7,7 @@ using System.Text;
 
 namespace TransactionAggregation.Worker.Kafka
 {
-    // One long-lived idempotent producer for the process (connections are reused, not opened per
-    // message). acks=all + idempotence means a retried produce never duplicates within the broker;
-    // a duplicate after a lost outbox acknowledgement is left to consumers, who dedupe on message-id.
+    // One long-lived idempotent producer (acks=all); a duplicate after a lost acknowledgement is left to consumers.
     internal sealed class KafkaIntegrationEventPublisher : IIntegrationEventPublisher, IDisposable
     {
         public const string MessageIdHeader = "message-id";
@@ -61,8 +59,7 @@ namespace TransactionAggregation.Worker.Kafka
             }
         }
 
-        // Errors a retry cannot fix; everything else (broker unavailable, timeouts, leader changes)
-        // is transient and left to the outbox's retry with backoff.
+        // Errors a retry can't fix; the rest is transient.
         private static bool IsPermanent(Error error) =>
             error.IsFatal
             || error.Code is ErrorCode.MsgSizeTooLarge

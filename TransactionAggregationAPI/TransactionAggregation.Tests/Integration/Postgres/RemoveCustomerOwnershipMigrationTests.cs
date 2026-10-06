@@ -20,7 +20,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var migrator = context.GetService<IMigrator>();
             await migrator.MigrateAsync(migrations[migrations.IndexOf(removal) - 1]);
 
-            // The two schemas as they stood: a bank link per holder of the joint account.
             var aliceAccount = Guid.NewGuid();
             var bobAccount = Guid.NewGuid();
             await context.Database.ExecuteSqlRawAsync("""

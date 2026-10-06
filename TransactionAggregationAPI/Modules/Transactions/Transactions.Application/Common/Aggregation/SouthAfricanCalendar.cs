@@ -11,9 +11,6 @@ namespace Modules.Transactions.Application.Common.Aggregation
 
         public static DateOnly DayOf(DateTime utc) => DateOnly.FromDateTime(utc + UtcOffset);
 
-        public static DateTime StartOfDayUtc(DateOnly date) =>
-            DateTime.SpecifyKind(date.ToDateTime(TimeOnly.MinValue) - UtcOffset, DateTimeKind.Utc);
-
         public static DateOnly StartOfWeek(DateOnly date) =>
             date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
 

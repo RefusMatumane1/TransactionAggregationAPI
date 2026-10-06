@@ -12,5 +12,8 @@ namespace Modules.WebhookSources.Contracts
     {
         Task<SignatureVerification> VerifySignatureAsync(
             string sourceName, byte[] signedContent, byte[] signature, CancellationToken cancellationToken = default);
+
+        // The code as registered ("FNB" for "fnb"), or null if no such bank exists.
+        Task<string?> FindBankCodeAsync(string code, CancellationToken cancellationToken = default);
     }
 }

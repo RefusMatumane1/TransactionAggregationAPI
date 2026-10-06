@@ -5,8 +5,7 @@ using TransactionAggregation.Hosting.Observability;
 
 namespace TransactionAggregation.Worker
 {
-    // An explicit, namespaced entry point: the tests reference both hosts, and two top-level-statement
-    // hosts would both define a global Program.
+    // Namespaced so the tests can reference both hosts without two global Programs.
     internal static class Program
     {
         private static async Task Main(string[] args)

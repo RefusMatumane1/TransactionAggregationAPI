@@ -42,6 +42,12 @@
     <ProjectReference Include="..\Modules\Audit\Audit.Presentation\Audit.Presentation.csproj" />
     <ProjectReference Include="..\Modules\Transactions\Transactions.Presentation\Transactions.Presentation.csproj" />
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Presentation\WebhookSources.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Customers\Customers.Domain\Customers.Domain.csproj" />
+    <ProjectReference Include="..\Modules\Customers\Customers.Application\Customers.Application.csproj" />
+    <ProjectReference Include="..\Modules\Customers\Customers.Infrastructure\Customers.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Customers\Customers.Contracts\Customers.Contracts.csproj" />
+    <ProjectReference Include="..\Modules\Customers\Customers.Presentation\Customers.Presentation.csproj" />
+    <ProjectReference Include="..\TransactionAggregationUI\TransactionAggregationUI.csproj" Aliases="ui" />
   </ItemGroup>
 
 </Project>

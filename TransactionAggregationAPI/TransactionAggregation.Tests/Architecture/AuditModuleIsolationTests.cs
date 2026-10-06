@@ -21,6 +21,7 @@ namespace TransactionAggregation.Tests.Architecture
         [
             "Modules.Transactions",
             "Modules.WebhookSources",
+            "Modules.Customers",
             "BuildingBlocks.Messaging"
         ];
 

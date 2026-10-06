@@ -40,6 +40,58 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
             }
         }
 
+        private sealed class AlwaysFailingJob : PollingBackgroundService
+        {
+            public AlwaysFailingJob() : base(NullLogger.Instance) { }
+
+            public int Runs;
+            public List<int> FailureCounts { get; } = [];
+            public TaskCompletionSource ThirdRun { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            protected override TimeSpan Interval => TimeSpan.FromHours(1);
+
+            protected override TimeSpan DelayAfterFailure(int consecutiveFailures)
+            {
+                FailureCounts.Add(consecutiveFailures);
+                return TimeSpan.FromMilliseconds(5);
+            }
+
+            protected override Task<bool> RunOnceAsync(CancellationToken cancellationToken)
+            {
+                if (Interlocked.Increment(ref Runs) == 3)
+                    ThirdRun.TrySetResult();
+                throw new InvalidOperationException("database unavailable");
+            }
+        }
+
+        [Fact]
+        public async Task AFailingRun_WaitsTheJobsFailureDelay_CountsConsecutiveFailures_AndIsCounted()
+        {
+            var job = new AlwaysFailingJob();
+            var before = PollingBackgroundService.FailedRuns.WithLabels(nameof(AlwaysFailingJob)).Value;
+
+            await job.StartAsync(CancellationToken.None);
+            var completed = await Task.WhenAny(job.ThirdRun.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            await job.StopAsync(CancellationToken.None);
+
+            completed.Should().Be(job.ThirdRun.Task, "the failure delay, not the one-hour interval, decides when it retries");
+            job.FailureCounts.Take(2).Should().Equal(1, 2);
+            PollingBackgroundService.FailedRuns.WithLabels(nameof(AlwaysFailingJob)).Value.Should().BeGreaterThanOrEqualTo(before + 2);
+        }
+
+        [Theory]
+        [InlineData(1, 30)]
+        [InlineData(2, 60)]
+        [InlineData(3, 120)]
+        [InlineData(7, 1920)]
+        [InlineData(8, 3600)]
+        [InlineData(50, 3600)]
+        public void AFailedTotalsRefresh_BacksOffFrom30Seconds_UpToTheInterval(int failures, int expectedSeconds)
+        {
+            DailyTotalsRefreshBackgroundService.RetryDelay(failures, TimeSpan.FromHours(1))
+                .Should().Be(TimeSpan.FromSeconds(expectedSeconds));
+        }
+
         [Fact]
         public async Task AFullBatch_RunsAgainAtOnce_InsteadOfWaitingForTheInterval()
         {

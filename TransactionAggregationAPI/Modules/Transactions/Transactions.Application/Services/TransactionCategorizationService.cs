@@ -16,8 +16,7 @@ namespace Modules.Transactions.Application.Services
             _rules = BuildRules(options.Value.Keywords);
         }
 
-        // Deterministic: the longest matching keyword wins (ties broken by ordinal order), then the
-        // bank's own category, then the direction of the amount.
+        // Deterministic: longest keyword wins (ties by ordinal order), then the bank's category, then the amount's direction.
         public TransactionCategory Categorize(string description, decimal amount, TransactionCategory? bankCategory)
         {
             var words = Words(description);

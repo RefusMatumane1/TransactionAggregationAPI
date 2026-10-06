@@ -3,8 +3,7 @@ using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Presentation.Responses
 {
-    // AsOf on every aggregate: the totals come from the scheduled daily read model and include the
-    // ledger as recorded up to that time (null until the first refresh has run).
+    // AsOf: when the read model was last rebuilt; null before the first refresh.
     public sealed record PeriodResponse(DateOnly From, DateOnly To)
     {
         internal static PeriodResponse Of(PeriodDto period) => new(period.From, period.To);

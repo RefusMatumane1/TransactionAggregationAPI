@@ -46,7 +46,7 @@
 @code {
     private bool _navOpen;
 
-    // Fragment links resolve against <base href="/">, so the skip link carries the current path.
+    // Fragment links resolve against <base href>, so the skip link carries the current path.
     private string SkipHref => $"{new Uri(Nav.Uri).PathAndQuery}#main";
 
     protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
@@ -63,11 +63,8 @@
 
     private void Logout()
     {
-        // NavigateToLogout, not a plain navigation: RemoteAuthenticatorView only performs a
-        // logout the app started this way. A direct (or force-reloaded) visit to
-        // authentication/logout is refused as "not initiated from within the page" — the
-        // tokens stay in session storage and the Keycloak session survives, so the user is
-        // still signed in. This clears both, via Keycloak's end-session endpoint.
+        // NavigateToLogout, not a plain navigation: RemoteAuthenticatorView refuses logouts the app didn't start,
+        // leaving the tokens and the Keycloak session intact.
         Nav.NavigateToLogout("authentication/logout");
     }
 

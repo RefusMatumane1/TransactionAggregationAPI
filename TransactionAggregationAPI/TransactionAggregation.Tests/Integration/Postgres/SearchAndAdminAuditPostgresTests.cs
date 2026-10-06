@@ -63,7 +63,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             (await SearchAsync(bank, "Coffee")).Should().Equal("Coffee");
         }
 
-        // Like production: the admin context and the audit trail share one scoped connection.
         private WebhookSourcesDbContext AdminContext(string database, IAuditTrail? auditTrail = null)
         {
             var messaging = fixture.CreateMessagingContext(database);

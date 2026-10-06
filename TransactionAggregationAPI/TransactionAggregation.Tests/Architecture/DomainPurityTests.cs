@@ -17,7 +17,8 @@ namespace TransactionAggregation.Tests.Architecture
             typeof(SharedKernel.Common.BaseEntity).Assembly.GetName().Name!,
             typeof(Modules.Transactions.Domain.Entities.Transaction).Assembly.GetName().Name!,
             typeof(Modules.WebhookSources.Domain.WebhookSource).Assembly.GetName().Name!,
-            typeof(Modules.Audit.Domain.AuditEvent).Assembly.GetName().Name!
+            typeof(Modules.Audit.Domain.AuditEvent).Assembly.GetName().Name!,
+            typeof(Modules.Customers.Domain.Customer).Assembly.GetName().Name!
         };
 
         [Theory]

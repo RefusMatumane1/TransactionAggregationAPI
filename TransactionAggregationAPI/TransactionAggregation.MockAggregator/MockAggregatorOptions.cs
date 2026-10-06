@@ -4,7 +4,6 @@ namespace TransactionAggregation.MockAggregator
     {
         public const string SectionName = "MockAggregator";
 
-        // Where the Kafka record-signing key is persisted between runs.
         public string DataDirectory { get; set; } = "App_Data";
     }
 
@@ -28,8 +27,7 @@ namespace TransactionAggregation.MockAggregator
 
         public string ApiKey { get; set; } = string.Empty;
 
-        // Each bank is its own source with its own key: the key for a bank is ApiKey + "-" + the
-        // bank's code in lower case, the convention the API's Development registration uses too.
+        // Each bank's key is ApiKey + "-" + its code in lower case, as in the API's Development registration.
         public string KeyFor(string bankCode) => $"{ApiKey}-{bankCode.ToLowerInvariant()}";
 
         public string KafkaTopic { get; set; } = "bank-transactions";

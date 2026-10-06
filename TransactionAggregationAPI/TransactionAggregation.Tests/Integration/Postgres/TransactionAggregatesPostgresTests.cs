@@ -8,8 +8,7 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // The database is shared by the whole collection, so each test writes under its own bank codes
-    // and reads back through a bank filter (or only looks at its own banks).
+    // Shared database: each test uses its own bank codes.
     [Collection(PostgresCollection.Name)]
     public class TransactionAggregatesPostgresTests(PostgresContainerFixture fixture)
     {

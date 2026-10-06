@@ -1,19 +1,16 @@
 <Project>
 
-	<!--Central Package Management -->
 	<PropertyGroup>
 		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
 		<CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
 	</PropertyGroup>
 
-	<!--Common .NET Settings -->
 	<PropertyGroup>
 		<TargetFramework>net10.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
-	<!--Build & Code Quality -->
 	<PropertyGroup>
 		<AnalysisLevel>latest</AnalysisLevel>
 		<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
@@ -29,7 +26,6 @@
 		<Version>1.0.0</Version>
 	</PropertyGroup>
 
-	<!--Common Usings (applies to all projects) -->
 	<ItemGroup>
 		<Using Include="System" />
 		<Using Include="System.Collections.Generic" />

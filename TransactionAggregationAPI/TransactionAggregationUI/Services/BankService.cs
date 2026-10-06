@@ -8,7 +8,6 @@ namespace TransactionAggregationUI.Services
 
         private Dictionary<string, BankModel>? _banks;
 
-        // Every bank by code (case-insensitive), loaded once per session; Refresh after an admin change.
         public async Task<IReadOnlyDictionary<string, BankModel>> GetBanksAsync(bool refresh = false)
         {
             if (_banks is null || refresh)

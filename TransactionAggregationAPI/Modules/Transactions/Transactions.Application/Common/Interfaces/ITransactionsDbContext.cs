@@ -15,8 +15,6 @@ namespace Modules.Transactions.Application.Common.Interfaces
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-        // Staged events are written to the audit trail inside the next SaveChangesAsync's database
-        // transaction, so they commit (or roll back) with the changes they describe.
         void StageAudit(IEnumerable<AuditEventRecord> events);
 
         void DiscardPendingChanges();

@@ -30,8 +30,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return service;
         }
 
-        // Runs an action once, at the moment the context is about to write: after the handler has
-        // checked for existing rows, before it inserts. That is the check-then-insert race window.
+        // Runs once, as the context is about to write: after the existence check, before the insert.
         private sealed class RunInsideTheRaceWindow(Func<Task> action) : SaveChangesInterceptor
         {
             public bool Fired { get; private set; }
@@ -70,7 +69,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var contextB = _fixture.CreateContext(messagingB);
             var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, TestNormalizers.Neutral, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
 
-            // B runs to completion, and commits, after A has found no existing row but before A inserts.
             var resultB = default(SharedKernel.Common.Models.Result<int>);
             var raceWindow = new RunInsideTheRaceWindow(async () => resultB = await handlerB.Handle(command, CancellationToken.None));
 

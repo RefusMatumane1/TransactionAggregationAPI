@@ -155,8 +155,17 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
 
-          # No readinessProbe: the worker receives no traffic, so readiness would only
-          # gate rollouts. /health still reports Redis for dashboards and manual checks.
+          # The worker receives no traffic, so readiness never routes anything: it shows a
+          # worker that cannot reach PostgreSQL as NotReady (instead of Running and blind),
+          # and holds a rollout whose new pods could not do their job.
+          readinessProbe:
+            httpGet:
+              path: /readiness
+              port: 8080
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+
           startupProbe:
             httpGet:
               path: /liveness

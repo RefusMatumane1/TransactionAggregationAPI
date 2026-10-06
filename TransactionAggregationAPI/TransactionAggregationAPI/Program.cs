@@ -1,4 +1,5 @@
 using Modules.Audit;
+using Modules.Customers;
 using Modules.Transactions;
 using Modules.WebhookSources;
 using Prometheus;
@@ -22,6 +23,7 @@ try
     builder.AddSerilogLogging();
 
     builder.AddApplicationModules();
+    builder.Services.AddCustomersModule();
     builder.AddKeycloakAuthentication();
     builder.AddApiPlatform();
     builder.Services.AddRedisRateLimiting();
@@ -67,8 +69,9 @@ try
     app.MapTransactionsEndpoints();
     app.MapWebhookSourcesEndpoints();
     app.MapAuditEndpoints();
+    app.MapCustomersEndpoints();
 
-    // An unknown API path is a 404, not the SPA shell: only non-API routes fall back to the UI.
+    // An unknown API path is a 404, not the SPA shell.
     app.MapFallback("api/{**path}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound));
     app.MapFallbackToFile("index.html");
 
@@ -82,6 +85,7 @@ try
     {
         await app.ApplyAllModuleMigrationsAsync();
         await SeedData.SeedDatabaseAsync(app.Services, app.Configuration);
+        await CustomerSeed.SeedAsync(app.Services);
         await MockAggregatorSource.EnsureRegisteredAsync(app.Services, app.Configuration);
     }
 

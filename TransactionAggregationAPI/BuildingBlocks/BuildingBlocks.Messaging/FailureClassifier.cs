@@ -14,16 +14,13 @@ namespace BuildingBlocks.Messaging
         Permanent
     }
 
-    // The message can never be processed as it is (undecodable, or refused by its schema).
     public sealed class PoisonMessageException(string message, Exception? innerException = null)
         : Exception(message, innerException);
 
-    // The destination refused the message for a reason retrying cannot change (e.g. HTTP 400, 403).
     public sealed class PermanentDeliveryException(string message, Exception? innerException = null)
         : Exception(message, innerException);
 
-    // Decides whether a failure is worth retrying. Transient failures are retried with backoff up to
-    // the queue's attempt limit; permanent ones are dead-lettered at once, without spending retries.
+    // Transient failures retry with backoff; permanent ones dead-letter at once.
     public static class FailureClassifier
     {
         private static readonly string[] PermanentSqlStateClasses = ["22", "23"];
@@ -76,7 +73,7 @@ namespace BuildingBlocks.Messaging
                 : $"{innermost.GetType().Name}: {innermost.Message}";
         }
 
-        // 4xx means the request itself was refused, except timeouts and rate limiting, which pass.
+        // 4xx is permanent, except timeouts and rate limiting.
         private static bool IsPermanentHttpStatus(HttpStatusCode status) =>
             (int)status is >= 400 and < 500
             && status is not HttpStatusCode.RequestTimeout and not HttpStatusCode.TooManyRequests;
@@ -92,8 +89,7 @@ namespace BuildingBlocks.Messaging
             return null;
         }
 
-        // Data and integrity violations are permanent, except a unique violation: that is a race
-        // with a concurrent writer, and the retry finds the row and treats it as a duplicate.
+        // Integrity violations are permanent, except unique: a lost race, and the retry records a duplicate.
         private static bool IsPermanentSqlState(string sqlState) =>
             sqlState != PostgresErrorCodes.UniqueViolation
             && PermanentSqlStateClasses.Any(sqlClass => sqlState.StartsWith(sqlClass, StringComparison.Ordinal));

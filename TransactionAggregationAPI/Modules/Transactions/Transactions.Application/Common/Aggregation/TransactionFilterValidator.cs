@@ -17,6 +17,10 @@ namespace Modules.Transactions.Application.Common.Aggregation
                 .When(x => !string.IsNullOrEmpty(x.ExternalAccountId))
                 .OverridePropertyName("institution")
                 .WithMessage("institution is required with externalAccountId: an account id is only unique within its bank.");
+            RuleFor(x => x.Accounts!.Count)
+                .LessThanOrEqualTo(TransactionFilter.MaxAccounts)
+                .When(x => x.Accounts is not null)
+                .OverridePropertyName("accounts");
         }
     }
 

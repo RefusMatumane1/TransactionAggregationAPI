@@ -2,9 +2,7 @@ using System.Diagnostics;
 
 namespace Microsoft.Extensions.Hosting
 {
-    // Some outbound URLs carry a credential in their path (incoming-webhook URLs). A request marked
-    // with Redact is traced as scheme://host/[redacted]; pair it with an HttpClient that has no
-    // request loggers, so the URL appears in no telemetry at all.
+    // Marked requests are traced as scheme://host/[redacted]; pair with an HttpClient that has no request loggers.
     public static class OutboundUrlRedaction
     {
         private static readonly HttpRequestOptionsKey<bool> RedactKey = new("TransactionAggregation.RedactUrl");

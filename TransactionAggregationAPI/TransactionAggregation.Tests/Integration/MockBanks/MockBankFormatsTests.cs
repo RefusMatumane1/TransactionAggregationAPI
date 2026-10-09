@@ -41,7 +41,7 @@ namespace TransactionAggregation.Tests.Integration.MockBanks
             { "Capitec", "Woolworths", "Woolworths Sandton", "Woolworths Sandton", TransactionCategory.Groceries },
             { "Capitec", "Netflix", "DEBIT ORDER Netflix", "Netflix", TransactionCategory.Subscriptions },
 
-            { "StandardBank", "Woolworths", "PURCHASE Woolworths", "PURCHASE Woolworths", null },
+            { "StandardBank", "Woolworths", "PURCHASE Woolworths", "Woolworths", null },
             { "StandardBank", "Netflix", "DEBIT ORDER Netflix", "Netflix", null },
         };
 

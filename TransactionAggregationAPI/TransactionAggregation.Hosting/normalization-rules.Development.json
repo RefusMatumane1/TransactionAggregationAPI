@@ -10,6 +10,18 @@
       },
       "Absa": {
         "DescriptionPrefixes": [ "ABSA CARD" ]
+      },
+      "Capitec": {
+        "CategoryMap": {
+          "Online Stores": "Shopping",
+          "Takeaways": "Dining"
+        }
+      },
+      "StandardBank": {
+        "CategoryMap": {
+          "Takeaways": "Dining",
+          "Online Stores": "Shopping"
+        }
       }
     }
   }

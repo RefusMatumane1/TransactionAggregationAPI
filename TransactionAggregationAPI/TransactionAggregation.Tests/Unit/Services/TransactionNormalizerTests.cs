@@ -250,5 +250,68 @@ namespace TransactionAggregation.Tests.Unit.Services
             result.Description.Should().Be("Spar");
             result.BankCategory.Should().Be(TransactionCategory.Groceries);
         }
+
+        [Theory]
+        [InlineData("StandardBank", "PURCHASE Woolworths", "Woolworths")]
+        [InlineData("StandardBank", "purchase: Woolworths", "Woolworths")]
+        [InlineData("StandardBank", "POS PURCHASE Woolworths", "Woolworths")]
+        [InlineData("StandardBank", "PURCHASE", "PURCHASE")]
+        [InlineData("StandardBank", "PURCHASES R US", "PURCHASES R US")]
+        [InlineData("StandardBank", "SBSA CARD Engen", "Engen")]
+        [InlineData("StandardBank", "DEBIT ORDER Discovery", "Discovery")]
+        [InlineData("Capitec", "CAPITEC PAY Takealot", "Takealot")]
+        [InlineData("Capitec", "DEBIT ORDER Vodacom", "Vodacom")]
+        [InlineData("Capitec", "Nandos Fourways", "Nandos Fourways")]
+        [InlineData("Capitec", "PURCHASE Nandos", "PURCHASE Nandos")]
+        [InlineData("capitec", "  CONTACTLESS   PURCHASE   Spar ", "Spar")]
+        [InlineData("Other", "PURCHASE Spar", "PURCHASE Spar")]
+        public void ShippedRules_Descriptions(string institution, string raw, string expected)
+        {
+            TestNormalizers.Shipped().Normalize(Raw(raw), institution).Description.Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData("StandardBank", "Food & Groceries", TransactionCategory.Groceries)]
+        [InlineData("StandardBank", "cellphone", TransactionCategory.Utilities)]
+        [InlineData("Capitec", "Eating Out", TransactionCategory.Dining)]
+        [InlineData("Capitec", "Groceries", TransactionCategory.Groceries)]
+        [InlineData("Capitec", "Fuel", TransactionCategory.Transportation)]
+        [InlineData("Other", "Eating Out", null)]
+        [InlineData("Capitec", "Mystery", null)]
+        public void ShippedRules_Categories(string institution, string label, TransactionCategory? expected)
+        {
+            TestNormalizers.Shipped().Normalize(Raw(category: label), institution).BankCategory.Should().Be(expected);
+        }
+
+        [Theory]
+        [InlineData("Capitec", "Online Stores", TransactionCategory.Shopping)]
+        [InlineData("StandardBank", "Takeaways", TransactionCategory.Dining)]
+        [InlineData("FNB", "Takeaways", TransactionCategory.Dining)]
+        [InlineData("StandardBank", "Eating Out", null)]
+        public void DevelopmentRules_Categories(string institution, string label, TransactionCategory? expected)
+        {
+            TestNormalizers.ShippedFor("Development").Normalize(Raw(category: label), institution)
+                .BankCategory.Should().Be(expected);
+        }
+
+        [Fact]
+        public void DevelopmentRules_KeepProductionPrefixesForCapitecAndStandardBank()
+        {
+            var normalizer = TestNormalizers.ShippedFor("Development");
+
+            normalizer.Normalize(Raw("PURCHASE Spar"), "StandardBank").Description.Should().Be("Spar");
+            normalizer.Normalize(Raw("CAPITEC PAY Spar"), "Capitec").Description.Should().Be("Spar");
+        }
+
+        [Fact]
+        public void ShippedRules_CapitecUtcAndStandardBankLocalDates_ResolveToTheSameInstant()
+        {
+            var normalizer = TestNormalizers.Shipped();
+            var utc = new DateTime(2026, 9, 10, 10, 0, 0, DateTimeKind.Utc);
+            var local = new DateTime(2026, 9, 10, 12, 0, 0, DateTimeKind.Unspecified);
+
+            normalizer.Normalize(Raw(date: utc), "Capitec").DateUtc.Should().Be(utc);
+            normalizer.Normalize(Raw(date: local), "StandardBank").DateUtc.Should().Be(utc);
+        }
     }
 }

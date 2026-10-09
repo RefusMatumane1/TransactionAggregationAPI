@@ -1,9 +1,3 @@
-// How each bank's raw transactions are normalized (see TransactionNormalizer).
-// "Default" applies to every institution, including ones with no profile ("Other").
-// Add a bank under "Institutions", keyed by the institution name deliveries carry (FNB,
-// StandardBank, Absa, Capitec): its TimeZone replaces the default's, and its DescriptionPrefixes and
-// CategoryMap are added to the default's. Only add rules observed in that bank's real
-// feeds — a wrong prefix silently strips merchant names.
 {
   "Normalization": {
     "Default": {
@@ -11,20 +5,73 @@
       "DescriptionPrefixes": [
         "POS PURCHASE",
         "CARD PURCHASE",
+        "CONTACTLESS PURCHASE",
+        "ONLINE PURCHASE",
+        "CARD PAYMENT",
+        "RECURRING PAYMENT",
         "DEBIT ORDER"
       ],
       "CategoryMap": {
         "Grocery": "Groceries",
+        "Supermarkets": "Groceries",
         "Food & Drink": "Dining",
         "Restaurants": "Dining",
+        "Fast Food": "Dining",
+        "Coffee & Tea": "Dining",
         "Transport": "Transportation",
         "Fuel": "Transportation",
+        "Petrol": "Transportation",
+        "Taxi": "Transportation",
+        "Parking": "Transportation",
+        "Tolls": "Transportation",
         "Salary": "Income",
+        "Wages": "Income",
+        "Interest Received": "Income",
         "Rent": "Housing",
+        "Bond": "Housing",
         "Medical": "Healthcare",
-        "Streaming": "Subscriptions"
+        "Pharmacy": "Healthcare",
+        "Medical Aid": "Healthcare",
+        "Streaming": "Subscriptions",
+        "Music": "Subscriptions",
+        "Electricity": "Utilities",
+        "Water": "Utilities",
+        "Municipal": "Utilities",
+        "Telecoms": "Utilities",
+        "Airtime": "Utilities",
+        "Retail": "Shopping",
+        "Clothing": "Shopping",
+        "Online Shopping": "Shopping",
+        "Cinema": "Entertainment",
+        "Gaming": "Entertainment",
+        "Own Account Transfer": "Transfer"
       }
     },
-    "Institutions": {}
+    "Institutions": {
+      "Capitec": {
+        "DescriptionPrefixes": [
+          "CAPITEC PAY",
+          "CAPITEC CARD"
+        ],
+        "CategoryMap": {
+          "Cellphone": "Utilities",
+          "Eating Out": "Dining",
+          "Groceries & Household": "Groceries"
+        }
+      },
+      "StandardBank": {
+        "DescriptionPrefixes": [
+          "PURCHASE",
+          "SBSA CARD",
+          "STANDARD BANK CARD",
+          "ACB DEBIT"
+        ],
+        "CategoryMap": {
+          "Cellphone": "Utilities",
+          "Food & Groceries": "Groceries",
+          "Fuel & Transport": "Transportation"
+        }
+      }
+    }
   }
 }

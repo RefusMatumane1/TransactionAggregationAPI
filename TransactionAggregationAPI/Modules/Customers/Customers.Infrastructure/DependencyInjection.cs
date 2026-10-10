@@ -13,7 +13,6 @@ namespace Modules.Customers
         {
             services.AddCustomersApplication();
 
-            // On the scoped shared connection so a change and its audit row commit in one transaction.
             services.AddDbContext<CustomersDbContext>((sp, options) =>
                 options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(),
                     npgsql => npgsql.UseModuleDefaults<CustomersDbContext>()));

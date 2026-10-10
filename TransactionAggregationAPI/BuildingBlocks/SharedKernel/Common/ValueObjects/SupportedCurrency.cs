@@ -1,6 +1,6 @@
 namespace SharedKernel.Common.ValueObjects
 {
-    // ISO 4217 active codes (no funds, metals or test codes). Amounts in different currencies are never summed.
+   
     public static class SupportedCurrency
     {
         public const string Default = "ZAR";

@@ -31,9 +31,6 @@ namespace BuildingBlocks.Persistence
             return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
         }
 
-        // Saves this context and whatever `enlist` writes in one database transaction. The unit is retried on
-        // transient failure, so `enlist` must be repeatable. Without a relational provider (in-memory tests)
-        // there is no transaction and `enlist` receives null.
         protected async Task<int> SaveAtomicallyAsync(
             Func<DbTransaction?, CancellationToken, Task> enlist, CancellationToken cancellationToken)
         {

@@ -4,7 +4,6 @@ using SharedKernel.Exceptions;
 
 namespace Modules.Transactions.Domain.Entities
 {
-    // Recorded once, never changed or deleted; the database rejects UPDATE and DELETE too.
     public sealed class Transaction
     {
         public const int MaxDescriptionLength = 500;

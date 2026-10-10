@@ -12,7 +12,6 @@ namespace BuildingBlocks.Web
         public const string Staff = "Staff";
     }
 
-    // Keycloak realm roles; there are no customer accounts.
     public static class Roles
     {
         public const string Admin = "admin";
@@ -21,7 +20,6 @@ namespace BuildingBlocks.Web
 
     public static class ClaimNames
     {
-        // Institution codes a staff member may read (Keycloak user attribute "institutions").
         public const string Institutions = "institutions";
     }
 }

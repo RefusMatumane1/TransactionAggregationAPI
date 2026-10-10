@@ -3,7 +3,6 @@ using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Presentation.Responses
 {
-    // AsOf: when the read model was last rebuilt; null before the first refresh.
     public sealed record PeriodResponse(DateOnly From, DateOnly To)
     {
         internal static PeriodResponse Of(PeriodDto period) => new(period.From, period.To);

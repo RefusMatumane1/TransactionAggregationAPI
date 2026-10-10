@@ -29,8 +29,6 @@ namespace Modules.WebhookSources.Infrastructure.Persistence
 
             base.OnModelCreating(modelBuilder);
         }
-
-        // A save with audit events needs a transaction; the throttled LastUsedAt write doesn't.
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             if (_stagedAudit.Count == 0)

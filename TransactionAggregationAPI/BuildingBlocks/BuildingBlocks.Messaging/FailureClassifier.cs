@@ -20,7 +20,6 @@ namespace BuildingBlocks.Messaging
     public sealed class PermanentDeliveryException(string message, Exception? innerException = null)
         : Exception(message, innerException);
 
-    // Transient failures retry with backoff; permanent ones dead-letter at once.
     public static class FailureClassifier
     {
         private static readonly string[] PermanentSqlStateClasses = ["22", "23"];
@@ -73,7 +72,6 @@ namespace BuildingBlocks.Messaging
                 : $"{innermost.GetType().Name}: {innermost.Message}";
         }
 
-        // 4xx is permanent, except timeouts and rate limiting.
         private static bool IsPermanentHttpStatus(HttpStatusCode status) =>
             (int)status is >= 400 and < 500
             && status is not HttpStatusCode.RequestTimeout and not HttpStatusCode.TooManyRequests;
@@ -89,7 +87,6 @@ namespace BuildingBlocks.Messaging
             return null;
         }
 
-        // Integrity violations are permanent, except unique: a lost race, and the retry records a duplicate.
         private static bool IsPermanentSqlState(string sqlState) =>
             sqlState != PostgresErrorCodes.UniqueViolation
             && PermanentSqlStateClasses.Any(sqlClass => sqlState.StartsWith(sqlClass, StringComparison.Ordinal));

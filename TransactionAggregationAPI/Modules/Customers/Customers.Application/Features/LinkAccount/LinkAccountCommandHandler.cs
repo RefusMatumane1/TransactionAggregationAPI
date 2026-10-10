@@ -27,8 +27,6 @@ namespace Modules.Customers.Application.Features.LinkAccount
             if (customer is null)
                 return Result.Failure<LinkAccountResult>(CustomerRules.NotFound(request.CustomerId));
 
-            // Transactions carry the bank's code exactly as registered; a link spelled any other way
-            // would silently match nothing.
             var institution = await banks.FindBankCodeAsync(request.Institution, cancellationToken);
             if (institution is null)
                 return Result.Failure<LinkAccountResult>(Error.Validation($"institution '{request.Institution}' is not a registered bank."));
@@ -45,7 +43,7 @@ namespace Modules.Customers.Application.Features.LinkAccount
             }
             catch (DbUpdateException)
             {
-                // A concurrent request linked the same account first (primary key); the outcome is the same.
+            
                 context.DiscardPendingChanges();
                 var current = await FindAsync(request.CustomerId, cancellationToken);
                 if (current is null || !current.Accounts.Any(a => a.Institution == institution && a.ExternalAccountId == request.ExternalAccountId))

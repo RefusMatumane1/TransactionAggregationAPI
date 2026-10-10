@@ -5,7 +5,6 @@ using System.Linq.Expressions;
 
 namespace Modules.Transactions.Application.Common.Pagination
 {
-    // Only orders backed by an index keyed (sort column, Id), so deep pages stay range scans.
     public static class TransactionSorts
     {
         public const string Date = "date";

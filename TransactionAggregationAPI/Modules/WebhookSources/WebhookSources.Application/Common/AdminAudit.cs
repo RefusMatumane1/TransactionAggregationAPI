@@ -4,7 +4,6 @@ using System.Diagnostics;
 
 namespace Modules.WebhookSources.Application.Common
 {
-    // Staged on the context so it commits with the change it describes.
     internal static class AdminAudit
     {
         public static AuditEventRecord Of(string eventType, WebhookSource source, Guid actor, string detail) =>

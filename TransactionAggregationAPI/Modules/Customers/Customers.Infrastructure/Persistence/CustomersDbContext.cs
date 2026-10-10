@@ -8,8 +8,6 @@ namespace Modules.Customers.Infrastructure.Persistence
 {
     public class CustomersDbContext : AppDbContextBase, ICustomersDbContext
     {
-        // Not "customers": an earlier migration (Transactions' RemoveCustomerOwnership) drops a schema of
-        // that name with CASCADE, so sharing the name would make these tables depend on migration order.
         public const string Schema = "customerdirectory";
 
         private readonly IAuditTrail _auditTrail;
@@ -40,7 +38,6 @@ namespace Modules.Customers.Infrastructure.Persistence
             base.OnModelCreating(modelBuilder);
         }
 
-        // Every change here is administrative and audited: the change and its audit row commit together.
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             if (_stagedAudit.Count == 0)

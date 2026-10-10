@@ -1,7 +1,5 @@
 namespace Modules.Transactions.Contracts.IntegrationEvents
 {
-    // Self-contained; published at least once, so consumers deduplicate on EventId or TransactionId.
-    // Additive fields keep version 1.
     public sealed record TransactionRecorded(
         Guid EventId,
         Guid TransactionId,

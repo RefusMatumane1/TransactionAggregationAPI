@@ -45,7 +45,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
             base.OnModelCreating(modelBuilder);
         }
 
-        // Ledger, inbox/outbox and audit rows commit in one transaction on the shared connection.
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var audit = _stagedAudit.ToList();

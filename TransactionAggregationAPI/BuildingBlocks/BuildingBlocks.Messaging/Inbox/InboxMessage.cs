@@ -2,7 +2,6 @@ using BuildingBlocks.Messaging.ValueObjects;
 
 namespace BuildingBlocks.Messaging.Inbox
 {
-    // Attempts counts every claim, crashes included, so a message that keeps killing its worker still dead-letters.
     public sealed class InboxMessage
     {
         public const int MaxCorrelationIdLength = 64;
@@ -59,7 +58,6 @@ namespace BuildingBlocks.Messaging.Inbox
             Attempts++;
         }
 
-        // Returns an unworked claim (shutdown) without spending an attempt.
         public void ReleaseClaim()
         {
             if (Status != InboxMessageStatus.Processing)
@@ -101,7 +99,6 @@ namespace BuildingBlocks.Messaging.Inbox
             Status = InboxMessageStatus.DeadLettered;
         }
 
-        // A redelivered dead letter gets a fresh retry budget.
         public bool RequeueIfDeadLettered()
         {
             if (Status != InboxMessageStatus.DeadLettered)

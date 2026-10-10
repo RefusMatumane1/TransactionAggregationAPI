@@ -1,6 +1,5 @@
 namespace BuildingBlocks.Messaging.Publishing
 {
-    // At least once: consumers deduplicate on MessageId.
     public interface IIntegrationEventPublisher
     {
         Task PublishAsync(IntegrationEventEnvelope envelope, CancellationToken cancellationToken);

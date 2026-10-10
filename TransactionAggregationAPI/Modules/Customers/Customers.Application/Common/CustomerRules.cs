@@ -23,8 +23,6 @@ namespace Modules.Customers.Application.Common
             rule.Must(Customer.IsValidExternalAccountId)
                 .WithMessage($"externalAccountId must be 1-{Customer.MaxExternalAccountIdLength} characters, without surrounding spaces.");
 
-        // A staff member sees a customer only through accounts at the banks they are assigned; one
-        // with none of those is reported exactly like a missing customer (no existence leak).
         public static bool CanSee(this InstitutionAccess access, Customer customer) =>
             access.AllInstitutions || customer.Accounts.Any(a => access.Includes(a.Institution));
 

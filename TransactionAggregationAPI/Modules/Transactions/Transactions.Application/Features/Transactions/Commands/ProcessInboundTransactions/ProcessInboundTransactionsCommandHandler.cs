@@ -22,8 +22,6 @@ using System.Text.Json;
 
 namespace Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions
 {
-    // The unique key (institution, account, bank transaction id) over booked rows is the guarantee;
-    // the existence check only spares the database a predictable conflict.
     internal sealed class ProcessInboundTransactionsCommandHandler(
         ITransactionsDbContext context,
         IMessagingDbContext messaging,

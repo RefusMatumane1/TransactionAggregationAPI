@@ -27,7 +27,6 @@ namespace BuildingBlocks.Messaging.Outbox
         public static OutboxMessage Create(string type, string payload, int schemaVersion = 1) =>
             Create(type, _ => payload, schemaVersion);
 
-        // For payloads that carry their own message id (deduplicated by it).
         public static OutboxMessage Create(string type, Func<Guid, string> payloadFor, int schemaVersion = 1)
         {
             var id = OutboxMessageId.Create();

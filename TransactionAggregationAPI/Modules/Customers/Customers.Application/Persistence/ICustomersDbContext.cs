@@ -10,7 +10,6 @@ namespace Modules.Customers.Application.Persistence
 
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 
-        // Staged events are written inside the next SaveChangesAsync's database transaction.
         void StageAudit(IEnumerable<AuditEventRecord> events);
 
         void DiscardPendingChanges();

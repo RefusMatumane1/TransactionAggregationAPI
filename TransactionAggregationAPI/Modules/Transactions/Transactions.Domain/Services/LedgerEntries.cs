@@ -6,7 +6,6 @@ namespace Modules.Transactions.Domain.Services
 {
     public static class LedgerEntries
     {
-        // Booked rows are the ledger; legacy Pending/Expired rows are kept but never read.
         public static readonly Expression<Func<Transaction, bool>> IsEntry =
             t => t.Status == TransactionStatus.Booked;
     }

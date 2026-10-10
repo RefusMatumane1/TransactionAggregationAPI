@@ -12,9 +12,6 @@ using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Presentation.Endpoints.Customers
 {
-    // One customer's money across every bank they hold accounts at: the same list and aggregate
-    // queries as /transactions, narrowed to the customer's linked accounts. The links are resolved
-    // per request, so linking or unlinking an account takes effect on the next read.
     internal static class CustomerTransactions
     {
         public static IEndpointRouteBuilder MapCustomerTransactions(this IEndpointRouteBuilder group)
@@ -117,9 +114,6 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
                 .ToOk(PeriodComparisonResponse.From);
         }
 
-        // The customer's linked accounts at banks the caller may read. Null (reported as 404, like a
-        // missing customer) when the customer doesn't exist, or when a staff member can see none of
-        // its accounts: the existence of other banks' customers is not disclosed.
         internal static async Task<IReadOnlyList<AccountKey>?> VisibleAccountsAsync(
             ICustomerAccounts customers, Guid customerId, InstitutionAccess access, CancellationToken cancellationToken)
         {

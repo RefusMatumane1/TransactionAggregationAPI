@@ -12,7 +12,6 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
     internal sealed class GetTransactionQueryHandler(ITransactionsDbContext context)
         : IQueryHandler<GetTransactionQuery, TransactionDto>
     {
-        // Outside the caller's institutions reads as not found, so ids can't be probed.
         public async Task<Result<TransactionDto>> Handle(GetTransactionQuery request, CancellationToken cancellationToken)
         {
             var transactionId = TransactionId.CreateFrom(request.TransactionId);

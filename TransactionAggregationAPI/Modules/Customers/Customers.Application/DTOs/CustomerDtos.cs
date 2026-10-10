@@ -8,7 +8,7 @@ namespace Modules.Customers.Application.DTOs
 
     public sealed record CustomerDto(Guid Id, string Reference, string Name, DateTime CreatedAt, IReadOnlyList<LinkedAccountDto> Accounts)
     {
-        // Only the accounts at banks the caller may read are listed.
+   
         internal static CustomerDto From(Customer customer, InstitutionAccess access) => new(
             customer.Id.Value,
             customer.Reference,

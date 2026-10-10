@@ -12,8 +12,6 @@ namespace Modules.WebhookSources.Domain
         private WebhookSource() { }
 
         public WebhookSourceId Id { get; private set; } = null!;
-
-        // The bank's identity everywhere: inbox/audit SourceName, Kafka `source` header, transaction institution. Immutable.
         public string Name { get; private set; } = null!;
 
         public string DisplayName { get; private set; } = null!;

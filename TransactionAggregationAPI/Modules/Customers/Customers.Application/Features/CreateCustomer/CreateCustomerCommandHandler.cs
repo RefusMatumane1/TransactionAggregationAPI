@@ -33,7 +33,6 @@ namespace Modules.Customers.Application.Features.CreateCustomer
             }
             catch (DbUpdateException)
             {
-                // Lost a race with a concurrent create: the unique reference index decided.
                 context.DiscardPendingChanges();
                 if (!await ReferenceTakenAsync(request.Reference, cancellationToken))
                     throw;

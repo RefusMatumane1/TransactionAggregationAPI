@@ -4,16 +4,14 @@ using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Infrastructure.Persistence
 {
-    // Rebuilds the touched account-days (entries recorded since the checkpoint, minus the overlap for late commits)
-    // in full from the ledger and moves the checkpoint, so a re-run or overlapping window is harmless.
+
     internal sealed class PostgresDailyTotalsRefresher(TransactionsDbContext context, TimeProvider time) : IDailyTotalsRefresher
     {
-        // pg_try_advisory_xact_lock key: one refresher across all replicas.
+
         internal const long LockKey = 0x5441_4747_5245_4731; // "TAGGREG1"
 
         private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(10);
 
-        // Before any ledger row: the first refresh rebuilds everything.
         private static readonly DateTime Beginning = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
         public async Task<DailyTotalsRefresh?> RefreshAsync(TimeSpan overlap, CancellationToken cancellationToken)

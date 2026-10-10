@@ -5,10 +5,6 @@ using System.Text.RegularExpressions;
 
 namespace Modules.Customers.Domain
 {
-    // The person whose money it is. A customer holds accounts at several banks; linking an account
-    // (bank code + the bank's account id, exactly as transactions carry them) is how the platform
-    // aggregates one person's transactions across banks. Transactions themselves never name the
-    // customer: the ledger is insert-only and links change, so ownership is resolved at read time.
     public sealed class Customer : BaseEntity
     {
         public const int MaxReferenceLength = 50;
@@ -16,7 +12,6 @@ namespace Modules.Customers.Domain
         public const int MaxInstitutionLength = 50;
         public const int MaxExternalAccountIdLength = 200;
 
-        // Bounds the per-request account filter a customer view expands into.
         public const int MaxLinkedAccounts = 50;
 
         private static readonly Regex CodePattern = new("^[A-Za-z0-9][A-Za-z0-9_-]*$", RegexOptions.Compiled);
@@ -68,7 +63,6 @@ namespace Modules.Customers.Domain
             UpdatedAt = DateTime.UtcNow;
         }
 
-        // Returns false when the account is already linked: linking is idempotent.
         public bool Link(string institution, string externalAccountId, DateTime now)
         {
             if (!IsValidInstitution(institution))
@@ -98,14 +92,12 @@ namespace Modules.Customers.Domain
             return true;
         }
 
-        // Bank codes compare case-insensitively (as everywhere else); account ids exactly, as banks send them.
         private LinkedAccount? FindAccount(string institution, string externalAccountId) =>
             _accounts.FirstOrDefault(a =>
                 string.Equals(a.Institution, institution, StringComparison.OrdinalIgnoreCase)
                 && a.ExternalAccountId == externalAccountId);
     }
 
-    // One bank account the customer has linked: the same (bank, account id) pair every transaction carries.
     public sealed class LinkedAccount
     {
         private LinkedAccount() { }

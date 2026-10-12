@@ -872,8 +872,8 @@ Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 
 | Scope | Limit | Notes |
 |---|---|---|
-| Per endpoint group | 60 req / min per client | `/transactions`, `/admin/...` |
-| Global (burst ceiling) | 100 req / min per client | All routes combined |
+| Per endpoint group | 150 req / min per client | `/transactions`, `/admin/...` |
+| Global (burst ceiling) | 200 req / min per client | All routes combined |
 
 Returns `HTTP 429` with a `Retry-After` header when exceeded.
 Client identity: authenticated username → remote IP → `anonymous`.
@@ -1076,7 +1076,7 @@ regardless of the token, the API most likely can't validate against Keycloak —
 
 ### Rate limit 429 on every request
 
-Limits: 60 req/min per endpoint group, 100 req/min global.
+Limits: 150 req/min per endpoint group, 200 req/min global.
 To raise temporarily for testing:
 
 - Global → `Program.cs` `AddOptions<RateLimiterOptions>` block: `PermitLimit = 3000`

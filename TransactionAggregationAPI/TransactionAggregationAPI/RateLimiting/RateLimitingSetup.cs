@@ -9,8 +9,8 @@ namespace TransactionAggregationAPI.RateLimiting
 {
     internal static class RateLimitingSetup
     {
-        private static readonly RedisRateLimiterOptions GlobalLimit = new() { PermitLimit = 100, Window = TimeSpan.FromMinutes(1) };
-        private static readonly RedisRateLimiterOptions ApiGroupLimit = new() { PermitLimit = 60, Window = TimeSpan.FromMinutes(1) };
+        private static readonly RedisRateLimiterOptions GlobalLimit = new() { PermitLimit = 200, Window = TimeSpan.FromMinutes(1) };
+        private static readonly RedisRateLimiterOptions ApiGroupLimit = new() { PermitLimit = 150, Window = TimeSpan.FromMinutes(1) };
 
         public static IServiceCollection AddRedisRateLimiting(this IServiceCollection services)
         {

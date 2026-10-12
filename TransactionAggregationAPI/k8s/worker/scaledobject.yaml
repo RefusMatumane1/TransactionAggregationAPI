@@ -24,7 +24,7 @@ spec:
   scaleTargetRef:
     name: transaction-worker
   minReplicaCount: 2
-  maxReplicaCount: 30
+  maxReplicaCount: 6
   pollingInterval: 15
   cooldownPeriod: 300
   fallback:

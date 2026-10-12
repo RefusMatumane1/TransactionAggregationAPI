@@ -53,7 +53,6 @@ namespace TransactionAggregationAPI.RateLimiting
             }
         }
 
-        // Answering "not acquired" here forces the async path: one counted increment, no thread blocked on network I/O.
         protected override RateLimitLease AttemptAcquireCore(int permitCount) => DeferredLease.Instance;
 
         private RateLimitLease LeaseFor(RedisResult result)

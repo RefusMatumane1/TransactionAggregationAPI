@@ -14,8 +14,9 @@ namespace Modules.Transactions.Infrastructure.Persistence
 
         private static readonly DateTime Beginning = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-        public async Task<DailyTotalsRefresh?> RefreshAsync(TimeSpan overlap, CancellationToken cancellationToken)
+        public async Task<DailyTotalsRefresh?> RefreshAsync(TimeSpan overlap, int maxRows, CancellationToken cancellationToken)
         {
+            ArgumentOutOfRangeException.ThrowIfLessThan(maxRows, 1);
             context.Database.SetCommandTimeout(CommandTimeout);
             var strategy = context.Database.CreateExecutionStrategy();
 
@@ -32,14 +33,39 @@ namespace Modules.Transactions.Infrastructure.Persistence
                     .Where(c => c.Id == AggregationCheckpoint.SingletonId)
                     .Select(c => (DateTime?)c.Watermark)
                     .FirstOrDefaultAsync(ct);
-                var since = watermark is { } mark ? mark - overlap : Beginning;
+                var mark = watermark ?? Beginning;
+                var since = mark - overlap;
 
-                var recomputed = await RecomputeTouchedAccountDaysAsync(since, ct);
-                await SaveCheckpointAsync(startedAt, ct);
+                // A full batch stops at its last entry's timestamp and the checkpoint stops there too, so a
+                // backlog is worked off in bounded transactions instead of one that can outrun the timeout.
+                var cutoff = await FindBatchCutoffAsync(mark, maxRows, ct);
+                var until = cutoff ?? startedAt;
+
+                var recomputed = await RecomputeTouchedAccountDaysAsync(since, until, ct);
+                await SaveCheckpointAsync(until, ct);
 
                 await transaction.CommitAsync(ct);
-                return new DailyTotalsRefresh(recomputed, startedAt);
+                return new DailyTotalsRefresh(recomputed, until, HasMore: cutoff is not null);
             }, cancellationToken);
+        }
+
+        // The recorded-at of the maxRows-th booked entry after the checkpoint; null when fewer are waiting.
+        private async Task<DateTime?> FindBatchCutoffAsync(DateTime mark, int maxRows, CancellationToken cancellationToken)
+        {
+            if (maxRows == int.MaxValue)
+                return null;
+
+            var booked = (int)TransactionStatus.Booked;
+            var cutoff = await context.Database
+                .SqlQuery<DateTime>($"""
+                    SELECT "CreatedAt" AS "Value"
+                    FROM transactions."Transactions"
+                    WHERE "Status" = {booked} AND "CreatedAt" > {mark}
+                    ORDER BY "CreatedAt"
+                    OFFSET {maxRows - 1} LIMIT 1
+                    """)
+                .ToListAsync(cancellationToken);
+            return cutoff.Count == 0 ? null : cutoff[0];
         }
 
         private async Task<bool> TryLockAsync(CancellationToken cancellationToken)
@@ -50,7 +76,7 @@ namespace Modules.Transactions.Infrastructure.Persistence
             return locked;
         }
 
-        private async Task<int> RecomputeTouchedAccountDaysAsync(DateTime since, CancellationToken cancellationToken)
+        private async Task<int> RecomputeTouchedAccountDaysAsync(DateTime since, DateTime until, CancellationToken cancellationToken)
         {
             var booked = (int)TransactionStatus.Booked;
             var offset = (int)SouthAfricanCalendar.UtcOffsetHours;
@@ -60,7 +86,7 @@ namespace Modules.Transactions.Infrastructure.Persistence
                 SELECT DISTINCT "SourceName", "ExternalAccountId",
                        (("Date" AT TIME ZONE 'UTC') + make_interval(hours => {offset}))::date AS "Day"
                 FROM transactions."Transactions"
-                WHERE "Status" = {booked} AND "CreatedAt" > {since};
+                WHERE "Status" = {booked} AND "CreatedAt" > {since} AND "CreatedAt" <= {until};
                 """, cancellationToken);
 
             // CREATE TABLE AS reports no row count, so the account-days are counted here.

@@ -90,6 +90,31 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         }
 
         [Fact]
+        public async Task ABacklogLargerThanTheCap_IsWorkedOffInBatches_UntilNothingRemains()
+        {
+            var db = await fixture.CreateIsolatedDatabaseAsync();
+            var start = DateTime.UtcNow.AddHours(-1);
+            await RecordAsync(db,
+                Entry(-10m, Utc(6, 1, 9), recordedAt: start.AddMinutes(1)),
+                Entry(-20m, Utc(6, 2, 9), recordedAt: start.AddMinutes(2)),
+                Entry(-30m, Utc(6, 3, 9), recordedAt: start.AddMinutes(3)),
+                Entry(-40m, Utc(6, 4, 9), recordedAt: start.AddMinutes(4)),
+                Entry(-50m, Utc(6, 5, 9), recordedAt: start.AddMinutes(5)));
+
+            var first = await fixture.RefreshDailyTotalsAsync(db, maxRows: 2);
+            var afterFirst = await TotalsAsync(db);
+            var second = await fixture.RefreshDailyTotalsAsync(db, maxRows: 2);
+            var third = await fixture.RefreshDailyTotalsAsync(db, maxRows: 2);
+
+            first!.HasMore.Should().BeTrue();
+            afterFirst.Should().HaveCount(2, "a capped refresh stops at the cap, not at the end of the ledger");
+            first.AsOf.Should().BeCloseTo(start.AddMinutes(2), TimeSpan.FromMilliseconds(1));
+            second!.HasMore.Should().BeTrue();
+            third!.HasMore.Should().BeFalse();
+            (await TotalsAsync(db)).Select(d => d.Expenses).Should().Equal(10m, 20m, 30m, 40m, 50m);
+        }
+
+        [Fact]
         public async Task WhileAnotherReplicaRefreshes_ARefreshSkips()
         {
             var db = await fixture.CreateIsolatedDatabaseAsync();

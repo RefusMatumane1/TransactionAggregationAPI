@@ -48,7 +48,8 @@ namespace TransactionAggregation.Worker.BackgroundServices
             var refresher = scope.ServiceProvider.GetRequiredService<IDailyTotalsRefresher>();
 
             var stopwatch = Stopwatch.StartNew();
-            var refresh = await refresher.RefreshAsync(TimeSpan.FromMinutes(Math.Max(0, _options.OverlapMinutes)), cancellationToken);
+            var refresh = await refresher.RefreshAsync(
+                TimeSpan.FromMinutes(Math.Max(1, _options.OverlapMinutes)), Math.Max(1, _options.MaxRowsPerRun), cancellationToken);
             if (refresh is null)
             {
                 logger.LogInformation("Daily totals refresh skipped: another replica holds the refresh lock");
@@ -62,7 +63,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
                 refresh.AsOf, refresh.AccountDaysRecomputed, stopwatch.ElapsedMilliseconds);
 
             await InvalidateCachedAggregatesAsync(scope.ServiceProvider.GetRequiredService<ICacheService>(), cancellationToken);
-            return false;
+            return refresh.HasMore;
         }
 
         // Totals are committed; a cache failure only delays fresh totals until entries expire.

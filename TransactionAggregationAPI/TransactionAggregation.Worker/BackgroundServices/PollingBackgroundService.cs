@@ -18,7 +18,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
 
         protected virtual TimeSpan DelayAfterFailure(int consecutiveFailures) => Interval;
 
-        // True on a full batch: the next run starts at once.
         protected abstract Task<bool> RunOnceAsync(CancellationToken cancellationToken);
 
         protected sealed override async Task ExecuteAsync(CancellationToken stoppingToken)

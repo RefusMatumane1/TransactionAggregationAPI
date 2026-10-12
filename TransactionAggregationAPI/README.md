@@ -606,9 +606,11 @@ different currencies are never added together.
 
 Aggregates are never computed on the request path. The worker rebuilds a daily read model
 (`transactions."DailyTotals"`: one row per day, bank, account, category and currency) every
-`Aggregation:IntervalMinutes` (60 by default). Each rebuild recomputes, in full, every account-day
+`Aggregation:IntervalMinutes` (5 by default). Each rebuild recomputes, in full, every account-day
 that received entries since the last one, so a backdated or re-delivered transaction can't be
-double counted. Every aggregate response carries `asOf`, the time of the last rebuild; a
+double counted. A rebuild folds in at most `Aggregation:MaxRowsPerRun` (500,000 by default) new
+entries; a larger backlog is worked off in back-to-back rebuilds. Every aggregate response carries
+`asOf`, the time the totals are current to (the last rebuild, or the last entry of a capped one); a
 transaction recorded since then is in the transaction list but not yet in the totals.
 `/transactions/summary` reads the same model, so its `startDate`/`endDate` are rounded to the South
 African days they fall on (both inclusive).

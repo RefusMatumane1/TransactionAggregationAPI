@@ -89,11 +89,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 await _container.DisposeAsync();
         }
 
-        public async Task<DailyTotalsRefresh?> RefreshDailyTotalsAsync(string? connectionString = null, TimeSpan? overlap = null)
+        public async Task<DailyTotalsRefresh?> RefreshDailyTotalsAsync(string? connectionString = null, TimeSpan? overlap = null, int maxRows = int.MaxValue)
         {
             using var context = CreateContext(connectionString: connectionString);
             return await new PostgresDailyTotalsRefresher(context, TimeProvider.System)
-                .RefreshAsync(overlap ?? TimeSpan.FromMinutes(10), CancellationToken.None);
+                .RefreshAsync(overlap ?? TimeSpan.FromMinutes(10), maxRows, CancellationToken.None);
         }
 
         public TransactionsDbContext CreateContext(

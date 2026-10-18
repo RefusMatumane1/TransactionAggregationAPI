@@ -1,4 +1,6 @@
 using FluentValidation;
+using Microsoft.Extensions.Options;
+using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
@@ -10,13 +12,14 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
     {
         public const int MaxAmountScale = Money.MaxScale;
 
-        public const int MaxTransactionsPerDelivery = 500;
         public const int MaxExternalAccountIdLength = Transaction.MaxExternalAccountIdLength;
         public const int MaxIdempotencyKeyLength = 200;
         public const int MaxCategoryLength = 100;
 
-        public ReceiveBankTransactionsCommandValidator()
+        public ReceiveBankTransactionsCommandValidator(IOptions<IngestionOptions> options)
         {
+            var maxTransactions = options.Value.MaxTransactionsPerDelivery;
+
             RuleFor(x => x.SourceName).NotEmpty();
             RuleFor(x => x.SchemaVersion)
                 .Must(BankTransactionsMessage.SupportedSchemaVersions.Contains)
@@ -29,8 +32,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
                 .WithMessage(ControlCharacterMessage);
             RuleFor(x => x.Transactions).NotEmpty();
             RuleFor(x => x.Transactions)
-                .Must(t => t.Count <= MaxTransactionsPerDelivery)
-                .WithMessage($"A single webhook call may contain at most {MaxTransactionsPerDelivery} transactions — split larger deliveries into multiple calls.");
+                .Must(t => t.Count <= maxTransactions)
+                .WithMessage($"A single webhook call may contain at most {maxTransactions} transactions — split larger deliveries into multiple calls.");
 
             RuleForEach(x => x.Transactions).ChildRules(transaction =>
             {

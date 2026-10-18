@@ -25,5 +25,7 @@ namespace Modules.Audit.Contracts
         public const string CustomerCreated = "admin.customer_created";
         public const string CustomerAccountLinked = "admin.customer_account_linked";
         public const string CustomerAccountUnlinked = "admin.customer_account_unlinked";
+
+        public const string CustomerViewed = "access.customer_viewed";
     }
 }

@@ -7,6 +7,8 @@ namespace Modules.Audit.Contracts
 
         public const string Admin = "admin";
 
+        public const string Api = "api";
+
         public const string Unknown = "unknown";
     }
 

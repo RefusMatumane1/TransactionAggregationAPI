@@ -167,6 +167,46 @@ namespace TransactionAggregation.Tests.Integration
             unlink.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
 
+        private async Task<List<(string Detail, IReadOnlyDictionary<string, string> Metadata)>> ViewsOfAsync(Guid customer)
+        {
+            using var scope = factory.Services.CreateScope();
+            var audit = scope.ServiceProvider.GetRequiredService<Modules.Audit.Infrastructure.Persistence.AuditDbContext>();
+            var id = customer.ToString();
+            return (await audit.AuditEvents.AsNoTracking()
+                    .Where(e => e.EventType == Modules.Audit.Contracts.AuditEventTypes.CustomerViewed)
+                    .ToListAsync())
+                .Where(e => e.Metadata["customerId"] == id)
+                .Select(e => (e.Detail!, (IReadOnlyDictionary<string, string>)e.Metadata))
+                .ToList();
+        }
+
+        [Fact]
+        public async Task ViewingACustomersData_IsRecordedWithTheViewerAndTheirScope()
+        {
+            var seeded = await SeedAsync();
+            using var staff = factory.CreateClient().SignedInAsStaffFor(TestInstitutions.FNB);
+
+            (await staff.GetAsync($"/api/v1/customers/{seeded.CrossBank}")).StatusCode.Should().Be(HttpStatusCode.OK);
+            (await staff.GetAsync($"/api/v1/customers/{seeded.CrossBank}/transactions")).StatusCode.Should().Be(HttpStatusCode.OK);
+            (await staff.GetAsync($"/api/v1/customers/{seeded.CrossBank}/aggregates/cash-flow")).StatusCode.Should().Be(HttpStatusCode.OK);
+
+            var views = await ViewsOfAsync(seeded.CrossBank);
+            views.Select(v => v.Metadata["view"]).Should().BeEquivalentTo("GetCustomer", "ListCustomerTransactions", "GetCustomerCashFlow");
+            views.Should().OnlyContain(v => v.Metadata["institutionScope"] == TestInstitutions.FNB);
+        }
+
+        [Fact]
+        public async Task ACustomerTheCallerCannotSee_LeavesNoViewRecord()
+        {
+            var seeded = await SeedAsync();
+            using var staff = factory.CreateClient().SignedInAsStaffFor(TestInstitutions.FNB);
+
+            (await staff.GetAsync($"/api/v1/customers/{seeded.CapitecOnly}")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+            (await staff.GetAsync($"/api/v1/customers/{seeded.CapitecOnly}/transactions")).StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+            (await ViewsOfAsync(seeded.CapitecOnly)).Should().BeEmpty("nothing was disclosed, so there is nothing to record");
+        }
+
         [Fact]
         public async Task ADuplicateReference_IsAConflict_AndAMalformedOneIsAValidationProblem()
         {

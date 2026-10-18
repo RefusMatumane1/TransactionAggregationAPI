@@ -22,6 +22,7 @@ namespace Modules.Customers.Presentation.Endpoints
                  .ProducesValidationProblem();
 
             group.MapGet("/{customerId:guid}", GetAsync)
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithName("GetCustomer")
                  .WithSummary("A customer and the linked bank accounts the caller may read")
                  .Produces<CustomerResponse>(StatusCodes.Status200OK)

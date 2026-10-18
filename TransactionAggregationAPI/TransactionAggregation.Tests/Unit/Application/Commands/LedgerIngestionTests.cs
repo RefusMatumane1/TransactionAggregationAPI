@@ -1,3 +1,5 @@
+using Modules.Transactions.Application.Common.Options;
+using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -171,7 +173,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
         {
             var command = new ReceiveBankTransactionsCommand("source-1", "ext-acc-1", null, [Dto("txn-1", status)]);
 
-            new ReceiveBankTransactionsCommandValidator().Validate(command).IsValid.Should().Be(valid);
+            new ReceiveBankTransactionsCommandValidator(Options.Create(new IngestionOptions())).Validate(command).IsValid.Should().Be(valid);
         }
     }
 }

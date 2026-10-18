@@ -16,7 +16,7 @@ namespace TransactionAggregation.Tests.Unit.Domain
 {
     public class IngressAndInvariantTests
     {
-        private static readonly ReceiveBankTransactionsCommandValidator Validator = new();
+        private static readonly ReceiveBankTransactionsCommandValidator Validator = new(Options.Create(new IngestionOptions()));
 
         private static ReceiveBankTransactionsCommand Delivery(
             string id = "t-1", decimal amount = -10m, string description = "Card purchase", string externalAccountId = "ext-1",

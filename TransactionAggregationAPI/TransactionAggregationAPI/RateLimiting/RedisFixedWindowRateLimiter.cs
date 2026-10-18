@@ -19,6 +19,17 @@ namespace TransactionAggregationAPI.RateLimiting
         private readonly string _key = $"ratelimit:{scope}:{partitionKey}";
         private long _lastUsedTimestamp = (timeProvider ?? TimeProvider.System).GetTimestamp();
 
+        // While Redis is unreachable each instance enforces the same limit on its own, so an outage
+        // degrades to per-instance limiting instead of no limiting at all.
+        private readonly Lazy<FixedWindowRateLimiter> _localFallback = new(() => new FixedWindowRateLimiter(
+            new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = options.PermitLimit,
+                Window = options.Window,
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
         private static readonly LuaScript AtomicIncrScript = LuaScript.Prepare("""
             local count = redis.call('INCR', @key)
             if count == 1 then
@@ -77,11 +88,18 @@ namespace TransactionAggregationAPI.RateLimiting
             {
                 Interlocked.Exchange(ref _lastOutageWarningTimestamp, now);
                 logger.LogWarning(ex,
-                    "Rate limiter ({Scope}) failing open: Redis is unreachable, so requests are not being rate limited",
+                    "Rate limiter ({Scope}) degraded: Redis is unreachable, so limits are enforced per instance until it returns",
                     scope);
             }
 
-            return SuccessfulLease.Instance;
+            return _localFallback.Value.AttemptAcquire();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing && _localFallback.IsValueCreated)
+                _localFallback.Value.Dispose();
+            base.Dispose(disposing);
         }
     }
 

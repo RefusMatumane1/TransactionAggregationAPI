@@ -16,6 +16,7 @@
 #   ./deploy-k8s.sh --ui             Also deploy the Blazor WASM UI
 #   ./deploy-k8s.sh --dev-tools      Also deploy pgAdmin + Redis Commander + Kafka UI
 #   ./deploy-k8s.sh --monitoring     Also deploy Prometheus + Grafana
+#   ./deploy-k8s.sh --vault          Read API and worker secrets from Vault (k8s/vault/README.md)
 #   ./deploy-k8s.sh --skip-hosts     Skip /etc/hosts update
 #   ./deploy-k8s.sh --teardown       Delete the namespace (removes all data)
 #   ./deploy-k8s.sh --help
@@ -210,6 +211,21 @@ log_ok "API and worker ConfigMaps applied"
 if $OPT_UI; then
   kubectl apply -f "$K8S/ui/configmap.yaml"
   log_ok "UI  ConfigMap applied  (API_UPSTREAM → http://transaction-api)"
+fi
+
+# The Seq, Grafana and Prometheus ingresses reference this Traefik middleware; without it Traefik
+# answers 404 for those hosts. k3s ships Traefik and its CRDs.
+kubectl apply -f "$K8S/monitoring/basic-auth-secret.yaml"
+if kubectl get crd middlewares.traefik.io >/dev/null 2>&1; then
+  kubectl apply -f "$K8S/monitoring/basic-auth-middleware.yaml"
+  log_ok "Ingress basic-auth applied  (Seq, Grafana, Prometheus)"
+else
+  log_warn "Traefik Middleware CRD not found — the Seq/Grafana/Prometheus ingresses will not route."
+  log_warn "Use k3s's bundled Traefik, or remove the router.middlewares annotation from those ingresses."
+fi
+# base64 of the shipped htpasswd line (password CHANGE_ME_BEFORE_DEPLOY).
+if grep -q "YWRtaW46JGFwcjEkNXdxNi4xTS4k" "$K8S/monitoring/basic-auth-secret.yaml" 2>/dev/null; then
+  log_warn "k8s/monitoring/basic-auth-secret.yaml still has the shipped password — fine for a local cluster only."
 fi
 
 # ── Step 3: Data stores ──────────────────────────────────────────────────────
@@ -466,8 +482,8 @@ if $OPT_DEV_TOOLS; then
   echo -e "  ${GREEN}→${NC}  Kafka UI         http://kafka-ui.transaction.local"
 fi
 if $OPT_MONITORING; then
-  echo -e "  ${GREEN}→${NC}  Prometheus       http://prometheus.transaction.local"
-  echo -e "  ${GREEN}→${NC}  Grafana          http://grafana.transaction.local  (admin/admin)"
+  echo -e "  ${GREEN}→${NC}  Prometheus       http://prometheus.transaction.local  (ingress basic auth: admin / see basic-auth-secret.yaml)"
+  echo -e "  ${GREEN}→${NC}  Grafana          http://grafana.transaction.local  (ingress basic auth, then Grafana's own login)"
 fi
 
 echo ""

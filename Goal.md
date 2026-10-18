@@ -1,1103 +1,293 @@
-# Transaction Aggregation Platform — Engineering Goal
+# Transaction Aggregation Platform — Goal
 
-## 1\. Purpose
+This document states what the system is for, the guarantees it makes, and where each guarantee is
+implemented and tested. It describes the code as it is. Anything the system does **not** do is
+listed under [Non-goals and known limits](#8-non-goals-and-known-limits), not implied.
 
-Build a **production-grade Transaction Aggregation Platform** for a banking environment using **.NET 10**.
-
-The system receives financial transaction events from multiple external providers, normalizes and categorizes those transactions, persists them safely, and exposes a secure API for querying transaction and aggregation data.
-
-The system must be designed and implemented at a level that demonstrates **strong Senior/SE3 engineering judgment**, with architectural decisions approaching a **Principal Engineer quality bar**.
-
-This is not a CRUD demonstration.
-
-The goal is to demonstrate that the system can remain:
-
-- Correct under retries and duplicate delivery.
-- Secure under hostile input and unauthorized access attempts.
-- Resilient when dependencies fail.
-- Observable when something goes wrong.
-- Maintainable as the system evolves.
-- Operationally simple.
-- Horizontally scalable where appropriate.
-- Testable at every important boundary.
-- Safe to deploy repeatedly.
+Paths are relative to `TransactionAggregationAPI/` (the solution root) unless noted.
+Test paths are under `TransactionAggregation.Tests/`.
 
 ---
 
-# 2\. Primary Engineering Principle
+## 1. The brief
 
-> **Production-grade does not mean maximum complexity.**
+> *Build a system that aggregates customer financial transaction data from multiple mock data
+> sources and categorizes the transactions. It will need an extensive API for retrieving
+> aggregated information.*
 
-Every technology, abstraction, pattern, database structure, and infrastructure component must solve a real problem.
+How the system reads each phrase:
 
-Prefer:
+| Phrase | Meaning in this system |
+|---|---|
+| **Customer** | The person whose money it is. A customer holds bank accounts at several banks; an administrator links them. Customers are data, not users: nobody signs in as a customer. |
+| **Multiple mock data sources** | Four mock banks (FNB, Absa, Capitec, Standard Bank). Each is a *source* with its own API key and its own wire format, delivered by REST webhook or signed Kafka record. `TransactionAggregation.MockAggregator` produces their feeds (Development only). |
+| **Aggregates** | Totals by customer, bank, account, category and period, one ISO 4217 currency at a time, served from a read model the worker rebuilds every 5 minutes. |
+| **Categorizes** | Keyword rules in `TransactionAggregation.Hosting/categorization-rules.json`, applied once when a transaction is recorded. |
+| **Extensive API** | A versioned REST API under `/api/v1`: transactions (list, detail, search, filters, keyset paging), four aggregate views plus a summary, the same views per customer, and administration of banks and customers. |
 
-- Simple over clever.
-- Explicit over magical.
-- Boring over fragile.
-- Strong invariants over application assumptions.
-- Database-enforced correctness over timing assumptions.
-- Observable behavior over implicit behavior.
-- Automated verification over documentation claims.
+## 2. Purpose
 
-Do not introduce:
+A .NET 10 modular monolith that receives posted bank transactions, deduplicates, normalizes and
+categorizes them, records them in an **insert-only PostgreSQL ledger**, publishes each one as an
+integration event, and serves them through a secured REST API with aggregates.
 
-- Microservices without a demonstrated need.
-- CQRS without a meaningful read/write separation.
-- Saga without a distributed compensating workflow.
-- Redis without a meaningful caching/coordination requirement.
-- Partitioning without sufficient data volume or query justification.
-- Abstractions that merely wrap existing framework capabilities.
+The aim is not feature count. It is a small system whose correctness, security, resilience and
+operational behaviour can be shown with evidence: each guarantee below names the code that provides
+it and the test that checks it.
 
-When a simpler solution is sufficient, choose it and document why.
+Principles that decide trade-offs:
 
----
+- **The database enforces correctness.** Uniqueness, immutability, valid currency, valid category
+  and non-zero amounts are constraints, triggers and grants, not conventions.
+- **At-least-once delivery is assumed**; duplicates are normal and handled.
+- **Simple beats clever.** Every component below has a stated reason; optional ones are marked.
+- **Never authoritative outside PostgreSQL.** Redis caches and rate-limits; Kafka transports.
+- **Nothing in the ledger is edited or deleted.** A correction would be a new entry.
 
-# 3\. Target Architecture
+## 3. Architecture
 
-The system shall be a **Modular Monolith**.
-
-The architecture must provide strong module boundaries while retaining a single deployable application.
-
-The design should allow a module to be extracted into a separate service in the future if there is a genuine scaling, ownership, or deployment reason.
-
-The preferred architectural direction is:
+One deployable API, one background worker, four business modules, one PostgreSQL database.
 
 ```
-External Providers
-        |
-        | Transaction Events
-        v
-+------------------------+
-| Event Ingestion        |
-| Authentication         |
-| Validation             |
-| Idempotency / Inbox    |
-+-----------+------------+
-            |
-            v
-+------------------------+
-| Provider Adapters      |
-| Canonicalization       |
-+-----------+------------+
-            |
-            v
-+------------------------+
-| Transaction Domain     |
-| Categorization         |
-| Business Rules         |
-+-----------+------------+
-            |
-            v
-+------------------------+
-| PostgreSQL             |
-| Source of Truth        |
-+-----------+------------+
-            |
-            v
-+------------------------+
-| Outbox                 |
-| Integration Events     |
-+------------------------+
-            |
-            v
-     Future Consumers
-
-REST API
-   |
-   v
-Application Layer
-   |
-   v
-Domain
-
-Redis
-   |
-   +-- Cache / supporting infrastructure
-   |
-   +-- Never the source of truth for financial transactions
+Mock banks ── webhook (X-Api-Key) ──▶ API ──┐
+           └─ Kafka bank-transactions ─▶ Worker (consumer, signature check) ──┤
+                                                                               ▼
+                                                              messaging.InboxMessages
+                                                                               │ claim (SKIP LOCKED)
+                                                                               ▼
+                                              Worker inbox dispatcher: normalize → categorize → record
+                                                                               │  ONE database transaction
+                              ┌────────────────────────┬───────────────────────┴──────────┐
+                              ▼                        ▼                                  ▼
+                   transactions.Transactions   messaging.OutboxMessages           audit.AuditEvents
+                     (insert-only ledger)                │
+                              │                          ▼
+                              │              Worker outbox dispatcher ──▶ Kafka transaction-events
+                              ▼
+               Worker daily-totals refresh ──▶ transactions.DailyTotals ──▶ API aggregate reads
 ```
 
-This diagram represents the intended direction, not a requirement to implement every component without justification.
-
----
-
-# 4\. Core Business Capability
-
-The platform must support the complete transaction lifecycle:
-
-```
-Provider Event
-    ↓
-Authenticate
-    ↓
-Validate
-    ↓
-Deduplicate
-    ↓
-Normalize
-    ↓
-Categorize
-    ↓
-Persist
-    ↓
-Publish reliable integration event
-    ↓
-Expose through API
-    ↓
-Aggregate / Query
-```
-
-The system must correctly handle:
-
-- Multiple providers.
-- Different provider schemas.
-- Provider-specific identifiers.
-- Different currencies.
-- Provider timestamps.
-- Processing timestamps.
-- Duplicate events.
-- Concurrent delivery.
-- Delayed events.
-- Out-of-order events.
-- Malformed events.
-- Retry.
-- Provider failures.
-- Infrastructure failures.
-- Application restarts.
-
----
-
-# 5\. Financial Data Correctness
-
-Financial data must never be treated as ordinary CRU data. No Delete logic
-
-The system must enforce strong correctness guarantees around:
-
-- Money.
-- Currency.
-- Transaction identity.
-- Account ownership.
-- Transaction state.
-- Provider identifiers.
-- Event identity.
-- Duplicate processing.
-- Concurrent processing.
-
-Never use floating-point types for monetary values.
-
-Use exact decimal representation with explicit currency handling.
-
-Important invariants must be enforced through both:
-
-1. Application/domain logic.
-2. Database constraints where appropriate.
-
-The database must be treated as an important correctness boundary.
-
----
-
-# 6\. Event Processing Guarantee
-
-Assume event delivery is **at-least-once** unless a stronger guarantee is explicitly justified.
-
-Therefore duplicate delivery is expected, not exceptional.
-
-The architecture must guarantee that replaying the same event does not create duplicate financial transactions or duplicate business effects.
-
-Idempotency must be enforced using stable identifiers and persistence-level guarantees.
-
-The implementation must address the failure window:
-
-```
-Receive Event
-    ↓
-Process
-    ↓
-Commit Database
-    ↓
-Application crashes
-    ↓
-Broker never receives acknowledgement
-    ↓
-Event delivered again
-```
-
-The second delivery must not corrupt state or create a duplicate transaction.
-
-This scenario must be reproduced by an automated test.
-
----
-
-# 7\. Inbox and Outbox
-
-Use the **Inbox Pattern** when required to make event consumption idempotent and recoverable.
-
-Use the **Outbox Pattern** when required to guarantee reliable publication of events following a database transaction.
-
-Do not implement either pattern merely because it is considered an enterprise pattern.
-
-For each pattern, document:
-
-- The failure it solves.
-- The transaction boundary.
-- Duplicate behavior.
-- Retry behavior.
-- Cleanup/retention.
-- Concurrency behavior.
-- Operational implications.
-
----
-
-# 8\. Provider Isolation
-
-Provider-specific concerns must remain isolated from the core domain.
-
-A provider should be able to change:
-
-- Event format.
-- Field names.
-- External identifiers.
-- Transport details.
-- Authentication mechanism.
-- Provider-specific semantics.
-
-without requiring changes throughout the transaction domain.
-
-Use adapters or strategies where appropriate.
-
-The core domain must operate on a canonical transaction model.
-
----
-
-# 9\. Transaction Categorization
-
-Transaction categorization must be deterministic and independently testable.
-
-The categorization design must allow new rules/categories to be added without modifying unrelated business logic.
-
-Potential patterns include:
-
-- Strategy.
-- Specification.
-- Chain of Responsibility.
-
-Use whichever design is most appropriate.
-
-Do not introduce a pattern simply to demonstrate knowledge of design patterns.
-
----
-
-# 10\. API
-
-Expose a secure REST API for transaction retrieval and aggregation.
-
-The API must support appropriate:
-
-- Authentication.
-- Authorization.
-- Resource ownership checks.
-- Validation.
-- Filtering.
-- Sorting.
-- Pagination.
-- Aggregation.
-- Consistent error responses.
-- API documentation.
-- Versioning strategy.
-
-Do not expose persistence entities directly.
-
-Collection endpoints must be paginated.
-
-Pagination must be designed against actual query patterns and database indexes.
-
-Where large or frequently changing datasets make offset pagination problematic, evaluate keyset/cursor pagination.
-
----
-
-# 11\. Security Goal
-
-Treat the application as a banking system.
-
-Security is a fundamental correctness requirement.
-
-The system must provide:
-
-- Authentication.
-- Authorization.
-- Resource-level access control.
-- Least privilege.
-- Input validation.
-- Parameterized database access.
-- Secure configuration.
-- Secret externalization.
-- Safe error responses.
-- PII minimization.
-- Sensitive-data protection.
-- Rate limiting where appropriate.
-- Security headers where appropriate.
-- Dependency vulnerability management.
-- Container security.
-
-The following are absolute requirements:
-
-```
-No secrets in source.
-No SQL injection.
-No command injection.
-No PII/secrets in logs.
-No sensitive data in error responses.
-No stack traces exposed to API consumers.
-No IDOR/BOLA vulnerabilities.
-```
-
-Missing critical configuration must fail fast.
-
-Secrets must come from environment/secret-management infrastructure rather than source code.
-
----
-
-# 12\. Resilience Goal
-
-Every external dependency must have deliberate failure behavior.
-
-This includes:
-
-- PostgreSQL.
-- Redis.
-- Message broker.
-- External provider APIs.
-- Event publishing.
-- Event consumption.
-- Other network dependencies.
-
-For every integration point, explicitly determine:
-
-- Timeout.
-- Cancellation.
-- Retryability.
-- Maximum retries.
-- Backoff.
-- Jitter.
-- Circuit breaking where appropriate.
-- Permanent failure behavior.
-- Dead-letter behavior where applicable.
-- Logging.
-- Metrics.
-- Recovery.
-
-Transient failures must not be treated the same as permanent/poison failures.
-
-Never create infinite retry loops.
-
----
-
-# 13\. Database Goal
-
-Use **PostgreSQL** as the authoritative source of transaction data.
-
-The database design must consider:
-
-- Normalization.
-- Referential integrity.
-- Unique constraints.
-- Foreign keys.
-- Check constraints.
-- Nullability.
-- Exact monetary types.
-- Timezone-safe timestamps.
-- Appropriate schemas.
-- Indexes.
-- Composite indexes.
-- Partial indexes where justified.
-- Query plans.
-- Concurrency.
-- Transaction boundaries.
-- Retention.
-
-Every important index must correspond to an actual query shape.
-
-Do not create indexes indiscriminately.
-
-Evaluate partitioning based on realistic data volume and access patterns rather than implementing it prematurely.
-
----
-
-# 14\. Database Evolution
-
-Database schema changes must be versioned.
-
-Use proper EF Core/PostgreSQL migrations.
-
-Production must never rely on:
-
-```
-CREATE TABLE IF NOT EXISTS
-```
-
-as the migration strategy.
-
-Migration deployment must distinguish between:
-
-- Local development.
-- Automated tests.
-- Staging.
-- Production.
-
-Prefer safe expand/contract migrations for changes that require compatibility across application versions.
-
-Do not blindly execute destructive migrations during application startup in production.
-
----
-
-# 15\. Redis
-
-Redis may be used for supporting concerns such as:
-
-- Caching.
-- Rate limiting.
-- Frequently accessed reference data.
-- Other explicitly justified use cases.
-
-Redis must never become the authoritative source for financial transaction state.
-
-The system should remain correct when Redis is unavailable unless Redis is explicitly part of a carefully justified consistency mechanism.
-
-Cache behavior must define:
-
-- TTL.
-- Key structure.
-- Invalidation.
-- Failure behavior.
-- Serialization.
-- Memory considerations.
-
----
-
-# 16\. Observability
-
-Every important operation must be observable.
-
-Use structured logging and OpenTelemetry where appropriate.
-
-The system should provide:
-
-- Structured logs.
-- Correlation IDs.
-- Trace IDs.
-- Metrics.
-- Distributed traces.
-- Health checks.
-
-Important operations include:
-
-- Event ingestion.
-- Event validation.
-- Event deduplication.
-- Transaction processing.
-- Categorization.
-- Database operations.
-- External provider calls.
-- Event publishing.
-- API requests.
-- Failures.
-- Retries.
-- Dead-letter processing.
-
-Do not log unnecessary PII or sensitive financial information.
-
-There must be no important execution path that becomes completely invisible when it fails.
-
----
-
-# 17\. Health and Lifecycle
-
-Provide appropriate:
-
-```
-/liveness
-/readiness
-/health
-```
-
-Health semantics must be deliberate.
-
-Liveness should represent process health.
-
-Readiness should represent whether the application is capable of serving traffic.
-
-Optional dependencies must not unnecessarily make the application appear dead.
-
-The application must:
-
-- Start cleanly.
-- Validate critical configuration.
-- Wait for required dependencies appropriately.
-- Stop gracefully.
-- Drain work.
-- Release resources correctly.
-- Reuse connections appropriately.
-
----
-
-# 18\. Performance
-
-Performance must be measured rather than assumed.
-
-The system must avoid:
-
-- N+1 queries.
-- Full-table scans on hot paths.
-- Unbounded in-memory collections.
-- Per-request connection creation.
-- Loading unnecessarily large datasets.
-- Unbounded event processing.
-- Infinite retries.
-
-Evaluate:
-
-- Database query performance.
-- Index effectiveness.
-- API latency.
-- Event processing latency.
-- Throughput.
-- Connection pooling.
-- Batch processing.
-- Caching.
-- Concurrency.
-- Backpressure.
-
-Use realistic performance tests where appropriate.
-
-Potential tools include:
-
-- k6.
-- NBomber.
-- BenchmarkDotNet.
-
-Performance optimizations must be evidence-driven.
-
----
-
-# 19\. Testing Goal
-
-The system must be verified, not merely compiled.
-
-The test strategy must include:
-
-### Unit Tests
-
-For:
-
-- Domain rules.
-- Categorization.
-- Validation.
-- Result behavior.
-- Business invariants.
-
-### Integration Tests
-
-For:
-
-- PostgreSQL.
-- EF Core.
-- Database constraints.
-- Transactions.
-- Inbox.
-- Outbox.
-- Redis where applicable.
-- Messaging where applicable.
-- External provider adapters.
-
-Prefer real infrastructure through containers/Testcontainers where practical.
-
-### API Tests
-
-For:
-
-- Authentication.
-- Authorization.
-- BOLA/IDOR.
-- Validation.
-- Pagination.
-- Filtering.
-- Error responses.
-- Problem Details.
-
-### Concurrency Tests
-
-Test:
-
-- Concurrent duplicate events.
-- Concurrent updates.
-- Race conditions.
-- Database constraints.
-
-### Failure Tests
-
-Test:
-
-- Provider timeout.
-- Provider 429.
-- Provider 500.
-- Database unavailable.
-- Redis unavailable.
-- Broker unavailable.
-- Malformed event.
-- Poison message.
-- Application restart.
-- Crash after database commit.
-- Redelivery.
-
-### Security Tests
-
-Test:
-
-- Injection.
-- Unauthorized access.
-- Resource ownership.
-- Secret exposure.
-- Unsafe error responses.
-
-### Architecture Tests
-
-Verify module dependency boundaries.
-
----
-
-# 20\. Production Infrastructure
-
-Use:
-
-- .NET 10.
-- Docker.
-- .NET Aspire.
-- Docker Compose.
-- CI/CD.
-
-Local development should be simple.
-
-The local environment should provide only the infrastructure actually required.
-
-Containers must:
-
-- Use multi-stage builds.
-- Use minimal runtime images.
-- Pin base images appropriately.
-- Run as a non-root user.
-- Externalize configuration.
-- Never contain secrets.
-- Have appropriate healthchecks.
-- Shut down gracefully.
-
-Aspire should primarily improve local orchestration and developer experience rather than become an unnecessary runtime dependency.
-
----
-
-# 21\. CI/CD Goal
-
-Every change should pass automated verification before deployment.
-
-The pipeline should include, where applicable:
-
-```
-Build
-  ↓
-Formatting / Static Analysis
-  ↓
-Unit Tests
-  ↓
-Integration Tests
-  ↓
-Architecture Tests
-  ↓
-Security Scanning
-  ↓
-Dependency Scanning
-  ↓
-Container Build
-  ↓
-Container Scan
-  ↓
-SBOM
-  ↓
-Artifact Publication
-  ↓
-Deployment
-  ↓
-Smoke Tests
-```
-
-Production deployment must use reproducible artifacts.
-
-Configuration and secrets must be injected externally.
-
-Database migrations must have a controlled deployment strategy.
-
----
-
-# 22\. Security Verification
-
-Security claims must be backed by executable evidence.
-
-Use appropriate tools such as:
-
-- OWASP ZAP.
-- Trivy.
-- Dependency vulnerability scanning.
-- Secret scanning.
-- Static analysis.
-- SBOM generation.
-
-Do not simply state:
-
-> "The application is secure."
-
-Instead demonstrate:
-
-```
-Threat
-    ↓
-Control
-    ↓
-Implementation
-    ↓
-Automated Test / Scan
-    ↓
-Result
-```
-
----
-
-# 23\. Documentation Goal
-
-Documentation must explain **why**, not simply **what**.
-
-Provide:
-
-```
-/docs
-    architecture.md
-    decisions/
-    events/
-    api.md
-    database.md
-    security.md
-    resilience.md
-    operations.md
-    testing.md
-    deployment.md
-    requirements-traceability.md
-    failure-mode-matrix.md
-    production-readiness.md
-    assessment/
-```
-
-Documentation should contain:
-
-- Architecture diagrams.
-- Module boundaries.
-- Event flows.
-- Database design.
-- API examples.
-- Security model.
-- Failure modes.
-- Operational procedures.
-- Deployment process.
-- Architectural decisions.
-- Trade-offs.
-
-Known limitations must describe the **actual failure mode and consequence**, not generic statements such as:
-
-> "This could be improved in the future."
-
----
-
-# 24\. Architecture Decision Records
-
-Important decisions must have ADRs.
-
-At minimum evaluate:
-
-- Modular monolith vs microservices.
-- Event transport.
-- Inbox.
-- Outbox.
-- CQRS.
-- Redis.
-- PostgreSQL schema design.
-- Partitioning.
-- Pagination.
-- Migration strategy.
-- Saga.
-- Provider adapter strategy.
-- Authentication/authorization.
-- Observability.
-
-An ADR must contain:
-
-```
-Context
-Decision
-Alternatives
-Reasoning
-Trade-offs
-Consequences
-```
-
-If a technology is intentionally rejected, document why.
-
----
-
-# 25\. Failure-Mode Thinking
-
-For every architectural guarantee, identify the failure it creates or permits.
-
-Use:
-
-```
-Failure
-    ↓
-Detection
-    ↓
-Guard
-    ↓
-Recovery
-    ↓
-Consistency Result
-    ↓
-Observability
-    ↓
-Automated Test
-```
-
-At minimum evaluate:
-
-- Duplicate delivery.
-- Concurrent delivery.
-- Out-of-order delivery.
-- Delayed delivery.
-- Application crash.
-- Database failure.
-- Broker failure.
-- Provider failure.
-- Redis failure.
-- Deployment failure.
-- Migration failure.
-- Poison messages.
-- Malformed input.
-- Unauthorized access.
-- Excessive request volume.
-
----
-
-# 26\. Requirements Traceability
-
-Create a requirements traceability matrix.
-
-Every requirement must map to:
-
-```
-Requirement
-    ↓
-Implementation
-    ↓
-Test
-    ↓
-Executed Result
-```
-
-Example:
-
-| Requirement                          | Implementation             | Test                    | Result |
-| ------------------------------------ | -------------------------- | ----------------------- | ------ |
-| Duplicate events are safe            | Inbox + unique constraint  | Redelivery test         | PASS   |
-| Money uses exact precision           | PostgreSQL numeric mapping | Monetary precision test | PASS   |
-| Unauthorized account access rejected | Resource authorization     | BOLA test               | PASS   |
-| API collections paginated            | Cursor pagination          | API integration test    | PASS   |
-
-No requirement may be considered complete merely because code exists.
-
----
-
-# 27\. Evidence-Driven Engineering
-
-A README claim is not proof.
-
-For important behavior, provide concrete evidence:
-
-- Source location.
-- Test location.
-- Command executed.
-- Test output.
-- Scan result.
-- Container inspection.
-- Database migration execution.
-- Failure reproduction.
-
-For example:
-
-```
-Claim:
-Container runs as non-root.
-
-Evidence:
-Dockerfile:USER app
-Command:
-docker inspect ...
-Result:
-UID 10001
-```
-
-Confidence must be reduced when behavior has not been executed.
-
----
-
-# 28\. Principal-Level Quality Bar
-
-The final system should demonstrate the following engineering qualities:
-
-### Correctness
-
-The system remains correct under:
-
-- Retry.
-- Redelivery.
-- Concurrency.
-- Restart.
-- Partial failure.
-- Invalid input.
-
-### Security
-
-Security boundaries are explicit and tested.
-
-### Reliability
-
-External failures are expected and handled deliberately.
-
-### Maintainability
-
-The architecture is understandable to engineers who did not build it.
-
-### Scalability
-
-The system can scale horizontally where appropriate without shared in-memory business state.
-
-### Observability
-
-Production failures can be diagnosed without attaching a debugger.
-
-### Operational Simplicity
-
-The system does not contain infrastructure that does not provide meaningful value.
-
-### Evolvability
-
-Providers, APIs, events and database schemas can evolve safely.
-
----
-
-# 29\. Definition of Done
-
-The project is not considered production-grade until:
-
-- Every stated requirement is implemented.
-- Every requirement has executable test evidence.
-- Duplicate/redelivery behavior is verified.
-- Concurrency behavior is verified.
-- Failure paths are tested.
-- Database migrations are verified.
-- API validation is verified.
-- Authorization is verified.
-- No secrets exist in source.
-- No injection vulnerabilities exist.
-- No PII/secrets appear in logs.
-- No stack traces leak to clients.
-- All external integrations have deliberate error handling.
-- Transient and permanent failures are distinguished.
-- Retry behavior is bounded.
-- Poison messages cannot cause infinite retry loops.
-- Collections are paginated.
-- Query shapes have appropriate indexes.
-- No N+1 queries exist on important paths.
-- Unit tests pass.
-- Integration tests pass.
-- Security scans pass.
-- Container scans pass.
-- Containers run as non-root.
-- Health/readiness behavior is verified.
-- Graceful shutdown is verified.
-- Structured logs and correlation IDs exist on important paths.
-- Documentation explains important architectural decisions.
-- Architecture diagrams exist.
-- Failure modes are documented.
-- The application builds from a clean environment.
-- The application boots successfully.
-- The documented scenarios can actually be reproduced.
-
----
-
-# 30\. Self-Verification Requirement
-
-Before declaring the project complete, perform a full self-assessment.
-
-Evaluate every category:
-
-1. Requirements Coverage.
-2. Problem Interpretation & Solution Fit.
-3. Architecture & Scalability.
-4. Resilience & Operational Readiness.
-5. Data & Domain Modelling.
-6. API Design & Contracts.
-7. Security.
-8. Code Quality & Maintainability.
-9. Testing.
-10. Observability.
-11. Event-Driven Design.
-12. Infrastructure & DevOps.
-13. Documentation & Communication.
-
-Use the project assessment rubric supplied with this repository.
-
-For each category record:
-
-```
-Score
-Evidence
-Confidence
-Remaining Gap
-Remediation
-```
-
-Do not award yourself credit based solely on documentation.
-
-If something has not been executed, mark it accordingly.
-
----
-
-# 31\. Final Success Criterion
-
-The ultimate objective is not:
-
-> "Build a complicated .NET application."
-
-The objective is:
-
-> **Build a small, credible banking-grade transaction platform whose correctness, security, resilience, architecture and operational behavior can be demonstrated with evidence.**
-
-The strongest solution is the one that a Principal Engineer can review and say:
-
-- The boundaries make sense.
-- The failure modes were understood.
-- The database protects correctness.
-- Events are safely processed.
-- Security is deliberate.
-- Operations are observable.
-- Tests prove the important guarantees.
-- Infrastructure is appropriately sized.
-- Complexity has been justified.
-- The system can evolve without a rewrite.
-
-  **Production-grade means the system can be trusted because its guarantees are designed, implemented, tested, and evidenced — not because the codebase contains many enterprise patterns.**
+| Part | Role | Required? |
+|---|---|---|
+| PostgreSQL 17 | System of record: ledger, inbox, outbox, read model, audit, customers, banks | Yes |
+| API (`TransactionAggregationAPI`) | Webhook ingress and the REST API. Runs no background service. | Yes |
+| Worker (`TransactionAggregation.Worker`) | Kafka consumer, inbox and outbox dispatchers, daily-totals refresh, message archiving. Scales apart from the API. | Yes |
+| Kafka | Inbound signed bank records; outbound `TransactionRecorded` events | Publishing needs it; the inbound consumer is optional (`Kafka:Enabled=false`) |
+| Redis | Response cache, distributed rate limits, Data Protection key ring. Never authoritative. Outside Development the API and worker refuse to start without a Redis connection string; at runtime they degrade rather than fail. | Configured always; runtime-optional |
+| Keycloak | OIDC identity provider; the API only validates its JWTs | Yes |
+| Seq, Prometheus, Grafana | Logs, metrics, dashboards, alert rules (`monitoring/prometheus-rules.yml`) | Optional |
+| Aspire, Docker Compose, Kubernetes manifests, Vault | Three ways to run it, and how secrets are rendered in a cluster | Optional; Compose alone runs everything |
+
+### Modules
+
+Each module has its own PostgreSQL schema, its own `DbContext` and its own migrations. Modules
+talk only through `*.Contracts` projects, enforced by architecture tests
+(`Architecture/ModuleIsolationTests.cs`, `AuditModuleIsolationTests.cs`).
+
+| Module | Schema | Owns |
+|---|---|---|
+| Transactions | `transactions` | Ingestion processing, the ledger, the `DailyTotals` read model, transaction and aggregate queries (including per customer), the `TransactionRecorded` v1 contract |
+| Customers | `customerdirectory` | Customers and the (bank, account id) pairs linked to them; resolves a customer to its accounts for other modules |
+| WebhookSources | `webhooksources` | The banks: one source per bank with its API-key hash, display name, colour and Kafka signing public key |
+| Audit | `audit` | The append-only audit trail |
+
+Shared technical code lives in `BuildingBlocks/` and depends on no module: `SharedKernel` (domain
+primitives, `Result`/`Error`), `BuildingBlocks.Application` (CQRS abstractions, MediatR pipeline,
+keyset pagination), `BuildingBlocks.Persistence`, `BuildingBlocks.Messaging` (inbox, outbox,
+archive; `messaging` schema) and `BuildingBlocks.Web` (Result → ProblemDetails, route groups,
+policy and role names). `TransactionAggregation.Hosting` is the composition shared by API and worker.
+
+Each module is layered Domain → Application → Infrastructure, with a `Presentation` project holding
+its HTTP surface. Only the API references Presentation; the worker runs every module without it.
+
+## 4. Guarantees
+
+Each row: the guarantee, what provides it, and the test that checks it.
+
+### 4.1 Correctness of the ledger
+
+| Guarantee | Provided by | Checked by |
+|---|---|---|
+| A ledger entry is never updated, deleted or truncated | Trigger `TR_Transactions_InsertOnly` and `TR_Transactions_NoTruncate`; `UPDATE`, `DELETE`, `TRUNCATE` revoked from `tagg_app` (migration `MakeLedgerInsertOnly`) | `Integration/Postgres/ProcessingGuaranteesPostgresTests.cs`, `Integration/Postgres/LeastPrivilegeRolesTests.cs`, `Architecture/MigrationPolicyTests.cs` |
+| One ledger row per bank, account and bank transaction id | Unique partial index `IX_Transactions_Ledger_Key` on `(SourceName, ExternalAccountId, SourceExternalId)` where booked | `Integration/Postgres/IngestionIntegrityTests.cs`, `Integration/Postgres/ConcurrentIngestionTests.cs` |
+| Money is exact and never zero | `Money` value object: `decimal`, ≤ 4 decimal places, \|amount\| < 10^15, ISO 4217 currency; column `numeric(19,4)`; `CK_Transactions_Amount_NonZero`, `CK_Transactions_Currency_Iso4217` | `Unit/Domain/MoneyValueObjectTests.cs`, `Integration/Postgres/SchemaContractTests.cs` |
+| Category and status are valid | `CK_Transactions_Category_Defined`, `CK_Transactions_Status_Defined` | `Integration/Postgres/SchemaContractTests.cs` |
+| Only posted transactions are recorded | `pending` notices are acknowledged, audited as `transaction.pending_skipped`, and skipped | `Unit/Application/Commands/LedgerIngestionTests.cs` |
+| Timestamps are UTC | `Transaction` rejects a non-UTC booking date; normalization converts bank-local times using the bank's time zone (default `Africa/Johannesburg`) | `Unit/Domain/TransactionEntityTests.cs`, `Integration/MockBanks/MockBankFormatsTests.cs` |
+
+### 4.2 Idempotency and delivery
+
+| Guarantee | Provided by | Checked by |
+|---|---|---|
+| A redelivered webhook call or Kafka record creates no second inbox row | Unique `(SourceName, IdempotencyKey)` on the inbox; key is the `Idempotency-Key` / `idempotency-key` header, or the SHA-256 of the payload | `Integration/WebhookApiIntegrationTests.cs`, `Integration/Postgres/InboxIdempotencyTests.cs` |
+| The same key with a different payload is refused, never treated as a duplicate | `422 Inbox.IdempotencyKeyReused` (dead-lettered on Kafka) | `Integration/WebhookApiIntegrationTests.cs` |
+| A crash after commit cannot duplicate or lose effects | The ledger rows, outbox events, audit events and the inbox "processed" mark commit in one transaction; a crash before commit leaves the message claimable again | `Integration/Postgres/ProcessingGuaranteesPostgresTests.cs`, `Integration/Postgres/StaleClaimReclaimTests.cs` |
+| Two workers racing on the same delivery cannot both insert | Unique-violation → `MaxConflictAttempts` (3) re-checks, then defer to inbox retry | `Integration/Postgres/ConcurrentIngestionTests.cs` |
+| Kafka offsets move only after the record is stored or dead-lettered | `EnableAutoOffsetStore=false`; the offset is stored after settlement | `Integration/Kafka/KafkaConsumerBrokerTests.cs`, `Unit/Kafka/BankTransactionsKafkaMessageHandlerTests.cs` |
+| Outbound events are at-least-once with a stable id | Outbox row written with the ledger entry; headers carry `message-id` for consumer deduplication | `Integration/Kafka/KafkaIntegrationEventPublisherTests.cs`, `Unit/BackgroundServices/OutboxDispatchTests.cs` |
+| Every duplicate is counted and alerted without failing the batch | `inbound_duplicates_total{source_name,level}`; `DuplicateInboundDetected` outbox message | `Unit/Application/Commands/ProcessInboundTransactionsCommandHandlerTests.cs`, `Unit/BackgroundServices/OutboxDispatchTests.cs` |
+
+### 4.3 Authentication and authorization
+
+| Guarantee | Provided by | Checked by |
+|---|---|---|
+| Only valid Keycloak tokens reach the API | JWT bearer: issuer, audience, lifetime and signing key validated; HTTPS metadata required outside Development; missing Keycloak settings stop startup | `Integration/RoleAccessTests.cs`, `Integration/OpenApiSecuritySchemeTests.cs` |
+| `staff` is read-only and limited to its banks; `admin` reads everything and manages | Policies `Staff` (staff or admin) and `Admin`; `InstitutionAccess` built from the `institutions` claim; staff with no banks see nothing | `Integration/RoleAccessTests.cs`, `Integration/InstitutionAccessApiTests.cs` |
+| No cross-bank access by manipulating IDs (BOLA/IDOR) | Every read path applies the caller's institution scope; an out-of-scope transaction or customer is `404`, identical to a missing one | `Integration/InstitutionAccessApiTests.cs`, `Integration/CustomerApiTests.cs` |
+| A bank can only write for itself | Its API key (SHA-256 hash stored, shown once) selects the source; a payload naming another bank is `400` at the webhook or dead-lettered and audited | `Integration/WebhookApiIntegrationTests.cs`, `Integration/WebhookSourceAdminApiIntegrationTests.cs` |
+| Kafka records are authentic | ECDSA P-256 signature over source, idempotency key and payload hash (`KafkaRecordSignature`, version `tagg-kafka-record-v1`) checked against the bank's registered public key; failures are dead-lettered and audited as `unauthenticated` | `Contract/KafkaRecordSignatureContractTests.cs`, `Unit/Kafka/BankTransactionsKafkaMessageHandlerTests.cs` |
+| Reading a customer's data is itself audited | `CustomerViewAuditFilter` records `access.customer_viewed` before the response is returned; if the write fails the read fails; 404s record nothing | `Integration/CustomerApiTests.cs`, `Integration/AuditApiIntegrationTests.cs` |
+
+### 4.4 Abuse resistance and safe errors
+
+| Guarantee | Provided by | Checked by |
+|---|---|---|
+| Request volume is bounded | Redis-backed fixed windows per client (JWT `sub`, else IP): 200/min global, 150/min per endpoint group; `429` with `Retry-After`. If Redis is unreachable each replica enforces the same limits on its own. | `Unit/Platform/PlatformHardeningTests.cs`, `Integration/ApiHardeningIntegrationTests.cs`, `Integration/Redis/RedisIntegrationTests.cs` |
+| Credential guessing is throttled before tokens are validated | `AuthFailureThrottleMiddleware`: an IP with more than 60 `401`s in a minute gets `429` | `Unit/Platform/PlatformHardeningTests.cs` |
+| Request bodies are bounded | Kestrel `MaxRequestBodySize` 1 MiB; at most `Ingestion:MaxTransactionsPerDelivery` transactions (default 500, allowed 1–5000) per webhook call or Kafka record; server header removed | `Integration/ApiHardeningIntegrationTests.cs` |
+| Clients never see stack traces or internals | `GlobalExceptionHandler` returns fixed ProblemDetails text and a `traceId`; details are logged | `Integration/ApiFailureSafetyTests.cs` |
+| Browser-facing headers | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, COOP; API responses add `default-src 'none'` CSP and `Cache-Control: no-store`; HSTS outside Development | `Integration/ApiHardeningIntegrationTests.cs` |
+| No secrets or personal data in logs | `LogRedaction` masks account ids; `SensitiveDataDestructuringPolicy`; customer names stay out of logs and audit | `Architecture/LoggingHygieneTests.cs`, `Integration/RequestLoggingTests.cs` |
+| No secrets in source | Untracked `secrets.json` locally, `.env` for Compose, Vault-rendered file in clusters; `deploy-k8s.sh` refuses placeholder secrets; gitleaks in CI | CI `Secret Scan` job |
+
+### 4.5 Resilience
+
+| Dependency | Failure behaviour |
+|---|---|
+| PostgreSQL | EF Core retry policy; transient inbox failures are retried with backoff; `/readiness` fails so traffic stops |
+| Redis | Reads run uncached, rate limits fall back per replica, events still publish; `/readiness` stays `200` (Redis degrades it only) |
+| Kafka (inbound) | Transient failures retry the same record with exponential backoff (cap `Kafka:MaxRetryBackoffSeconds`, 60 s) and pause the partition; records that can never succeed go to `bank-transactions.dlq` with `dlq-*` headers |
+| Kafka (outbound) | Idempotent producer, `acks=all`, 30 s message timeout; failures are retried by the outbox |
+| Duplicate-alert webhook | Retried by the outbox on 408/429/5xx, dead-lettered on other 4xx; its URL (which can embed a token) is never logged |
+
+Failures are classified in `BuildingBlocks.Messaging/FailureClassifier.cs`:
+**permanent** (malformed JSON, domain violations, validation, most 4xx, SQL state classes 22 and 23
+other than unique violations) dead-letter immediately; **transient** retry. Retries are bounded:
+inbox and outbox allow 5 attempts, with `RetryBackoff` doubling from 4 s up to a 300 s ceiling and
+jittered between half and full of the ceiling. A claim older than 10 minutes is reclaimed; a
+reclaimed message already at 5 attempts is dead-lettered as abandoned. On shutdown the worker
+releases unworked claims within 5 s (`ClaimRelease`). Tests: `Unit/Resilience/ResiliencePolicyTests.cs`,
+`Unit/BackgroundServices/FailureClassificationTests.cs`, `Unit/Messaging/*`, `Integration/Postgres/StaleClaimReclaimTests.cs`.
+
+### 4.6 Read performance
+
+| Guarantee | Provided by |
+|---|---|
+| Aggregates never run on the request path | `transactions.DailyTotals`, keyed by bank, account, day, category and currency, rebuilt by the worker every `Aggregation:IntervalMinutes` (5) |
+| A late or re-delivered entry cannot be double counted | Each refresh recomputes in full every account-day touched since the last checkpoint, looking back `Aggregation:OverlapMinutes` (10); a single-flight `pg_try_advisory_xact_lock` keeps replicas from refreshing at once |
+| Callers know how stale totals are | Every aggregate response carries `asOf` |
+| A refresh is bounded | At most `Aggregation:MaxRowsPerRun` (500,000) new entries per run; a larger backlog is worked off in back-to-back runs |
+| Page N costs the same as page 1 | Keyset (cursor) pagination on every list; default page 20, max 100 (audit: 200) |
+| Totals are cheap and honest | `includeTotal` counts up to 10,000 and reports `totalCountCapped` beyond |
+| Hot queries are index-backed | Partial indexes `WHERE Status = booked`: covering `(Date DESC, Id DESC)`, amount `(Amount, Id)`, account `(SourceName, ExternalAccountId, Date DESC, Id DESC)`, trigram GIN on `Description` for `searchTerm`; sorting is limited to `date` and `amount` for that reason |
+| Currencies never mix | Every aggregate takes one `currency` (default `ZAR`) |
+| Cached reads stay correct | Ledger reads cache 5 min and are invalidated by the outbox after a dispatch cycle that recorded something; aggregate reads cache up to 55 min and are invalidated when a refresh commits. If invalidation fails, entries expire on their own. |
+
+Tests: `Integration/Postgres/TransactionAggregatesPostgresTests.cs`,
+`Integration/Postgres/DailyTotalsRefresherPostgresTests.cs`, `Integration/Postgres/CursorPaginationPostgresTests.cs`,
+`Integration/Redis/RedisIntegrationTests.cs`.
+
+### 4.7 Operability
+
+| Guarantee | Provided by |
+|---|---|
+| Health semantics are deliberate | `/liveness` does no dependency I/O; `/readiness` checks PostgreSQL (Redis degrades only, Seq never counts); `/health` lists every check. The worker serves the same three. |
+| Metrics are scraped privately | prometheus-net on port 9464, never routed publicly; alert rules cover API down, error rate, p99 latency, memory, worker down, inbox/outbox backlog and dead-lettering, ingestion lag, Kafka dead letters and consumer crashes, stale aggregates, and failing background jobs |
+| Every request is traceable | `X-Correlation-Id` on every response (caller's if a short `[A-Za-z0-9._-]` token, else the trace id); trace id on ProblemDetails; `traceparent` and `correlation-id` carried through inbox, outbox and Kafka headers |
+| Every inbound delivery has a trail | `audit.AuditEvents`, append-only by trigger and by revoked grants; written in the same transaction as the change it describes |
+| Schema changes are safe to ship | Per-module migrations; Development applies them at start, elsewhere a `db-migrate` Job (`--migrate-only`) runs as schema owner `tagg_migrator` before any replica rolls; the app connects as DML-only `tagg_app`; `MigrationPolicyTests` fails the build for any migration from `20261003000000` on that drops a table or column, changes data, or builds an index without `CONCURRENTLY` (earlier migrations predate the policy); CI fails on model changes without a migration |
+| Message tables stay small | Processed inbox and outbox rows older than 30 days (`MessageArchive:RetainDays`) are moved to archive tables in batches of 1,000 |
+
+## 5. Interfaces
+
+All routes are under `/api/v1`. Reads need `staff` or `admin`; changes and admin routes need `admin`.
+
+| Area | Routes |
+|---|---|
+| Transactions | `GET /transactions`, `GET /transactions/{id}`, `GET /transactions/summary` |
+| Aggregates | `GET /transactions/aggregates/{institutions, categories, cash-flow, comparison}` |
+| Banks | `GET /banks` (staff); `/admin/webhook-sources` list, create, update, rotate key, register signing key, activate, deactivate (admin) |
+| Customers | `GET /customers`, `/customers/{id}`, `/customers/{id}/transactions`, `/customers/{id}/aggregates/{cash-flow, categories, institutions, comparison}` (staff); `POST /customers`, `POST /customers/{id}/accounts`, `DELETE /customers/{id}/accounts` (admin) |
+| Audit | `GET /admin/audit/events`, `GET /admin/audit/transactions/{id}/lineage` (admin) |
+| Ingestion | `POST /webhooks/bank-aggregator/transactions` (API key); Kafka topic `bank-transactions` |
+| Events out | Kafka topic `transaction-events`: `TransactionRecorded` v1, keyed `{institution}:{externalAccountId}` |
+| Operations | `/liveness`, `/readiness`, `/health`; `/metrics` on port 9464 only; `/openapi/v1.json` (authorized outside Development); Scalar at `/scalar/v1` in Development only |
+
+Every list returns `{ items, pageSize, nextCursor, hasMore, totalCount, totalCountCapped }`.
+Errors are RFC 9457 ProblemDetails with per-field `errors` for validation failures. The wire formats
+are specified in [`TransactionAggregationAPI/README.md`](TransactionAggregationAPI/README.md#api-reference).
+
+## 6. Domain facts
+
+- **Transaction** is immutable once recorded: id, external account id, `Money`, description,
+  category, `TransactionSource` (bank code plus the bank's transaction id), booking date (UTC),
+  status, recorded-at, and a metadata dictionary holding the bank's original description and
+  category. Only `Booked` is ever written; `Pending` and `Expired` exist as retired values for old rows.
+- **Categories** (stored as integers, enforced by check constraint): Uncategorized 0, Groceries 1,
+  Dining 2, Transportation 3, Entertainment 4, Utilities 5, Housing 6, Healthcare 7, Income 8,
+  Transfer 9, Shopping 10, Subscriptions 11.
+- **Categorization** (`TransactionCategorizationService`): lower-cased whole-word phrase match
+  against the rules file; the longest keyword wins, ties broken ordinally; otherwise the bank's own
+  category (mapped through the bank's `CategoryMap`); otherwise `Income` for a positive amount and
+  `Uncategorized` for the rest. It is decided once, at recording time, and never revisited.
+- **Normalization** (`TransactionNormalizer`, rules in `normalization-rules.json`): date to UTC,
+  description trimmed and stripped of known statement prefixes, currency upper-cased, bank category
+  mapped. The bank's transaction id is never changed. Originals are kept in metadata.
+- **Customer**: reference (unique, 1–50 chars), name, and at most 50 linked accounts, each a
+  (bank, account id) pair stored in the bank's registered spelling. Links are resolved at read time,
+  so linking or unlinking never touches the ledger and takes effect on history immediately.
+- **Reporting day** is a South African calendar day (UTC+2, no daylight saving).
+
+## 7. Definition of done
+
+A change is done when, from a clean checkout:
+
+1. `dotnet build -warnaserror` succeeds and `dotnet format --verify-no-changes` is clean.
+2. `dotnet test` passes. About 780 cases run; integration tests use real PostgreSQL, Redis and Kafka
+   through Testcontainers, so Docker must be running.
+3. Every module's migrations match its model (`dotnet ef migrations has-pending-model-changes`).
+4. Architecture, logging-hygiene and migration-policy tests pass, so module boundaries, log content
+   and migration safety have not regressed.
+5. The images build, run as a non-root user, and pass the Trivy gate (no CRITICAL with a fix).
+6. `docker compose up --build` starts and `scripts/smoke-test.sh` passes.
+
+CI (`.github/workflows/ci-cd.yml`) performs exactly these, plus gitleaks, an SPDX SBOM per image,
+Kubernetes manifest validation (kubeconform) and alert-rule validation (promtool). A weekly OWASP
+ZAP baseline scan runs against the Compose stack (`.github/workflows/zap-baseline.yml`). Dependabot
+tracks NuGet packages, GitHub Actions and base-image digests.
+
+## 8. Non-goals and known limits
+
+Stated as failure and consequence.
+
+- **Stale totals.** Aggregates lag the ledger by up to one refresh (5 minutes by default), and
+  longer while a backlog above 500,000 entries is worked off. `asOf` states the age. A failed
+  refresh retries after 30 s, doubling to the interval; `TransactionAggregatesStale` fires if none
+  succeeds for two hours. The transaction list is fresher than the totals.
+- **Ingestion latency.** Inbox and outbox are polled every 5 s, so a delivery is recorded up to
+  about 5 s after it is accepted.
+- **Event ordering.** The outbox publishes up to 16 events concurrently, so two events for one
+  account in one batch can reach Kafka in either order. Consumers must order by
+  `BookedAt`/`RecordedAt` and deduplicate on `message-id`.
+- **Best-effort cache invalidation.** If Redis is unreachable when a transaction is recorded, the
+  event is still published, and a ledger read cached just before the outage may be up to 5 minutes
+  stale. Nothing is cached while Redis is down.
+- **Staff scope lives in the application**, not in PostgreSQL row-level security, which would need
+  the caller's banks set on every pooled transaction. A bug in a new query could bypass it; the
+  institution-access tests exist to catch that.
+- **No currency conversion.** Aggregates never mix currencies, by design.
+- **No partitioning, no saga, no microservices.** Volumes fit one table with the indexes above, no
+  workflow spans separately committed steps, and the modules scale together. Revisit partitioning
+  at roughly 100 million ledger rows.
+- **Customers are not users.** There is no customer sign-in, self-service or registration.
+- **Single-node infrastructure in the bundled manifests.** PostgreSQL, Redis, Kafka (KRaft, one
+  broker, replication factor 1) and Keycloak run as single replicas in `k8s/`. That is a local
+  cluster profile, not a high-availability design.
+- **Deployment.** The CI deploy job is a notice and a post-deployment smoke test hook, not an
+  automated rollout. Third-party images in the manifests are pinned by tag; the application images'
+  base layers are pinned by digest.
+- **Mock data.** The bank formats in `normalization-rules.Development.json` are invented for the
+  mock aggregator; real banks need their own profiles.
+- **Retention.** Processed messages are archived after 30 days; no rule deletes ledger or audit
+  rows, because the database forbids it. Regulatory retention periods are not encoded and must be
+  confirmed with compliance before production.

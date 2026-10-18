@@ -15,6 +15,7 @@ namespace TransactionAggregationAPI.RateLimiting
         public static IServiceCollection AddRedisRateLimiting(this IServiceCollection services)
         {
             services.AddSingleton<ApiGroupRateLimitPolicy>();
+            services.AddSingleton<IAuthFailureThrottle, RedisAuthFailureThrottle>();
             services.AddRateLimiter(options =>
             {
                 options.AddPolicy<string, ApiGroupRateLimitPolicy>(RateLimitPolicies.FixedWindow);

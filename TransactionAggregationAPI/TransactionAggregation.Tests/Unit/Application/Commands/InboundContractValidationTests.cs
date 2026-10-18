@@ -1,3 +1,5 @@
+using Modules.Transactions.Application.Common.Options;
+using Microsoft.Extensions.Options;
 using FluentAssertions;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
@@ -7,7 +9,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
 {
     public class InboundContractValidationTests
     {
-        private static readonly ReceiveBankTransactionsCommandValidator Validator = new();
+        private static readonly ReceiveBankTransactionsCommandValidator Validator = new(Options.Create(new IngestionOptions()));
 
         private static ReceiveBankTransactionsCommand Command(decimal amount = -10m, string currency = "ZAR", int schemaVersion = BankTransactionsMessage.CurrentSchemaVersion, string? institution = null) =>
             new("source", "ext-acc", institution, [new ExternalTransactionDTO

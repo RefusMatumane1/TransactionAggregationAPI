@@ -18,6 +18,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
         {
             group.MapGet("/{customerId:guid}/transactions", ListAsync)
                  .WithName("ListCustomerTransactions")
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithSummary("The customer's ledger entries across all their linked accounts (at banks the caller may read), with the same filters and paging as /transactions")
                  .Produces<CursorPagedResponse<TransactionListItemResponse>>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status404NotFound)
@@ -25,6 +26,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
 
             group.MapGet("/{customerId:guid}/aggregates/categories", CategoriesAsync)
                  .WithName("GetCustomerCategoryBreakdown")
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithSummary("The customer's spending (or income) per category across their banks")
                  .Produces<CategoryBreakdownResponse>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status404NotFound)
@@ -32,6 +34,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
 
             group.MapGet("/{customerId:guid}/aggregates/cash-flow", CashFlowAsync)
                  .WithName("GetCustomerCashFlow")
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithSummary("The customer's income, expenses and net per day, week or month across their banks")
                  .Produces<CashFlowSeriesResponse>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status404NotFound)
@@ -39,6 +42,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
 
             group.MapGet("/{customerId:guid}/aggregates/institutions", InstitutionsAsync)
                  .WithName("GetCustomerInstitutionBreakdown")
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithSummary("The customer's totals per bank, then per account")
                  .Produces<InstitutionBreakdownResponse>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status404NotFound)
@@ -46,6 +50,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
 
             group.MapGet("/{customerId:guid}/aggregates/comparison", ComparisonAsync)
                  .WithName("GetCustomerPeriodComparison")
+                 .AddEndpointFilter<CustomerViewAuditFilter>()
                  .WithSummary("The customer's period against the equally long period before it")
                  .Produces<PeriodComparisonResponse>(StatusCodes.Status200OK)
                  .Produces(StatusCodes.Status404NotFound)

@@ -53,8 +53,75 @@ namespace TransactionAggregation.Tests.Unit.Platform
             clock.Advance(TimeSpan.FromSeconds(30));
             limiter.IdleDuration.Should().Be(TimeSpan.FromSeconds(30));
 
-            (await limiter.AcquireAsync()).IsAcquired.Should().BeTrue("Redis being down fails open");
+            (await limiter.AcquireAsync()).IsAcquired.Should().BeTrue("Redis being down still serves requests within the limit");
             limiter.IdleDuration.Should().Be(TimeSpan.Zero, "use resets the idle clock");
+        }
+
+        [Fact]
+        public async Task RateLimiter_RedisDown_FallsBackToALocalLimit_SoAnOutageIsNotAnOpenDoor()
+        {
+            using var limiter = Limiter(new ManualClock());
+
+            for (var i = 0; i < 10; i++)
+                (await limiter.AcquireAsync()).IsAcquired.Should().BeTrue($"request {i + 1} is within the limit of 10");
+
+            using var rejected = await limiter.AcquireAsync();
+
+            rejected.IsAcquired.Should().BeFalse("the 11th request in the window is over the limit even though Redis is down");
+            rejected.TryGetMetadata(MetadataName.RetryAfter, out _).Should().BeTrue();
+        }
+
+        private sealed class FakeThrottle(TimeSpan? blockedFor) : IAuthFailureThrottle
+        {
+            public int Recorded;
+            public Task<TimeSpan?> BlockedForAsync(string client, CancellationToken cancellationToken) => Task.FromResult(blockedFor);
+            public Task RecordFailureAsync(string client, CancellationToken cancellationToken)
+            {
+                Recorded++;
+                return Task.CompletedTask;
+            }
+        }
+
+        private static async Task<(DefaultHttpContext Context, bool Reached)> RunThrottleAsync(FakeThrottle throttle, int downstreamStatus)
+        {
+            var reached = false;
+            var middleware = new TransactionAggregationAPI.Middleware.AuthFailureThrottleMiddleware(ctx =>
+            {
+                reached = true;
+                ctx.Response.StatusCode = downstreamStatus;
+                return Task.CompletedTask;
+            }, throttle);
+            var context = new DefaultHttpContext();
+            context.Connection.RemoteIpAddress = IPAddress.Parse("203.0.113.7");
+
+            await middleware.Invoke(context);
+            return (context, reached);
+        }
+
+        [Fact]
+        public async Task AuthFailureThrottle_ABlockedClient_IsTurnedAwayBeforeAuthentication()
+        {
+            var throttle = new FakeThrottle(TimeSpan.FromSeconds(42));
+
+            var (context, reached) = await RunThrottleAsync(throttle, StatusCodes.Status200OK);
+
+            reached.Should().BeFalse("no token is validated for a client that keeps failing");
+            context.Response.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+            context.Response.Headers.RetryAfter.ToString().Should().Be("42");
+        }
+
+        [Theory]
+        [InlineData(StatusCodes.Status401Unauthorized, 1)]
+        [InlineData(StatusCodes.Status200OK, 0)]
+        [InlineData(StatusCodes.Status403Forbidden, 0)]
+        public async Task AuthFailureThrottle_CountsOnlyFailedAuthentication(int downstreamStatus, int expectedRecorded)
+        {
+            var throttle = new FakeThrottle(null);
+
+            var (_, reached) = await RunThrottleAsync(throttle, downstreamStatus);
+
+            reached.Should().BeTrue();
+            throttle.Recorded.Should().Be(expectedRecorded);
         }
 
         [Fact]

@@ -285,6 +285,6 @@ Test paths are under `TransactionAggregationAPI/TransactionAggregation.Tests/`.
 | [`TransactionAggregationAPI/README.md`](TransactionAggregationAPI/README.md) | The detailed guide: project structure, seed data and logins, running with [Compose](TransactionAggregationAPI/README.md#option-a--docker-compose-quickest), [Aspire](TransactionAggregationAPI/README.md#option-b--net-aspire-debug) or [Kubernetes](TransactionAggregationAPI/README.md#option-c--kubernetes-rancher-desktop), the [API reference](TransactionAggregationAPI/README.md#api-reference), [configuration](TransactionAggregationAPI/README.md#configuration-reference) and [troubleshooting](TransactionAggregationAPI/README.md#troubleshooting) |
 | [`TransactionAggregationAPI/k8s/README.md`](TransactionAggregationAPI/k8s/README.md) | Kubernetes manifests |
 | [`TransactionAggregationAPI/perf/README.md`](TransactionAggregationAPI/perf/README.md) | k6 load tests |
-| [`Goal.md`](Goal.md), [`Instructions.md`](Instructions.md) | The longer build prompts this system was developed against (the brief itself is the two sentences quoted under Requirements coverage) |
+| [`Goal.md`](Goal.md), [`Instructions.md`](Instructions.md) | What the system guarantees and where each guarantee is implemented and tested; and the rules, commands and recipes for changing it safely |
 
 Licensed under the terms in [`LICENSE`](LICENSE).

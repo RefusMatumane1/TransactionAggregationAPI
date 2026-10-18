@@ -20,6 +20,12 @@ namespace Modules.Transactions
                 configuration.GetSection(NormalizationOptions.SectionName));
             services.AddSingleton<ITransactionNormalizer, TransactionNormalizer>();
 
+            services.AddOptions<IngestionOptions>()
+                .Bind(configuration.GetSection(IngestionOptions.SectionName))
+                .Validate(IngestionOptions.IsValid,
+                    $"Ingestion:MaxTransactionsPerDelivery must be between 1 and {IngestionOptions.MaxAllowedTransactionsPerDelivery}.")
+                .ValidateOnStart();
+
             services.AddModuleApplication(Assembly.GetExecutingAssembly());
 
             return services;

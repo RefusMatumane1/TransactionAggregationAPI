@@ -40,6 +40,9 @@ data:
   MessageArchive__BatchSize: "1000"
   MessageArchive__MaxBatchesPerRun: "50"
 
+  # Most transactions one Kafka record may carry (1-5000). Keep equal to the API's value.
+  Ingestion__MaxTransactionsPerDelivery: "500"
+
   Aggregation__IntervalMinutes: "5"
   Aggregation__OverlapMinutes: "10"
   Aggregation__MaxRowsPerRun: "500000"

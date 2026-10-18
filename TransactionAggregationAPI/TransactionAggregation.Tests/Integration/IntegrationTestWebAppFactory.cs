@@ -56,6 +56,9 @@ namespace TransactionAggregation.Tests.Integration
                 services.AddHealthChecks()
                     .AddCheck("self", () => HealthCheckResult.Healthy(), tags: ["live"]);
 
+                services.RemoveAll<TransactionAggregationAPI.RateLimiting.IAuthFailureThrottle>();
+                services.AddSingleton<TransactionAggregationAPI.RateLimiting.IAuthFailureThrottle, NoAuthFailureThrottle>();
+
                 services.RemoveAll<IConfigureOptions<RateLimiterOptions>>();
                 services.Configure<RateLimiterOptions>(options =>
                 {

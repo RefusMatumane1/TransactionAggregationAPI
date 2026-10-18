@@ -73,6 +73,8 @@ data:
   # ── Serilog (minimal; code wires Seq from ConnectionStrings:seq) ───────
   # Cached aggregate reads live until the next scheduled rebuild clears them (worker Aggregation__IntervalMinutes).
   Caching__ScopeExpirationMinutes__transaction-aggregates: "55"
+  # Most transactions one webhook call may carry (1-5000). Keep equal to the worker's value.
+  Ingestion__MaxTransactionsPerDelivery: "500"
   Serilog__MinimumLevel__Default: "Information"
   Serilog__MinimumLevel__Override__Microsoft: "Warning"
   Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore: "Warning"

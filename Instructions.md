@@ -1,1517 +1,291 @@
-You are acting as a **Principal Software Engineer / Staff+ .NET Architect** designing and implementing a production-grade financial transaction aggregation platform for a regulated banking environment.
+# Engineering Instructions
 
-Your job is NOT to generate a toy CRUD application.
+How to work in this repository: what the rules are, which ones a test enforces, the commands to run,
+and the recipe for each common change. [`Goal.md`](Goal.md) says what the system guarantees;
+this file says how to change it without breaking those guarantees.
 
-Design the system as if it will eventually process real financial transaction events, operate continuously in production, handle failures and security threats, and be maintained by multiple engineering teams over several years.
+Paths are relative to `TransactionAggregationAPI/` (the solution root, next to
+`TransactionAggregationAPI.slnx`) unless noted. Tests live in `TransactionAggregation.Tests/`.
 
-The implementation target is:
-
-- .NET 10
-- C#
-- ASP.NET Core
-- PostgreSQL
-- Redis
-- .NET Aspire
-- Docker
-- Docker Compose
-- CI/CD
-- Event-driven transaction ingestion
-- Modular Monolith
-- Clean Architecture / Hexagonal Architecture
-- SOLID
-- Strong automated testing
-- Production-grade observability
-- High security
-- Low operational and maintenance complexity
-
-Do not introduce complexity merely to make the architecture look "enterprise". Every architectural decision must have a clear reason, and you must explicitly identify where simpler approaches are preferable.
+If a rule below conflicts with what you were asked to do, say so before changing anything. The
+rules exist because each one has a failure behind it.
 
 ---
 
-# 1\. PRIMARY BUSINESS CAPABILITY
-
-Build a **Transaction Aggregation API**.
-
-Transactions arrive through events from multiple financial providers.
-
-The system must:
-
-1. Receive transaction events.
-2. Validate and authenticate incoming events.
-3. Deduplicate events safely.
-4. Normalize provider-specific transaction formats.
-5. Categorize transactions.
-6. Persist normalized transactions.
-7. Maintain customer/account relationships.
-8. Expose transactions through a REST API.
-9. Support filtering, sorting and pagination.
-10. Provide aggregation/reporting endpoints.
-11. Handle duplicate, delayed, reordered and failed events.
-12. Remain resilient when external providers or infrastructure components fail.
-13. Provide strong observability and auditability.
-
-Assume providers can have different event schemas, identifiers, currencies, timestamps and transaction semantics.
-
-The domain model must NOT become coupled to provider-specific contracts.
-
----
-
-# 2\. ARCHITECTURAL STYLE
-
-Use a **Modular Monolith**.
-
-Do NOT start with microservices.
-
-The system should have strong module boundaries and be designed so that a module can be extracted into a service later if there is a genuine business or scaling reason.
-
-Use:
-
-- Clean Architecture
-- Hexagonal Architecture / Ports and Adapters
-- Domain-driven boundaries where appropriate
-- Dependency Inversion
-- SOLID
-- Explicit module boundaries
-- CQRS where it provides real value
-- Domain events where appropriate
-
-Avoid:
-
-- Anemic "service/repository/controller" architecture everywhere.
-- Generic repositories without a clear reason.
-- Shared mutable state between modules.
-- Domain logic inside controllers.
-- Infrastructure dependencies leaking into the domain.
-- Provider-specific models leaking into the domain.
-- Premature microservices.
-
----
-
-# 3\. MODULE DESIGN
-
-Propose and justify module boundaries.
-
-A starting point may be:
-
-- Transactions
-- Transaction Ingestion
-- Categorization
-- Providers
-- Customers / Accounts
-- Reporting / Analytics
-- Audit
-
-But do NOT blindly follow this list.
-
-Determine the appropriate boundaries based on cohesion, coupling, ownership and change patterns.
-
-Each module should have clear:
-
-- Domain
-- Application
-- Infrastructure
-- Contracts
-
-boundaries where appropriate.
-
-Explain dependencies between modules.
-
-Prefer:
+## 1. Orientation
 
 ```
-API
- ↓
-Application
- ↓
-Domain
- ↓
-Ports
- ↓
-Infrastructure Adapters
+TransactionAggregationAPI/              solution root
+├── TransactionAggregationAPI/          API host: auth, rate limiting, middleware, Development seeding
+├── TransactionAggregation.Worker/      Worker host: ALL background work lives here, nowhere else
+├── TransactionAggregation.Hosting/     Composition shared by API and worker; rules JSON files
+├── TransactionAggregation.MockAggregator/   Development only: mock-bank feeds through the real pipeline
+├── TransactionAggregationUI/           Blazor WebAssembly front end (nginx in production)
+├── TransactionAggregationAPI.AppHost/  .NET Aspire local orchestration
+├── TransactionAggregationAPI.ServiceDefaults/  OpenTelemetry, health checks, secrets file loading
+├── BuildingBlocks/                     Shared technical code; depends on no module
+│   ├── SharedKernel/                   Domain primitives, Result/Error, ValueObject, Money-adjacent helpers
+│   ├── BuildingBlocks.Application/     CQRS interfaces, MediatR pipeline, keyset pagination, log redaction
+│   ├── BuildingBlocks.Persistence/     DbContext base, module registration, design-time support
+│   ├── BuildingBlocks.Messaging/       Inbox, outbox, archive, failure classification (`messaging` schema)
+│   └── BuildingBlocks.Web/             Result → ProblemDetails, route groups, policy/role/claim names
+├── Modules/
+│   ├── Transactions/    (schema `transactions`)         ledger, ingestion processing, read model, queries
+│   ├── Customers/       (schema `customerdirectory`)    customers and their linked accounts
+│   ├── WebhookSources/  (schema `webhooksources`)       the banks: keys, display names, signing keys
+│   └── Audit/           (schema `audit`)                append-only audit trail
+│       each: Domain · Application · Infrastructure · Presentation · Contracts
+├── k8s/  keycloak/  monitoring/  perf/  scripts/  docker-compose*.yml  deploy-k8s.sh
+└── TransactionAggregation.Tests/       Unit · Integration (Postgres, Kafka, Redis, MockBanks) · Architecture · Contract
 ```
 
-rather than allowing arbitrary dependencies.
-
----
-
-# 4\. EVENT-DRIVEN INGESTION
-
-Transactions arrive as events.
-
-Design an event ingestion pipeline such as:
-
-```
-Provider
-   ↓
-Event
-   ↓
-Ingress / Consumer
-   ↓
-Authentication
-   ↓
-Schema Validation
-   ↓
-Idempotency / Inbox
-   ↓
-Provider Adapter
-   ↓
-Canonical Transaction
-   ↓
-Domain Processing
-   ↓
-Persistence
-   ↓
-Outbox
-   ↓
-Integration Events
-```
-
-Consider:
-
-- At-least-once delivery.
-- Duplicate events.
-- Out-of-order events.
-- Delayed events.
-- Poison messages.
-- Retry behavior.
-- Dead-letter handling.
-- Event versioning.
-- Schema evolution.
-- Correlation IDs.
-- Causation IDs.
-- Event IDs.
-- Provider transaction IDs.
-- Idempotency keys.
-
-Explain whether Kafka, RabbitMQ, Azure Service Bus, or another broker is appropriate for this project.
-
-For the local development environment, keep the infrastructure manageable.
-
-Do not introduce a message broker solely for architectural theatre.
-
-If a broker is required, make the local developer experience simple through Aspire/Docker.
-
----
-
-# 5\. INBOX / OUTBOX
-
-Evaluate and implement the **Inbox Pattern** where required for idempotent event consumption.
-
-Evaluate and implement the **Outbox Pattern** where required for reliable publication of integration events.
-
-Explain:
-
-- Why Inbox is needed.
-- Why Outbox is needed.
-- Transaction boundaries.
-- Failure scenarios.
-- Duplicate handling.
-- Retry behavior.
-- Cleanup/retention.
-- Indexing strategy.
-- Concurrency handling.
-
-Avoid implementing both patterns everywhere without justification.
-
----
-
-# 6\. IDEMPOTENCY
-
-Idempotency is mandatory.
-
-The system must remain correct when the same transaction event is delivered multiple times.
-
-Design database-level guarantees rather than relying solely on application-level checks.
-
-Consider:
-
-- Event ID uniqueness.
-- Provider + external transaction ID uniqueness.
-- Account scope.
-- Idempotency keys.
-- Concurrent processing.
-- Retry after partial failure.
-
-Explain race conditions such as:
-
-```
-Request A → check transaction → not found
-Request B → check transaction → not found
-Request A → insert
-Request B → insert
-```
-
-and demonstrate how the architecture/database prevents duplicate data.
-
----
-
-# 7\. DOMAIN MODEL
-
-Design a financially appropriate domain model.
-
-Consider:
-
-- Customer
-- Account
-- Transaction
-- TransactionCategory
-- Provider
-- ProviderAccount
-- TransactionEvent
-- AggregationRun
-- InboxMessage
-- OutboxMessage
-- AuditEntry
-
-Do not create entities simply because they sound enterprise.
-
-Explain which concepts are entities, value objects, aggregates or simple persistence models.
-
-Money must be represented safely.
-
-Do not use floating-point types for monetary values.
-
-Consider:
-
-- Decimal precision.
-- Currency.
-- Debit/credit semantics.
-- Transaction status.
-- Transaction timestamps.
-- Provider timestamps vs processing timestamps.
-- Time zones.
-- Reversals.
-- Corrections.
-
----
-
-# 8\. TRANSACTION CATEGORIZATION
-
-Implement a rule-based categorization system.
-
-Use appropriate design patterns where they genuinely help, for example:
-
-- Strategy
-- Specification
-- Chain of Responsibility
-
-Potential categories:
-
-- Groceries
-- Transport
-- Utilities
-- Entertainment
-- Shopping
-- Salary
-- Transfer
-- Banking
-- Other
-
-The categorization system must be:
-
-- Testable.
-- Extensible.
-- Deterministic.
-- Independent of HTTP.
-- Independent of EF Core.
-- Independent of provider-specific APIs.
-
-Adding a new categorization rule should not require modifying unrelated code.
-
----
-
-# 9\. RESULT PATTERN
-
-Use a consistent Result pattern where it improves domain/application error handling.
-
-Distinguish between:
-
-- Expected business failures.
-- Validation failures.
-- Not found.
-- Conflict.
-- Unauthorized/forbidden.
-- External provider failures.
-- Infrastructure failures.
-- Unexpected programming errors.
-
-Do not use exceptions as normal control flow.
-
-Do not overuse Result\<T\> where normal return values are sufficient.
-
-Explain where Result is appropriate and where exceptions remain appropriate.
-
----
-
-# 10\. GLOBAL EXCEPTION HANDLING
-
-Implement centralized exception handling.
-
-Use:
-
-- ASP.NET Core exception handling middleware / handler.
-- Problem Details.
-- Consistent error contracts.
-- Correlation/trace IDs.
-- Safe error messages.
-
-Never expose:
-
-- Stack traces.
-- Database details.
-- Connection strings.
-- Secrets.
-- Internal implementation details.
-
-Production errors should be useful to operators without leaking sensitive information to clients.
-
----
-
-# 11\. API DESIGN
-
-Build a professional REST API.
-
-Include appropriate endpoints for:
-
-- Customer transactions.
-- Individual transactions.
-- Filtering.
-- Date ranges.
-- Categories.
-- Transaction types.
-- Accounts.
-- Aggregated summaries.
-- Spending by category.
-- Monthly summaries.
-- Synchronization/ingestion status where applicable.
-
-Use:
-
-- DTOs.
-- Explicit API contracts.
-- API versioning strategy.
-- Problem Details.
-- Validation.
-- Correct HTTP status codes.
-- Pagination.
-- Sorting.
-- Filtering.
-
-Do not expose EF Core entities directly.
-
----
-
-# 12\. PAGINATION
-
-Design pagination deliberately.
-
-Compare:
-
-- Offset pagination.
-- Keyset/cursor pagination.
-
-Determine which is appropriate for:
-
-- Transaction history.
-- Large datasets.
-- Frequently changing data.
-
-Consider indexes required to support the chosen pagination strategy.
-
-Avoid queries that become increasingly expensive as page numbers increase.
-
----
-
-# 13\. POSTGRESQL DATABASE DESIGN
-
-Design PostgreSQL as a production database.
-
-Consider:
-
-- Normalization.
-- Appropriate denormalization where justified.
-- Primary keys.
-- Foreign keys.
-- Unique constraints.
-- Check constraints.
-- Indexes.
-- Composite indexes.
-- Partial indexes.
-- Covering indexes where appropriate.
-- Query plans.
-- Connection pooling.
-- Concurrency.
-- Transaction isolation.
-- Soft deletion only where genuinely required.
-- Auditability.
-
-Explain every important index.
-
-Do not blindly index every column.
-
----
-
-# 14\. DATABASE PARTITIONING
-
-Evaluate whether transaction tables require partitioning.
-
-Consider partitioning by:
-
-- Transaction date.
-- Account/customer.
-- Another appropriate key.
-
-Do NOT automatically partition the database.
-
-Explain:
-
-- Expected volume.
-- Query patterns.
-- Retention requirements.
-- Partition maintenance.
-- Index implications.
-- Operational complexity.
-
-If partitioning is not justified at the initial scale, document the threshold/conditions under which it should be introduced.
-
----
-
-# 15\. DATABASE SCHEMA
-
-Use PostgreSQL schemas where they provide meaningful isolation.
-
-Evaluate whether modules should have separate database schemas such as:
-
-```
-transactions.*
-providers.*
-audit.*
-integration.*
+Dependency direction inside a module: `Presentation → Application → Domain`, and
+`Infrastructure → Application → Domain`. Modules reach each other only through `*.Contracts`.
+`Presentation` is referenced only by the API host.
+
+Data flow, in one line: **webhook or Kafka → inbox → (worker) normalize, categorize, record →
+ledger + outbox + audit in one transaction → Kafka `transaction-events`; separately, the worker
+rebuilds `DailyTotals` for the aggregate endpoints.**
+
+## 2. Rules, and what enforces them
+
+### Domain and data
+
+1. **The ledger is insert-only.** Never write an `UPDATE`, `DELETE` or `TRUNCATE` against
+   `transactions."Transactions"` or `audit."AuditEvents"`, and never add an endpoint that edits a
+   transaction or its category. The database refuses them (triggers; grants revoked from `tagg_app`).
+   A correction is a new entry. *Enforced by:* the triggers and grants, `LeastPrivilegeRolesTests`,
+   `ProcessingGuaranteesPostgresTests`.
+2. **Money is `decimal` through `Money`.** Non-zero, at most 4 decimal places, below 10^15, ISO 4217
+   currency. Never `double` or `float`; never add amounts of different currencies.
+3. **Dates are UTC** in the domain and the database. Bank-local times are converted during
+   normalization using the bank's time zone. Reporting days are South African calendar days (UTC+2).
+4. **Uniqueness is the database's job.** Do not replace a unique index with a check-then-insert.
+   The ledger key is `(SourceName, ExternalAccountId, SourceExternalId)`; the inbox key is
+   `(SourceName, IdempotencyKey)`. Handle the unique violation instead of preventing it.
+5. **Nothing stores a customer on a transaction.** Customers link (bank, account id) pairs and are
+   resolved on read. Do not add a `CustomerId` to the ledger.
+6. **Categorization happens once, at recording time.** Do not recategorize stored rows.
+
+### Boundaries
+
+7. **Modules talk only through `*.Contracts`.** No project reference from one module's
+   Domain/Application/Infrastructure/Presentation to another module's internals.
+   *Enforced by:* `ModuleIsolationTests`, `AuditModuleIsolationTests`, `LayerDependencyTests`.
+8. **Domain stays pure.** No EF Core, MediatR, validation or logging framework, and no ASP.NET
+   reference. *Enforced by:* `DomainPurityTests`, `LayerDependencyTests`.
+9. **Presentation holds HTTP only**, one file per endpoint under `Endpoints/`, wire shapes under
+   `Requests/` and `Responses/`. Endpoint handlers are not `public`. Application DTOs are mapped to
+   a response type, never serialized directly. Presentation does not reference Infrastructure, and
+   Infrastructure does not map endpoints. *Enforced by:* `PresentationLayerTests`.
+10. **The API runs no background service; the worker runs all of them.** Do not add a
+    `BackgroundService` to the API host, and do not load Kafka there. *Enforced by:* `WorkerHostTests`.
+11. **Naming:** `*CommandHandler`, `*QueryHandler`, interfaces start with `I`, domain entities are
+    `sealed`, value objects inherit `ValueObject`. *Enforced by:* `LayerDependencyTests`.
+
+### Messaging
+
+12. **The inbox "processed" mark, the ledger rows, the outbox events and the audit events commit in
+    one transaction.** Do not split them, and do not publish to Kafka from the request or inbox path;
+    write an outbox row and let the outbox dispatcher publish.
+13. **Classify every failure.** Permanent failures (malformed input, validation, domain violation,
+    most 4xx) dead-letter at once; transient ones retry. Use `FailureClassifier`; do not catch and
+    swallow. Retries are bounded: 5 attempts, exponential backoff with jitter, 300 s ceiling.
+14. **Integration events are versioned and additive.** `TransactionRecorded` is v1
+    (`Transactions.Contracts`). Add fields compatibly; a breaking change is a new schema version,
+    published alongside the old until consumers move.
+15. **Consumers deduplicate.** Delivery is at least once; `message-id` is the stable id.
+
+### Security
+
+16. **Every endpoint declares its policy.** Reads use `AuthorizationPolicies.Staff`, changes and
+    admin routes use `AuthorizationPolicies.Admin`; the only unauthenticated routes are the webhook
+    (API key), health, and Development-only Scalar.
+17. **Scope every read by `IUserContext.InstitutionAccess`.** A transaction or customer outside the
+    caller's banks is a `404`, indistinguishable from a missing one. A new query that forgets this is
+    a BOLA bug. *Verify with:* `InstitutionAccessApiTests`, `CustomerApiTests`.
+18. **Secrets never enter source.** Use `secrets.json` (git-ignored; shape in `secrets.template.json`),
+    `.env` for Compose, or the Vault-rendered file. A required setting that is missing must stop the
+    host at startup, not fall back to a default.
+19. **Bank API keys are stored as SHA-256 hashes and shown once.** Never log or return key material.
+20. **Errors are safe.** Return ProblemDetails with fixed text; log the exception. Never put stack
+    traces, SQL, connection strings or internal type names in a response.
+
+### Logging
+
+21. **Structured templates only; no personal data.** Mask account ids with `LogRedaction.Account(...)`.
+    Never log customer names, tokens, keys, webhook URLs or whole request objects. Do not push a
+    request object into the log context. *Enforced by:* `LoggingHygieneTests`.
+
+### Migrations
+
+22. **A migration only changes schema, and never blocks writes.** From migration
+    `20261003000000` on: no `DropTable`, no `DropColumn`, no data `UPDATE`/`DELETE`/`TRUNCATE`, and
+    every index built with `CREATE INDEX CONCURRENTLY` through `migrationBuilder.Sql(..., suppressTransaction: true)`.
+    Use expand/contract: add, backfill outside migrations, switch readers, drop in a later release.
+    *Enforced by:* `MigrationPolicyTests`.
+23. **Every model change ships with a migration**, in the module that owns the `DbContext`.
+    *Enforced by:* the CI step "Migrations in sync with the model".
+24. **Production never migrates from a pod.** Only Development applies migrations at start; elsewhere
+    the `db-migrate` Job runs `--migrate-only` as `tagg_migrator` before the API and worker roll out.
+    The running services connect as the DML-only `tagg_app`.
+
+### Dependencies
+
+25. **NuGet versions live only in `Directory.Packages.props`;** `.csproj` files list names without
+    versions. Add a package only if .NET does not already provide the capability. CI fails on a known
+    vulnerable package.
+
+## 3. Commands
+
+```bash
+# from TransactionAggregationAPI/ (the solution root)
+dotnet restore TransactionAggregationAPI.slnx
+dotnet format TransactionAggregationAPI.slnx --verify-no-changes
+dotnet build TransactionAggregationAPI.slnx -c Release -warnaserror
+dotnet test TransactionAggregation.Tests -c Release      # needs Docker: Testcontainers starts PostgreSQL, Redis, Kafka
+
+dotnet test TransactionAggregation.Tests --filter "FullyQualifiedName~Architecture"   # fast boundary check
+
+# run the system (pick ONE stack; Compose and Aspire both publish Keycloak on 8081)
+cp .env.template .env                      # once, fill in credentials (git-ignored)
+docker compose up --build                  # add --profile tools and/or --profile monitoring
+dotnet run --project TransactionAggregationAPI.AppHost    # Aspire; needs each secrets.json filled in
+scripts/smoke-test.sh http://localhost:5001
 ```
 
-Avoid pretending that PostgreSQL schemas provide security boundaries if the actual deployment does not enforce them.
+In Development the API applies migrations, seeds demo accounts and customers, and registers the mock
+banks as sources. `TransactionAggregation.MockAggregator` then pushes new transactions every 30 s
+through the real webhook (or Kafka with `Feed__Channel=Kafka`).
 
-Document the reasoning.
+Logins (local realm import): `staff@test.com` (FNB and StandardBank only) and `admin@test.com`
+(everything). Their passwords come from `.env` or the AppHost's `secrets.json`; none is committed.
 
----
+Ports: UI 7200, API 5001, Keycloak 8081, mock aggregator 5090, Seq 5341, Kafka UI 8083 (tools),
+Prometheus 9090 and Grafana 3000 (monitoring). The API also serves `/metrics` on port 9464 only.
 
-# 16\. EF CORE
+## 4. Recipes
 
-Use EF Core appropriately.
+### Add or change a categorization keyword
+Edit `TransactionAggregation.Hosting/categorization-rules.json` (`CategorizationRules:Keywords`:
+`"phrase": "CategoryName"`). Matching is whole-word, case-insensitive, longest phrase first. No code
+change. Add a case to `Unit/Services/TransactionCategorizationServiceTests.cs`. A new *category* is
+different: add the enum member (the next free integer; a check constraint covers the range, so it
+needs a migration that widens the constraint), then update `categorization-rules.json`,
+`normalization-rules.json` maps and the UI badge.
 
-Consider:
+### Teach the pipeline a bank's format
+Banks differ only in `normalization-rules.json` (production) or `normalization-rules.Development.json`
+(mock banks). Add an entry under `Normalization:Institutions:<BankCode>` with `TimeZone`,
+`DescriptionPrefixes` and `CategoryMap`; `Default` applies to every bank. The bank's transaction id
+is never altered. Cover it in `Unit/Services/TransactionNormalizerTests.cs`.
 
-- Fluent configuration.
-- Separate entity configurations.
-- Migrations.
-- Optimized queries.
-- AsNoTracking where appropriate.
-- Compiled queries only if justified.
-- Transaction boundaries.
-- Concurrency handling.
-- Value conversions.
-- PostgreSQL-specific features where valuable.
+### Add a bank
+Create it through `POST /api/v1/admin/webhook-sources` (or the UI's Banks page): the code is fixed,
+the key is shown once. For Kafka, register its ECDSA P-256 public key with
+`PUT /admin/webhook-sources/{id}/signing-key`. Nothing in code changes. Staff reach it only if the
+bank code is in their Keycloak `institutions` attribute.
 
-Avoid:
+### Add a read endpoint
+1. Put a query record and handler in the module's `Application/Features/<Area>/Queries/…`
+   (`IQuery<T>`, `…QueryHandler`), with a FluentValidation validator for its inputs.
+2. Take `InstitutionAccess` from `IUserContext` and apply it in the query. Use `AsNoTracking`.
+3. For a list, use the keyset paginator (`IKeysetPaginator`), a sort backed by an existing index,
+   and the standard response `{ items, pageSize, nextCursor, hasMore, totalCount, totalCountCapped }`.
+   A new filter or sort needs an index justified by the query; build it `CONCURRENTLY` (rule 22).
+4. If it is cacheable, implement `ICacheableQuery` and choose a scope from `TransactionCacheScopes`.
+   Ledger scope is invalidated by the outbox, the aggregates scope by the refresh.
+5. Add one file under `Presentation/Endpoints/`, map it in the module's `*Endpoints.cs` with the right
+   policy, return a Presentation response type, and convert `Result` with the helpers in `BuildingBlocks.Web`.
+6. Tests: an application unit test, an API test for roles and out-of-scope access, and a Postgres
+   test if the query shape matters.
 
-- N+1 queries.
-- Accidental eager loading.
-- Generic repository abstractions that hide EF Core's capabilities.
-- Loading huge datasets into memory.
-- Tracking entities unnecessarily.
+### Add a write endpoint
+Admin only. Use a command and `…CommandHandler` returning `Result`. Write the audit event **in the
+same transaction** as the change (see `Customers.Application/Common/CustomerAudit.cs` and
+`Transactions.Application/Common/Audit/InboundAudit.cs`), including the acting admin. Never audit
+secrets or personal names. Add the event type to `Audit.Contracts/AuditEventTypes.cs`.
 
----
-
-# 17\. MIGRATIONS
-
-Database migrations must be production-safe.
-
-Design a proper migration strategy.
-
-Consider:
-
-- Forward-only migrations.
-- Startup migration vs deployment migration.
-- CI validation.
-- Migration bundles/scripts.
-- Roll-forward strategy.
-- Backward-compatible schema changes.
-- Expand/contract migrations.
-- Large table migrations.
-- Index creation without excessive locking.
-- Rollback limitations.
-
-Do NOT blindly run destructive migrations during application startup in production.
-
-Explain exactly how migrations are applied in:
-
-- Local development.
-- Test environments.
-- CI.
-- Staging.
-- Production.
-
----
-
-# 18\. REDIS
-
-Evaluate Redis for:
-
-- Caching.
-- Distributed coordination where appropriate.
-- Rate limiting if appropriate.
-- Frequently accessed reference data.
-
-Do not use Redis as the source of truth for financial transactions.
-
-Design:
-
-- TTLs.
-- Cache invalidation.
-- Cache stampede protection where needed.
-- Failure behavior.
-- Serialization.
-- Key naming.
-- Memory limits.
-
-The application must remain correct if Redis is unavailable unless Redis is explicitly part of a required consistency mechanism.
-
----
-
-# 19\. RESILIENCE
-
-Design for failure.
-
-External dependencies can:
-
-- Timeout.
-- Return 500s.
-- Return malformed data.
-- Return 429.
-- Become unavailable.
-- Return partial data.
-- Respond slowly.
-
-Implement appropriate:
-
-- Timeouts.
-- Retries.
-- Exponential backoff.
-- Jitter.
-- Circuit breakers.
-- Bulkheads where justified.
-- Cancellation tokens.
-- Rate limiting.
-- Backpressure.
-
-Do not retry non-idempotent operations blindly.
-
-Do not retry validation errors or permanent failures.
-
-Document retry policies per dependency.
-
----
-
-# 20\. SECURITY
-
-Treat this as a banking system.
-
-Implement defense in depth.
-
-Consider:
-
-- Authentication.
-- Authorization.
-- Object-level authorization.
-- Least privilege.
-- HTTPS.
-- Secure headers.
-- Input validation.
-- Output encoding where applicable.
-- SQL injection protection.
-- SSRF protection where applicable.
-- Rate limiting.
-- Request size limits.
-- File/resource access controls.
-- Secret management.
-- Encryption in transit.
-- Encryption at rest.
-- Key rotation.
-- Audit logging.
-- PII minimization.
-- Sensitive data masking.
-- Secure error handling.
-
-Never put secrets in:
-
-- Git.
-- appsettings.json committed to source control.
-- Docker images.
-- source code.
-
-Use appropriate secret management.
-
----
-
-# 21\. SECURITY TESTING / BREACH TOOLS
-
-Include a practical security testing strategy.
-
-Evaluate appropriate tools such as:
-
-- OWASP ZAP.
-- Trivy.
-- Snyk or equivalent dependency scanning.
-- GitHub Dependabot.
-- .NET security analyzers.
-- Secret scanning.
-- Container image scanning.
-- SBOM generation.
-- Static analysis.
-- Dynamic API security testing.
-
-Do not just list tools.
-
-Integrate appropriate checks into CI/CD.
-
-Explain what each tool protects against and what it does NOT protect against.
-
----
-
-# 22\. AUTHORIZATION
-
-Do not stop at authentication.
-
-Design authorization around resources.
-
-For example:
-
+### Add a database change
+```bash
+# from the solution root; the design-time factory only needs a connection-string value
+export ConnectionStrings__transactiondb="Host=localhost;Database=dev;Username=dev;Password=dev"
+dotnet ef migrations add <Name> \
+  -p Modules/<Module>/<Module>.Infrastructure -s Modules/<Module>/<Module>.Infrastructure \
+  --context <Module>DbContext
 ```
-User A
-  ↓
-Customer A
-  ↓
-Account A
-  ↓
-Transactions A
-```
-
-User A must not be able to manipulate an ID in the URL and access Customer B's transactions.
-
-Explicitly address IDOR/BOLA risks.
-
----
-
-# 23\. LOGGING
-
-Use structured logging.
-
-Prefer:
-
-```
-TransactionSyncCompleted
-ProviderRequestFailed
-TransactionDuplicateDetected
-EventProcessingFailed
-```
-
-with structured properties.
-
-Do not log sensitive financial information unnecessarily.
-
-Never log:
-
-- Passwords.
-- Tokens.
-- Secrets.
-- Full authentication credentials.
-- Sensitive PII unnecessarily.
-
-Include:
-
-- Correlation ID.
-- Trace ID.
-- Event ID.
-- Provider.
-- Operation.
-- Duration.
-- Result.
-- Error classification.
-
----
-
-# 24\. OBSERVABILITY
-
-Use OpenTelemetry where appropriate.
-
-Provide:
-
-- Logs.
-- Metrics.
-- Distributed traces.
-- Health checks.
-
-Important metrics could include:
-
-```
-events_received_total
-events_processed_total
-events_failed_total
-duplicate_events_total
-provider_failures_total
-provider_latency
-transaction_processing_latency
-api_request_duration
-api_error_rate
-database_latency
-queue_depth
-```
-
-Define useful dashboards/alerts conceptually.
-
-Do not create meaningless metrics just to increase the metric count.
-
----
-
-# 25\. HEALTH CHECKS
-
-Implement:
-
-```
-/liveness
-/readiness
-/health
-```
-
-Distinguish:
-
-- Process is alive.
-- Application is ready to serve traffic.
-- Dependency health.
-
-Do not make liveness fail because an optional dependency such as Redis is unavailable.
-
-Avoid health checks that cause cascading failures.
-
----
-
-# 26\. PERFORMANCE
-
-Treat performance as an engineering concern.
-
-Consider:
-
-- Database query performance.
-- Indexes.
-- Pagination.
-- Connection pooling.
-- Async I/O.
-- Allocation reduction where justified.
-- Serialization.
-- Caching.
-- Batch processing.
-- Bulk inserts.
-- Background processing.
-- Provider concurrency limits.
-
-Do not prematurely optimize.
-
-Define performance assumptions and measurable targets.
-
-Include a performance-testing strategy.
-
-Consider tools such as:
-
-- k6.
-- NBomber.
-- BenchmarkDotNet where appropriate.
-
-Test realistic workloads.
-
----
-
-# 27\. CONCURRENCY
-
-Explicitly design for concurrent event processing.
-
-Consider:
-
-- Multiple consumers.
-- Duplicate events.
-- Same transaction arriving simultaneously.
-- Optimistic concurrency.
-- Database constraints.
-- Transaction isolation.
-- Race conditions.
-- Distributed processing.
-
-The correctness guarantee must come from the architecture and persistence layer, not from timing assumptions.
-
----
-
-# 28\. DESIGN PATTERNS
-
-Use design patterns only when they solve a real problem.
-
-Potential patterns:
-
-- Strategy.
-- Adapter.
-- Factory.
-- Specification.
-- Chain of Responsibility.
-- Decorator.
-- Outbox.
-- Inbox.
-- Unit of Work where appropriate.
-- CQRS.
-- Saga where genuinely required.
-
-For every pattern, explain:
-
-1. The problem.
-2. Why the pattern solves it.
-3. The alternative.
-4. The trade-off.
-
-Do not use patterns simply to demonstrate that you know patterns.
-
----
-
-# 29\. SAGA
-
-Evaluate whether a Saga is actually required.
-
-Do NOT implement a Saga merely because the project is "production-grade."
-
-A Saga is justified only when there is a distributed business workflow requiring multiple independently committed steps and compensating behavior.
-
-If a Saga is unnecessary for the current transaction aggregation workflow, explicitly document that decision.
-
-If a Saga becomes appropriate, design:
-
-- Orchestration vs choreography.
-- State transitions.
-- Idempotency.
-- Retry.
-- Compensation.
-- Timeout.
-- Recovery.
-- Observability.
-
----
-
-# 30\. CLEAN CODE
-
-Follow high-quality coding standards.
-
-Use:
-
-- Meaningful names.
-- Small cohesive methods.
-- Explicit dependencies.
-- Immutable DTOs where appropriate.
-- Guard clauses.
-- Strong typing.
-- Nullable reference types.
-- Async/await correctly.
-- CancellationToken propagation.
-- No unnecessary abstractions.
-- No magic strings.
-- No magic numbers.
-- No duplicated business logic.
-
-Avoid "clever" code.
-
-Optimize for maintainability.
-
----
-
-# 31\. TESTING STRATEGY
-
-Build a serious test pyramid.
-
-Include:
-
-### Unit tests
-
-Test:
-
-- Domain rules.
-- Categorization.
-- Result behavior.
-- Validation.
-- Business logic.
-
-### Integration tests
-
-Test:
-
-- PostgreSQL.
-- EF Core.
-- Transactions.
-- Constraints.
-- Inbox/outbox.
-- Redis where appropriate.
-- Event processing.
-
-Prefer real infrastructure through containers/Testcontainers where practical.
-
-### API tests
-
-Test:
-
-- Authentication.
-- Authorization.
-- Validation.
-- Pagination.
-- Error responses.
-- Problem Details.
-- API contracts.
-
-### Contract tests
-
-Consider contracts between:
-
-- Provider events.
-- Internal events.
-- API consumers.
-
-### Architecture tests
-
-Verify dependency boundaries.
-
-Examples:
-
-```
-Domain → must not depend on Infrastructure
-Domain → must not depend on ASP.NET
-Application → must not depend on provider implementations
-```
-
-### Performance tests
-
-Include realistic load scenarios.
-
-### Security tests
-
-Include automated security scanning and API security tests.
-
----
-
-# 32\. CI/CD
-
-Create a realistic pipeline.
-
-Suggested flow:
-
-```
-Pull Request
-    ↓
-Build
-    ↓
-Format / Lint
-    ↓
-Static Analysis
-    ↓
-Unit Tests
-    ↓
-Integration Tests
-    ↓
-Architecture Tests
-    ↓
-Security Scanning
-    ↓
-Dependency Scanning
-    ↓
-Container Build
-    ↓
-Container Scan
-    ↓
-SBOM
-    ↓
-Publish Artifact
-    ↓
-Deploy Staging
-    ↓
-Smoke Tests
-    ↓
-Production Deployment
-```
-
-Use appropriate deployment strategies.
-
-Consider:
-
-- Immutable artifacts.
-- Environment configuration.
-- Secrets injection.
-- Database migration strategy.
-- Roll-forward.
-- Health checks.
-- Deployment verification.
-- Rollback strategy.
-
----
-
-# 33\. DOCKER
-
-Provide production-quality containers.
-
-Consider:
-
-- Multi-stage builds.
-- Non-root execution.
-- Minimal runtime image.
-- Health checks.
-- Read-only filesystem where practical.
-- No secrets baked into images.
-- Proper signal handling.
-- Resource limits.
-- Image scanning.
-
----
-
-# 34\. .NET ASPIRE
-
-Use .NET Aspire primarily for:
-
-- Local orchestration.
-- Service discovery.
-- Developer experience.
-- Observability.
-- Local infrastructure management.
-
-Do not make Aspire a hard runtime dependency unless there is a compelling reason.
-
-The application should remain independently deployable.
-
-Use Aspire to make local development easy:
-
-```
-API
-PostgreSQL
-Redis
-Message Broker (if required)
-Telemetry
-```
-
----
-
-# 35\. DOCKER COMPOSE
-
-Provide Docker Compose for developers who do not use Aspire.
-
-The local environment should be easy to start.
-
-Example conceptual environment:
-
-```
-API
-PostgreSQL
-Redis
-Message Broker (if required)
-```
-
-Keep local infrastructure minimal.
-
----
-
-# 36\. CONFIGURATION
-
-Use strongly typed options.
-
-Separate:
-
-- Application configuration.
-- Environment configuration.
-- Secrets.
-
-Validate required configuration at startup.
-
-Fail fast when critical configuration is missing.
-
-Do not scatter configuration access throughout the codebase.
-
----
-
-# 37\. DEPENDENCY MANAGEMENT
-
-Keep dependencies minimal.
-
-Before introducing a NuGet package, evaluate:
-
-- Is it necessary?
-- Is the project actively maintained?
-- Is it secure?
-- Does .NET already provide this capability?
-- What is its operational cost?
-- Does it lock us into a specific implementation?
-
-Avoid dependency bloat.
-
----
-
-# 38\. API DOCUMENTATION
-
-Provide high-quality OpenAPI documentation.
-
-Document:
-
-- Endpoints.
-- Authentication.
-- Request parameters.
-- Response schemas.
-- Error responses.
-- Pagination.
-- Filtering.
-- Examples.
-
-The API should be understandable without reading the source code.
-
----
-
-# 39\. ARCHITECTURAL DOCUMENTATION
-
-Produce:
-
-- System Context Diagram.
-- Container Diagram.
-- Component Diagram.
-- Module Dependency Diagram.
-- Database ERD.
-- Event Flow Diagram.
-- Sequence Diagrams for critical workflows.
-- Deployment Diagram.
-- Threat Model.
-- Architecture Decision Records (ADRs).
-
-Create ADRs for important decisions such as:
-
-- Modular monolith vs microservices.
-- PostgreSQL choice.
-- Event broker choice.
-- Inbox/outbox.
-- CQRS.
-- Redis.
-- Partitioning.
-- Migration strategy.
-- Saga decision.
-- Consistency model.
-
----
-
-# 40\. THREAT MODEL
-
-Perform a lightweight threat model using STRIDE or an equivalent methodology.
-
-Consider:
-
-- Spoofing.
-- Tampering.
-- Repudiation.
-- Information disclosure.
-- Denial of service.
-- Elevation of privilege.
-
-Identify threats around:
-
-- Event ingestion.
-- API.
-- Provider integrations.
-- Database.
-- Redis.
-- Message broker.
-- Authentication.
-- Authorization.
-- Secrets.
-
-For each important threat, provide:
-
-```
-Threat
-Impact
-Likelihood
-Mitigation
-Detection
-Residual Risk
-```
-
-Do not claim the system is "100% secure."
-
----
-
-# 41\. DATA RETENTION
-
-Because this is financial data, consider:
-
-- Retention periods.
-- Audit requirements.
-- Data minimization.
-- Archiving.
-- Deletion requirements.
-- Legal/regulatory requirements.
-
-Do not invent regulatory requirements.
-
-Where requirements are unknown, explicitly state assumptions and identify what must be confirmed with compliance/legal teams.
-
----
-
-# 42\. FAILURE SCENARIOS
-
-Explicitly design and test scenarios such as:
-
-1. PostgreSQL unavailable.
-2. Redis unavailable.
-3. Provider unavailable.
-4. Provider timeout.
-5. Provider returns 429.
-6. Provider returns malformed event.
-7. Duplicate event.
-8. Same event processed concurrently.
-9. Outbox publication fails.
-10. Consumer crashes after database commit.
-11. Consumer crashes before database commit.
-12. Message broker unavailable.
-13. Application restarts during processing.
-14. Database migration fails.
-15. Partial provider outage.
-16. Large transaction volume.
-17. Poison message.
-18. Invalid authentication.
-19. Unauthorized customer access.
-
-For each scenario explain:
-
-```
-Detection
-Response
-Recovery
-Data consistency
-Observability
-User impact
-```
-
----
-
-# 43\. MAINTAINABILITY
-
-Optimize for low maintenance.
-
-Prefer:
-
-- Fewer moving parts.
-- Clear boundaries.
-- Automated deployment.
-- Automated migrations.
-- Automated security scanning.
-- Strong defaults.
-- Centralized observability.
-- Minimal manual operational procedures.
-- Boring infrastructure where possible.
-
-Every new infrastructure component must have a documented justification.
-
----
-
-# 44\. PRODUCTION READINESS CHECKLIST
-
-Create a checklist covering:
-
-Security\
- Reliability\
- Performance\
- Observability\
- Testing\
- Deployment\
- Database\
- Data protection\
- Disaster recovery\
- Configuration\
- Dependencies\
- Documentation\
- Operations
-
-Identify:
-
-- Must-have.
-- Should-have.
-- Future enhancement.
-
-Do not pretend optional production infrastructure is mandatory for a small deployment.
-
----
-
-# 45\. IMPLEMENTATION RULES
-
-Before writing substantial code:
-
-1. Analyze the requirements.
-2. Identify assumptions.
-3. Identify ambiguities.
-4. Propose architecture.
-5. Explain trade-offs.
-6. Define module boundaries.
-7. Define domain model.
-8. Define event contracts.
-9. Define database schema.
-10. Define API contracts.
-11. Define failure model.
-12. Define security model.
-13. Define testing strategy.
-14. Define deployment strategy.
-15. Then implement incrementally.
-
-Do not generate the entire system in one enormous response.
-
-Build in vertical slices.
-
-After each major slice:
-
-- Review architecture.
-- Review security.
-- Review tests.
-- Review performance.
-- Identify technical debt.
-- Confirm consistency with previous decisions.
-
----
-
-# 46\. IMPORTANT PRINCIPAL ENGINEER BEHAVIOR
-
-Challenge my assumptions.
-
-If I ask for something that is unnecessary, explain why.
-
-If a simpler design is better, recommend the simpler design.
-
-If a requirement introduces operational risk, explain it.
-
-If two requirements conflict, identify the conflict and propose alternatives.
-
-Do not blindly follow my requested technologies if they contradict the stated goals.
-
-For example:
-
-If I ask for Redis but Redis provides no meaningful value for a particular operation, say so.
-
-If I ask for Kafka but a simpler mechanism is sufficient, explain the trade-off.
-
-If I ask for a Saga but the workflow does not require distributed compensation, say so.
-
-If partitioning is premature, say so.
-
-If microservices are premature, say so.
-
-The goal is **engineering correctness, not technology accumulation.**
-
----
-
-# 47\. OUTPUT FORMAT
-
-Start by producing:
-
-## A. Executive Architecture Summary
-
-Explain the architecture in concise Principal Engineer language.
-
-## B. Architecture Diagram
-
-Provide a Mermaid diagram.
-
-## C. Module Boundaries
-
-Show module responsibilities and dependencies.
-
-## D. Event Flow
-
-Show transaction event ingestion from provider to persistence.
-
-## E. Database Design
-
-Provide an ERD and explain normalization, indexes, constraints and partitioning decisions.
-
-## F. API Design
-
-List endpoints, contracts, pagination strategy and error model.
-
-## G. Security Architecture
-
-Provide authentication, authorization, threat model and security controls.
-
-## H. Reliability Architecture
-
-Explain retries, timeouts, circuit breakers, Inbox, Outbox, idempotency and failure handling.
-
-## I. Observability
-
-Explain logs, metrics, traces and health checks.
-
-## J. Testing Strategy
-
-Define unit, integration, contract, architecture, performance and security tests.
-
-## K. CI/CD
-
-Provide the proposed pipeline.
-
-## L. ADRs
-
-List the important architectural decisions and their trade-offs.
-
-## M. Project Structure
-
-Provide the proposed .NET solution/project structure.
-
-## N. Implementation Roadmap
-
-Break implementation into small vertical slices.
-
-Do NOT start writing all production code until the architecture has been reviewed.
-
----
-
-# FINAL QUALITY BAR
-
-Judge every implementation against these questions:
-
-1. Is it secure?
-2. Is it correct under concurrency?
-3. Is it resilient to dependency failure?
-4. Is it observable?
-5. Is it testable?
-6. Is it maintainable?
-7. Is it operationally simple?
-8. Is it scalable where it needs to be?
-9. Does the database enforce important invariants?
-10. Are module boundaries respected?
-11. Can providers evolve independently?
-12. Can the system recover from partial failure?
-13. Can engineers diagnose production problems?
-14. Can the system be deployed repeatedly and safely?
-15. Is every piece of complexity justified?
-
-Most importantly:
-
-**Do not confuse "production-grade" with "maximum complexity."**
-
-The target architecture should be **boring, secure, observable, resilient, testable, maintainable and evolvable**.
-
-Use complexity only where it buys measurable business or engineering value.
-
-### One thing I'd add
-
-Your original list is actually **very good**, but I'd make one major change in how you approach Claude:
-
-**Don't tell it to implement all of those technologies immediately.**
-
-For example, you've mentioned:
-
-> Redis + Aspire + Docker \+ Docker Compose + Inbox \+ Outbox + Saga + partitioning \+ CQRS + Result + Clean Architecture + resilience...
-
-That's potentially a **technology checklist**, rather than an architecture.
-
-The strongest instruction in the prompt above is essentially:
-
-> **"Challenge my assumptions. Don't introduce complexity without justification."**
+(`MessagingDbContext` lives in `BuildingBlocks/BuildingBlocks.Messaging`.) Then check the generated
+file against rule 22: replace any generated `CreateIndex` with a `CONCURRENTLY` SQL statement and
+`suppressTransaction: true`, use `AddCheckConstraintWithoutBlockingWrites` for constraints on large
+tables, and write a Down that restores the shape. Check with
+`dotnet ef migrations has-pending-model-changes` and add a test under `Integration/Postgres/`
+(`SchemaContractTests` pins the indexes and constraints).
+
+### Add an outbound event or an outbox handler
+Define the contract in the owning module's `*.Contracts` with an `EventType` and `SchemaVersion`.
+Enqueue an `OutboxMessage` in the same transaction as the change. Add an `IOutboxMessageHandler` in
+the worker (see `Outbox/TransactionRecordedHandler.cs`); if it changes cached data, invalidate the
+cache scope through the handler run, not by hand. A handler that calls an external system must
+throw `PermanentDeliveryException` for errors that retrying cannot fix.
+
+### Add a background job
+Derive from `PollingBackgroundService` in the worker. Give it an options class, a bounded batch,
+retry with `DelayAfterFailure`, and a metric. A job that several replicas may run needs a lock
+(see the advisory lock in `PostgresDailyTotalsRefresher`) or claim-based work (`FOR UPDATE SKIP
+LOCKED`, as in `MessagingDbContext`). Register it only in the worker host.
+
+### Add a metric or an alert
+Use prometheus-net (`Metrics.CreateCounter/Gauge/Histogram`) with snake_case names ending in
+`_total` or `_seconds`, and low-cardinality labels (bank code is fine; account or transaction ids
+are not). Alert rules live in `monitoring/prometheus-rules.yml` (CI validates them with promtool);
+Grafana dashboards are generated by `monitoring/grafana/generate_dashboards.py`, so edit the script,
+not the JSON.
+
+### Add configuration
+Bind it to a strongly typed options class with a `SectionName`. Non-secret values go in
+`appsettings*.json` (and `k8s/configmap.yaml` / `k8s/worker/configmap.yaml` when they differ in a
+cluster); secrets go in `secrets.template.json` (shape only), `.env.template` and `k8s/secrets.yaml`
+placeholders. Required values must fail at startup when absent, and numeric limits should be range-checked at
+startup too (see `IngestionOptions`, `Ingestion:MaxTransactionsPerDelivery`, which the API and the
+worker must agree on).
+
+## 5. Behaviour you will otherwise get wrong
+
+- **Webhook acceptance is not recording.** The webhook returns `202` once the delivery is in the inbox;
+  the worker records it up to about 5 s later. Tests that need the ledger must run the dispatcher
+  (`Helpers/InboxDispatcherTestExtensions.cs`) or poll.
+- **Aggregates lag.** They come from `DailyTotals`, rebuilt every 5 minutes, and carry `asOf`. A new
+  transaction appears in the list first and in totals later. Do not "fix" this with a request-time
+  `GROUP BY`.
+- **`pending` is not recorded.** Only posted transactions become ledger rows; the posting arrives
+  later as its own item.
+- **A repeated id is a skip, not an error.** Duplicates inside a batch or already in the ledger are
+  skipped, counted, audited and alerted; the rest of the batch is recorded.
+- **The same idempotency key with a different payload is `422`,** not a duplicate.
+- **Redis is optional at runtime but required in configuration** outside Development (it holds the
+  Data Protection key ring and the shared cache). When it is unreachable: reads go uncached,
+  rate limits apply per replica, `/readiness` stays `200`, events still publish.
+- **Staff with no banks see nothing;** a signed-in user with neither role gets a "No access" page.
+- **Deactivating a bank stops it on both channels.**
+- **Outbox ordering is not guaranteed within a batch.** Do not write a consumer that depends on arrival order.
+
+## 6. Before you finish a change
+
+1. `dotnet format --verify-no-changes`, then `dotnet build -warnaserror`, then `dotnet test`.
+2. The architecture, logging-hygiene and migration-policy tests are green.
+3. Every new endpoint has a policy, institution scoping, a validator and tests for 401, 403 and an
+   out-of-scope id.
+4. Every new write path has an audit event in the same transaction, and no new log line carries
+   personal data.
+5. Every new query is paginated by keyset and has an index (or a stated reason it does not need one).
+6. Every new failure path says whether it is transient or permanent, and its retries are bounded.
+7. If behaviour a README or `Goal.md` describes has changed, update the document in the same change.
+   A document that disagrees with the code is a defect.
+
+## 7. Do not introduce
+
+Microservices, a saga, a generic repository over EF Core, partitioning, row-level security, a second
+cache, or a new message broker, unless the problem they solve has been shown in this system. Each is
+rejected today for a recorded reason in [`Goal.md`](Goal.md#8-non-goals-and-known-limits). Likewise
+do not add `UPDATE`/`DELETE` paths to the ledger or audit trail, request-time aggregation,
+background services in the API host, or secrets in any tracked file.

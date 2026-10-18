@@ -54,6 +54,7 @@ try
 
     app.UseRouteTemplateRequestLogging();
 
+    app.UseMiddleware<AuthFailureThrottleMiddleware>();
     app.UseAuthentication();
     app.UseAuthorization();
     app.UseRateLimiter();
@@ -71,7 +72,6 @@ try
     app.MapAuditEndpoints();
     app.MapCustomersEndpoints();
 
-    // An unknown API path is a 404, not the SPA shell.
     app.MapFallback("api/{**path}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound));
     app.MapFallbackToFile("index.html");
 

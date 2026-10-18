@@ -877,7 +877,20 @@ Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 
 Returns `HTTP 429` with a `Retry-After` header when exceeded.
 Client identity: authenticated username → remote IP → `anonymous`.
-Counters live in Redis and are shared across all replicas.
+Counters live in Redis and are shared across all replicas. If Redis is unreachable, each replica
+keeps enforcing the same limits on its own until it returns.
+
+A client IP that fails authentication (HTTP 401: a bad token or API key) more than 60 times a
+minute is answered with `429` before any token is validated, for the rest of that minute.
+
+### Audit of customer reads
+
+Every successful read of a customer's data (`GET /customers/{id}` and the customer's
+`/transactions` and `/aggregates/*`) records an `access.customer_viewed` audit event with the
+viewer, the customer, which view, and the viewer's institution scope. The record is written before
+the response is returned, so if the audit write fails the read fails. Reads that return 404
+(including customers the caller may not see) disclose nothing and record nothing; the customer
+list is not audited.
 
 ---
 
@@ -899,6 +912,7 @@ Environment variables use `__` as a section separator:
 | `ConnectionStrings:transactiondb` | PostgreSQL connection string (secret) | built from `POSTGRES_PASSWORD` in `.env` |
 | `ConnectionStrings:kafka` | Kafka bootstrap servers (worker: required) | `kafka:9093` |
 | `Secrets:FilePath` | Absolute path of the secrets file (clusters: the Vault-rendered file) | not set: `secrets.json` in the content root, optional |
+| `Ingestion:MaxTransactionsPerDelivery` | Most transactions one webhook call or Kafka record may carry (1–5000; startup fails outside that). Set the same value on the API and the worker; the 1 MiB request-body limit still applies | `500` |
 | `Kafka:IntegrationEventsTopic` | Topic for `TransactionRecorded` events | `transaction-events` |
 | `NotificationOptions:DuplicateAlertWebhookUrl` | Optional alert hook (secret: it embeds a token) | `DUPLICATE_ALERT_WEBHOOK_URL` in `.env` |
 | `ConnectionStrings:redis` | Redis connection string | `redis:6379` |

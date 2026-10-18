@@ -196,11 +196,11 @@ is never altered. Cover it in `Unit/Services/TransactionNormalizerTests.cs`.
 
 ### Add a bank
 Create it through `POST /api/v1/admin/webhook-sources` (or the UI's Banks page): the code is fixed,
-the key is shown once. For Kafka, register its ECDSA P-256 public key with
-`PUT /admin/webhook-sources/{id}/signing-key`. To receive duplicate alerts for that bank, set its own
-URL with `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (https, public host; stored
-encrypted by the Notifications module; a bank without one uses
-`NotificationOptions:DuplicateAlertWebhookUrl`, if set). Nothing in code changes. Staff reach it only
+the key is shown once. Pass `notificationUrl` in the same call to say where the bank's REST
+notifications go (https, public host; stored encrypted by the Notifications module). It is optional;
+a bank without one uses `NotificationOptions:DuplicateAlertWebhookUrl`, if set, and it can be set or
+changed later with `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}`. For Kafka, register
+its ECDSA P-256 public key with `PUT /admin/webhook-sources/{id}/signing-key`. Nothing in code changes. Staff reach it only
 if the bank code is in their Keycloak `institutions` attribute.
 
 ### Add a read endpoint

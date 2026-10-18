@@ -12,10 +12,11 @@ namespace Modules.WebhookSources.Presentation.Responses
                 source.SigningKeyRegistered);
     }
 
-    public sealed record CreateWebhookSourceResponse(Guid Id, string Code, string DisplayName, string Color, string ApiKey)
+    public sealed record CreateWebhookSourceResponse(
+        Guid Id, string Code, string DisplayName, string Color, string ApiKey, bool NotificationUrlConfigured)
     {
         internal static CreateWebhookSourceResponse From(CreateWebhookSourceResult result) =>
-            new(result.Id, result.Code, result.DisplayName, result.Color, result.ApiKey);
+            new(result.Id, result.Code, result.DisplayName, result.Color, result.ApiKey, result.NotificationUrlConfigured);
     }
 
     public sealed record RotateWebhookSourceKeyResponse(string ApiKey);

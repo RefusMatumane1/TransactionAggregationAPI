@@ -19,7 +19,7 @@ namespace TransactionAggregation.Tests.Helpers
                 message.Claim(DateTime.UtcNow);
 
             return dispatcher.ProcessMessageAsync(
-                message, sender, messaging, InMemoryDbContextFactory.Create(messagingDbContext: messaging), cancellationToken);
+                message, sender, InMemoryDbContextFactory.Create(messagingDbContext: messaging), cancellationToken);
         }
 
         public static Task ProcessMessageAsync(

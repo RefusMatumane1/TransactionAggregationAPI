@@ -113,6 +113,17 @@ else
                         <label class="form-label" for="bank-name">Display name</label>
                         <input id="bank-name" class="form-control" @bind="_editing.DisplayName" placeholder="e.g. Nedbank" />
                     </div>
+                    @if (_editing.Id is null)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label" for="bank-notification-url">Notification URL <span class="text-muted">(optional)</span></label>
+                            <input id="bank-notification-url" type="url" class="form-control" @bind="_editing.NotificationUrl" placeholder="https://notifications.bank.example/hooks/..." />
+                            <div class="form-text">
+                                Where we post REST notifications for this bank, such as duplicate-transaction alerts.
+                                https only. It is stored encrypted and never shown again.
+                            </div>
+                        </div>
+                    }
                     <div class="mb-3">
                         <label class="form-label" for="bank-color">Colour</label>
                         <div class="d-flex align-items-center gap-2">
@@ -173,6 +184,13 @@ else
                         This key will not be shown again. Copy it now and give it to the bank; it sends it as
                         the <code>X-Api-Key</code> header.
                     </div>
+                    @if (_notificationUrlFailed)
+                    {
+                        <div class="alert alert-danger py-2">
+                            The bank was created, but its notification URL could not be saved. Set it again with
+                            <code>PUT /api/v1/admin/notifications/duplicate-alert-webhooks/@_revealedFor</code>.
+                        </div>
+                    }
                     <div class="input-group">
                         <input class="form-control font-monospace" readonly value="@_revealedKey" aria-label="API key" />
                         <button class="btn btn-outline-secondary" @onclick="CopyRevealedKey">
@@ -195,6 +213,7 @@ else
         public string Code { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
         public string Color { get; set; } = "#0d6efd";
+        public string NotificationUrl { get; set; } = string.Empty;
     }
 
     private List<BankSourceModel> _sources = [];
@@ -207,6 +226,7 @@ else
     private string _signingKey = string.Empty;
     private string? _revealedKey;
     private string? _revealedFor;
+    private bool _notificationUrlFailed;
     private Guid? _actingOnId;
 
     protected override async Task OnInitializedAsync()
@@ -243,12 +263,13 @@ else
         }
         else
         {
-            var (result, error) = await BankService.CreateAsync(_editing.Code, _editing.DisplayName, _editing.Color);
+            var (result, error) = await BankService.CreateAsync(_editing.Code, _editing.DisplayName, _editing.Color, _editing.NotificationUrl);
             _modalError = error;
             if (result is not null)
             {
                 _revealedKey = result.ApiKey;
                 _revealedFor = result.Code;
+                _notificationUrlFailed = !string.IsNullOrWhiteSpace(_editing.NotificationUrl) && !result.NotificationUrlConfigured;
             }
         }
         _saving = false;
@@ -298,6 +319,7 @@ else
 
         _revealedKey = apiKey;
         _revealedFor = source.DisplayName;
+        _notificationUrlFailed = false;
         await LoadAsync();
     }
 

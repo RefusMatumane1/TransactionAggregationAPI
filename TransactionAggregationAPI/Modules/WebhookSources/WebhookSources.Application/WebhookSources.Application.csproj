@@ -16,5 +16,7 @@
 		<ProjectReference Include="..\WebhookSources.Domain\WebhookSources.Domain.csproj" />
 		<ProjectReference Include="..\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
 		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+		<!-- Registering a bank can set where its notifications go. -->
+		<ProjectReference Include="..\..\Notifications\Notifications.Contracts\Notifications.Contracts.csproj" />
 	</ItemGroup>
 </Project>

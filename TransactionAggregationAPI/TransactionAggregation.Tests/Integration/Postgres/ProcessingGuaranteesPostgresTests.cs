@@ -43,7 +43,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 claimed.Should().ContainSingle(m => m.Id.Value == inboxId);
 
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(claimed[0], SenderFor(context, messaging), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(claimed[0], SenderFor(context, messaging), context, CancellationToken.None);
             }
 
             (await StatusOfAsync(database, inboxId)).Should().Be(InboxMessageStatus.Processed,
@@ -76,7 +76,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 reclaimed.Should().ContainSingle(m => m.Id.Value == inboxId, "a stale claim is recoverable, not stuck forever");
 
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(reclaimed[0], SenderFor(context, messaging), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(reclaimed[0], SenderFor(context, messaging), context, CancellationToken.None);
             }
 
             (await StatusOfAsync(database, inboxId)).Should().Be(InboxMessageStatus.Processed);
@@ -98,7 +98,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 await using var context = _fixture.CreateContext(messaging, database);
                 foreach (var message in claimed)
-                    await Dispatcher().ProcessMessageAsync(message, SenderFor(context, messaging), messaging, context, CancellationToken.None);
+                    await Dispatcher().ProcessMessageAsync(message, SenderFor(context, messaging), context, CancellationToken.None);
                 await context.SaveChangesAsync();
                 (await StatusOfAsync(database, delivery)).Should().Be(InboxMessageStatus.Processed);
             }
@@ -123,7 +123,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             {
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(claimed.Single(), conflicted, messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(claimed.Single(), conflicted, context, CancellationToken.None);
                 await context.SaveChangesAsync();
             }
 
@@ -150,7 +150,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             {
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(claimed.Single(), SenderFor(context, messaging), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(claimed.Single(), SenderFor(context, messaging), context, CancellationToken.None);
                 await context.SaveChangesAsync();
             }
 

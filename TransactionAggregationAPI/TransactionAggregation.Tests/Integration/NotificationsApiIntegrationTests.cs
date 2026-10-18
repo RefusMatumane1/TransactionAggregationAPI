@@ -119,6 +119,73 @@ namespace TransactionAggregation.Tests.Integration
         }
 
         [Fact]
+        public async Task RegisteringABank_WithANotificationUrl_ConfiguresItInTheSameCall()
+        {
+            using var admin = As("admin");
+            var code = $"reg-{Guid.NewGuid():N}";
+
+            var response = await admin.PostAsJsonAsync(BanksPath, new { Code = code, DisplayName = code, Color = "#0033A1", NotificationUrl = AlertUrl });
+
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+            var created = await response.Content.ReadFromJsonAsync<JsonElement>();
+            created.GetProperty("notificationUrlConfigured").GetBoolean().Should().BeTrue();
+            created.GetProperty("apiKey").GetString().Should().NotBeNullOrWhiteSpace();
+            (await response.Content.ReadAsStringAsync()).Should().NotContain("ALERT-SECRET", "the URL is never echoed back");
+
+            (await StoredAsync(code)).Plain.Should().Be(AlertUrl);
+            JsonDocument.Parse(await admin.GetStringAsync($"{AlertsPath}/{code}")).RootElement.GetProperty("configured").GetBoolean().Should().BeTrue();
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public async Task RegisteringABank_WithoutANotificationUrl_ConfiguresNone(string? url)
+        {
+            using var admin = As("admin");
+            var code = $"reg-{Guid.NewGuid():N}";
+
+            var response = await admin.PostAsJsonAsync(BanksPath, new { Code = code, DisplayName = code, Color = "#0033A1", NotificationUrl = url });
+
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+            (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("notificationUrlConfigured").GetBoolean().Should().BeFalse();
+            (await StoredAsync(code)).Stored.Should().BeNull();
+        }
+
+        [Theory]
+        [InlineData("http://hooks.example.com/hook")]
+        [InlineData("https://localhost/hook")]
+        [InlineData("https://169.254.169.254/latest/meta-data")]
+        [InlineData("https://user:pass@hooks.example.com/hook")]
+        public async Task RegisteringABank_WithAnUnsafeNotificationUrl_Returns400_AndCreatesNothing(string url)
+        {
+            using var admin = As("admin");
+            var code = $"reg-{Guid.NewGuid():N}";
+
+            var refused = await admin.PostAsJsonAsync(BanksPath, new { Code = code, DisplayName = code, Color = "#0033A1", NotificationUrl = url });
+
+            refused.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+            (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors").TryGetProperty("notificationUrl", out _).Should().BeTrue();
+
+            var retry = await admin.PostAsJsonAsync(BanksPath, new { Code = code, DisplayName = code, Color = "#0033A1" });
+            retry.StatusCode.Should().Be(HttpStatusCode.Created, "the refused attempt left no bank behind, so the code is still free");
+        }
+
+        [Fact]
+        public async Task RegisteringABank_ADuplicateCode_DoesNotOverwriteTheExistingBanksNotificationUrl()
+        {
+            using var admin = As("admin");
+            var code = $"reg-{Guid.NewGuid():N}";
+            await admin.PostAsJsonAsync(BanksPath, new { Code = code, DisplayName = code, Color = "#0033A1", NotificationUrl = AlertUrl });
+
+            var duplicate = await admin.PostAsJsonAsync(
+                BanksPath, new { Code = code.ToUpperInvariant(), DisplayName = code, Color = "#0033A1", NotificationUrl = "https://attacker.example.com/steal" });
+
+            duplicate.StatusCode.Should().Be(HttpStatusCode.Conflict);
+            (await StoredAsync(code)).Plain.Should().Be(AlertUrl);
+        }
+
+        [Fact]
         public async Task UnknownBank_Returns404_OnBothReadAndWrite()
         {
             using var admin = As("admin");

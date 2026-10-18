@@ -892,7 +892,7 @@ Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/admin/webhook-sources` | List banks (never includes key material) |
-| `POST` | `/admin/webhook-sources` | Add a bank: `{ "code": "Nedbank", "displayName": "Nedbank", "color": "#007A4D" }`. `code` and `displayName` are required (`400` with `"Code is required."` otherwise); the code (letters, digits, `-`, `_`) is fixed and stamped on its transactions. The response includes the API key once |
+| `POST` | `/admin/webhook-sources` | Add a bank: `{ "code": "Nedbank", "displayName": "Nedbank", "color": "#007A4D", "notificationUrl": "https://notifications.nedbank.example/hooks/abc" }`. `code` and `displayName` are required (`400` with `"Code is required."` otherwise); the code (letters, digits, `-`, `_`) is fixed and stamped on its transactions. `notificationUrl` is optional: when given it is where this bank's REST notifications are posted (see [duplicate-alert webhooks](#admin--duplicate-alert-webhooks)); it must be `https` on a public host, otherwise `400` and **no bank is created**. The response includes the API key once, and `notificationUrlConfigured`. If the bank was created but its URL could not be stored (a transient failure), the response is still `201` with `notificationUrlConfigured: false`, and the URL is set again with `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` |
 | `PUT` | `/admin/webhook-sources/{id}` | Change a bank's display name and colour: `{ "displayName", "color" }` |
 | `PUT` | `/admin/webhook-sources/{id}/signing-key` | Register the bank's Kafka signing key (ECDSA P-256) |
 | `POST` | `/admin/webhook-sources/{id}/rotate` | Replace the key — old one stops working immediately |

@@ -21,10 +21,12 @@ namespace TransactionAggregationUI.Services
         public Task<List<BankSourceModel>> GetSourcesAsync() =>
             api.GetAllPagesAsync<BankSourceModel>(AdminPath);
 
-        public async Task<(CreateBankResultModel? Result, string? Error)> CreateAsync(string code, string displayName, string color)
+        public async Task<(CreateBankResultModel? Result, string? Error)> CreateAsync(
+            string code, string displayName, string color, string? notificationUrl = null)
         {
             var (result, error) = await api.SendAsync<CreateBankResultModel>(
-                HttpMethod.Post, AdminPath, new { Code = code, DisplayName = displayName, Color = color });
+                HttpMethod.Post, AdminPath,
+                new { Code = code, DisplayName = displayName, Color = color, NotificationUrl = string.IsNullOrWhiteSpace(notificationUrl) ? null : notificationUrl.Trim() });
             _banks = null;
             return (result, error);
         }

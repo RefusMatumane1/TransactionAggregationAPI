@@ -5,10 +5,10 @@ using Modules.WebhookSources.Domain;
 
 namespace Modules.WebhookSources.Presentation.Requests
 {
-    public sealed record CreateWebhookSourceRequest(string? Code, string? DisplayName, string? Color)
+    public sealed record CreateWebhookSourceRequest(string? Code, string? DisplayName, string? Color, string? NotificationUrl = null)
     {
         internal CreateWebhookSourceCommand ToCommand() =>
-            new(Code ?? string.Empty, DisplayName ?? string.Empty, Color ?? WebhookSource.DefaultColor);
+            new(Code ?? string.Empty, DisplayName ?? string.Empty, Color ?? WebhookSource.DefaultColor, NotificationUrl);
     }
 
     public sealed record UpdateWebhookSourceRequest(string? DisplayName, string? Color)

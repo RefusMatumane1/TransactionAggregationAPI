@@ -15,6 +15,7 @@ namespace Modules.Notifications
 
             services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
             services.AddScoped<IDuplicateAlertNotifier, DuplicateAlertNotifier>();
+            services.AddScoped<IDuplicateAlertWebhooks, DuplicateAlertWebhooks>();
 
             return services;
         }

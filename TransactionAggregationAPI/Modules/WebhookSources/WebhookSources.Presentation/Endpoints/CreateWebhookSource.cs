@@ -14,7 +14,7 @@ namespace Modules.WebhookSources.Presentation.Endpoints
         public static RouteHandlerBuilder MapCreateWebhookSource(this IEndpointRouteBuilder group) =>
             group.MapPost("/", HandleAsync)
                  .WithName("CreateWebhookSource")
-                 .WithSummary("Register a new webhook source — the returned API key is shown exactly once")
+                 .WithSummary("Register a new bank. The returned API key is shown exactly once; an optional notificationUrl is where its REST notifications are posted")
                  .Produces<CreateWebhookSourceResponse>(StatusCodes.Status201Created)
                  .Produces(StatusCodes.Status409Conflict);
 

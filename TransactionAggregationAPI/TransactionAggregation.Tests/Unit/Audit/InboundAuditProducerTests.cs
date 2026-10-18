@@ -194,7 +194,7 @@ namespace TransactionAggregation.Tests.Unit.Audit
             var context = InMemoryDbContextFactory.Create(messagingDbContext: messaging);
             message.Claim(DateTime.UtcNow);
 
-            await sut.ProcessMessageAsync(message, sender, messaging, context, CancellationToken.None);
+            await sut.ProcessMessageAsync(message, sender, context, CancellationToken.None);
 
             var queued = context.RecordedAudit().Should().ContainSingle(
                 "the failure and its audit row are committed before the next message is processed").Subject;

@@ -26,6 +26,7 @@ namespace TransactionAggregationUI.Models.Banks
         public Guid Id { get; set; }
         public string Code { get; set; } = string.Empty;
         public string ApiKey { get; set; } = string.Empty;
+        public bool NotificationUrlConfigured { get; set; }
     }
 
     public class RotateKeyResultModel

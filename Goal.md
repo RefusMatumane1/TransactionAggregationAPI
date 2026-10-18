@@ -211,7 +211,7 @@ All routes are under `/api/v1`. Reads need `staff` or `admin`; changes and admin
 | Transactions | `GET /transactions`, `GET /transactions/{id}`, `GET /transactions/summary` |
 | Aggregates | `GET /transactions/aggregates/{institutions, categories, cash-flow, comparison}` |
 | Currencies | `GET /currencies` (staff): the base currency and every supported currency with its rate |
-| Banks | `GET /banks` (staff); `/admin/webhook-sources` list, create, update, rotate key, register signing key, activate, deactivate (admin) |
+| Banks | `GET /banks` (staff); `/admin/webhook-sources` list, create (optionally with the bank's `notificationUrl`), update, rotate key, register signing key, activate, deactivate (admin) |
 | Customers | `GET /customers`, `/customers/{id}`, `/customers/{id}/transactions`, `/customers/{id}/aggregates/{cash-flow, categories, institutions, comparison}` (staff); `POST /customers`, `POST /customers/{id}/accounts`, `DELETE /customers/{id}/accounts` (admin) |
 | Notifications | `GET`, `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (admin) |
 | Audit | `GET /admin/audit/events`, `GET /admin/audit/transactions/{id}/lineage` (admin) |

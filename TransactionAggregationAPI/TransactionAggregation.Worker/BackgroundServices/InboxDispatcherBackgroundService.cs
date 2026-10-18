@@ -78,7 +78,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
                 for (; next < claimed.Count; next++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    await ProcessMessageAsync(claimed[next], sender, messaging, context, cancellationToken);
+                    await ProcessMessageAsync(claimed[next], sender, context, cancellationToken);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -90,7 +90,7 @@ namespace TransactionAggregation.Worker.BackgroundServices
         }
 
         internal async Task ProcessMessageAsync(
-            InboxMessage message, ISender sender, IMessagingDbContext messaging, ITransactionsDbContext context,
+            InboxMessage message, ISender sender, ITransactionsDbContext context,
             CancellationToken cancellationToken)
         {
             using var activity = MessagingTelemetry.StartConsumerActivity("inbox.process", message.TraceParent);

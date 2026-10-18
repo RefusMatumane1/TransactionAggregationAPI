@@ -70,9 +70,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [GeneratedRegex(@"<<'SQL'\n(?<sql>.*?)\n\s*SQL\n", RegexOptions.Singleline)]
         private static partial Regex SqlBlock();
 
-        /// <summary>
-        /// Runs init-roles.yaml's SQL heredoc the way psql would (variables substituted, `\gexec` statements run).
-        /// </summary>
         private static async Task RunInitRolesScriptAsync(string superuserConnectionString)
         {
             var yaml = (await File.ReadAllTextAsync(Path.Combine(RepositoryRoot(), "k8s", "postgres", "init-roles.yaml"))).Replace("\r\n", "\n");

@@ -46,7 +46,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
         private ProcessInboundTransactionsCommandHandler Handler(TransactionsDbContext context, MessagingDbContext messaging) =>
             new(context, messaging, TestNormalizers.Neutral, Categorization(),
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
 
         [Fact]
         public async Task Handle_DeliveryNamingAnotherBank_IsRefusedAsPermanent_AndStoresNothing()

@@ -37,7 +37,8 @@ Nothing in the ledger is ever edited or deleted.
 - **Secured, scoped API.** Keycloak JWTs: `staff` reads the banks in their `institutions` claim,
   `admin` reads everything and manages. Every list uses cursor pagination with index-backed sorting.
 - **Aggregates off the request path.** The worker rebuilds a daily read model hourly (configurable);
-  every aggregate says how old it is (`asOf`) and is computed in one ISO 4217 currency at a time.
+  every aggregate says how old it is (`asOf`) and is computed in one currency at a time, or converted into one with
+  configured rates (`convertTo`).
 - **Full audit trail.** Every inbound delivery, ledger entry and admin change (with its actor) is
   written to an append-only trail in the same transaction as the change.
 
@@ -174,7 +175,7 @@ cover that. Everything else is here for a reason, or is optional:
 | No partitioning, no saga | Volumes fit one table with the right indexes; no workflow spans separately committed steps | Revisit at roughly 100M ledger rows | |
 | Migrations never change data or block writes | Every index built `CONCURRENTLY`, expand/contract only; a policy test fails the build otherwise | Two-step changes where one would do | |
 
-Smaller choices: any ISO 4217 currency with one currency per aggregate; an untracked
+Smaller choices: a configured set of currencies with rates to a base, converted at read time and never stored; an untracked
 `secrets.json` locally, rendered by Vault in clusters.
 
 ---
@@ -189,6 +190,7 @@ routes need `admin`; staff are confined to their banks.
 | Transactions | list (filters, search, sorting), detail, summary |
 | Aggregates | institutions, categories, cash flow, period comparison, each also per customer |
 | Customers | list, detail, register, link and unlink accounts |
+| Currencies | the supported currencies and their rates to the base; `convertTo` on transactions and aggregates |
 | Banks | the banks the caller may read; admins manage webhook sources |
 | Notifications | a bank's duplicate-alert webhook: set, clear, and whether one is set (admin) |
 | Audit | inbound deliveries and transaction lineage (admin) |
@@ -243,7 +245,7 @@ How each phrase is read:
 - **Multiple mock data sources.** Four mock banks (FNB, Absa, Capitec, Standard Bank), each with its
   own wire format, delivered by webhook or Kafka. `TransactionAggregation.MockAggregator` produces
   their feeds.
-- **Aggregates.** Totals by customer, bank, account, category and period, never mixing currencies,
+- **Aggregates.** Totals by customer, bank, account, category and period, one currency at a time unless `convertTo` is asked for,
   rebuilt hourly from the ledger. Read-time aggregation was rejected so dashboard load can't compete
   with ingestion; the cost is that totals may be up to one rebuild old, and every response says how
   old (`asOf`).
@@ -274,7 +276,10 @@ Test paths are under `TransactionAggregationAPI/TransactionAggregation.Tests/`.
   `BookedAt`/`RecordedAt`, not arrival.
 - **Staff scope in the application.** It is enforced there, not by PostgreSQL row-level security (which
   would need the caller's banks set on every pooled transaction).
-- **No currency conversion.** Aggregates never mix currencies, by design.
+- **Conversion uses static configured rates.** There is no live FX feed. Rates are applied at read time
+  (a rate change re-values history), reflect the last deployment, and a currency without a rate is
+  left out of a converted view and named in `conversion.unconvertedCurrencies`. Treat converted
+  figures as indicative unless the rates come from your treasury.
 - **Deployment.** The CI deploy stage is a notice, not an automated deployment. Third-party images
   are pinned by tag, not digest.
 

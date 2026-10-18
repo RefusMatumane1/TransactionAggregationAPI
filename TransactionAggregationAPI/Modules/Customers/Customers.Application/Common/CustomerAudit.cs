@@ -6,7 +6,7 @@ namespace Modules.Customers.Application.Common
 {
     internal static class CustomerAudit
     {
- 
+
         public const string Registry = "customers";
 
         public static AuditEventRecord Of(string eventType, Customer customer, Guid actor, string detail,

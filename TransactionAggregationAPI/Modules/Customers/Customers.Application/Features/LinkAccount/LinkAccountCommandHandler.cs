@@ -43,7 +43,7 @@ namespace Modules.Customers.Application.Features.LinkAccount
             }
             catch (DbUpdateException)
             {
-            
+
                 context.DiscardPendingChanges();
                 var current = await FindAsync(request.CustomerId, cancellationToken);
                 if (current is null || !current.Accounts.Any(a => a.Institution == institution && a.ExternalAccountId == request.ExternalAccountId))

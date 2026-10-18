@@ -18,7 +18,6 @@ namespace TransactionAggregationUI.Services
         public Task<(CustomerModel? Value, string? Error)> CreateAsync(string reference, string name) =>
             api.SendAsync<CustomerModel>(HttpMethod.Post, BasePath, new { Reference = reference, Name = name });
 
-        // Linking an account that is already linked succeeds and changes nothing.
         public Task<(CustomerModel? Value, string? Error)> LinkAsync(Guid id, string institution, string externalAccountId) =>
             api.SendAsync<CustomerModel>(HttpMethod.Post, $"{BasePath}/{id}/accounts",
                 new { Institution = institution, ExternalAccountId = externalAccountId });

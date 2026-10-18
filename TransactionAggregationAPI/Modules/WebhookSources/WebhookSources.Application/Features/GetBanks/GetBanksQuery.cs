@@ -7,7 +7,6 @@ using SharedKernel.Common.Models;
 
 namespace Modules.WebhookSources.Application.Features.GetBanks
 {
-    // Staff get only their assigned banks. Returned whole: it is a small reference set.
     public sealed record GetBanksQuery(InstitutionAccess Access) : IQuery<IReadOnlyList<BankDto>>;
 
     internal sealed class GetBanksQueryHandler(IWebhookSourcesDbContext context)

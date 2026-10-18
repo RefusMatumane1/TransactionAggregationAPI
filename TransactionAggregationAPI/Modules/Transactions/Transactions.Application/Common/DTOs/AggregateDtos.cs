@@ -26,7 +26,8 @@ namespace Modules.Transactions.Application.Common.DTOs
         decimal Total,
         int TransactionCount,
         IReadOnlyList<CategoryTotalDto> Categories,
-        DateTime? AsOf);
+        DateTime? AsOf,
+        ConversionDto? Conversion = null);
 
     public sealed record CashFlowPointDto(
         DateOnly PeriodStart,
@@ -44,7 +45,8 @@ namespace Modules.Transactions.Application.Common.DTOs
         decimal TotalExpenses,
         decimal Net,
         IReadOnlyList<CashFlowPointDto> Points,
-        DateTime? AsOf);
+        DateTime? AsOf,
+        ConversionDto? Conversion = null);
 
     public sealed record AccountTotalDto(string ExternalAccountId, decimal Income, decimal Expenses, decimal Net, int TransactionCount);
 
@@ -58,7 +60,8 @@ namespace Modules.Transactions.Application.Common.DTOs
         IReadOnlyList<AccountTotalDto> Accounts);
 
     public sealed record InstitutionBreakdownDto(
-        PeriodDto Period, string Currency, IReadOnlyList<InstitutionTotalDto> Institutions, DateTime? AsOf);
+        PeriodDto Period, string Currency, IReadOnlyList<InstitutionTotalDto> Institutions, DateTime? AsOf,
+        ConversionDto? Conversion = null);
 
     public sealed record PeriodTotalsDto(PeriodDto Period, decimal Income, decimal Expenses, decimal Net, int TransactionCount);
 
@@ -76,5 +79,6 @@ namespace Modules.Transactions.Application.Common.DTOs
         decimal? ExpensesChangePercent,
         decimal? IncomeChangePercent,
         IReadOnlyList<CategoryChangeDto> Categories,
-        DateTime? AsOf);
+        DateTime? AsOf,
+        ConversionDto? Conversion = null);
 }

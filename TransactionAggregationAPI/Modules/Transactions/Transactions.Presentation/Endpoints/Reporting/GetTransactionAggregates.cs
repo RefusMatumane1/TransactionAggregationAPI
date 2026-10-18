@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Presentation.Requests;
 using Modules.Transactions.Presentation.Responses;
 
@@ -41,19 +42,19 @@ namespace Modules.Transactions.Presentation.Endpoints.Reporting
         }
 
         private static async Task<IResult> CategoriesAsync(
-            ISender sender, IUserContext user, TimeProvider time, [AsParameters] CategoryBreakdownRequest request, CancellationToken cancellationToken) =>
-            (await sender.Send(request.ToQuery(user.InstitutionAccess, time), cancellationToken)).ToOk(CategoryBreakdownResponse.From);
+            ISender sender, IUserContext user, TimeProvider time, ICurrencyCatalog catalog, [AsParameters] CategoryBreakdownRequest request, CancellationToken cancellationToken) =>
+            (await sender.Send(request.ToQuery(user.InstitutionAccess, time, catalog), cancellationToken)).ToOk(CategoryBreakdownResponse.From);
 
         private static async Task<IResult> CashFlowAsync(
-            ISender sender, IUserContext user, TimeProvider time, [AsParameters] CashFlowRequest request, CancellationToken cancellationToken) =>
-            (await sender.Send(request.ToQuery(user.InstitutionAccess, time), cancellationToken)).ToOk(CashFlowSeriesResponse.From);
+            ISender sender, IUserContext user, TimeProvider time, ICurrencyCatalog catalog, [AsParameters] CashFlowRequest request, CancellationToken cancellationToken) =>
+            (await sender.Send(request.ToQuery(user.InstitutionAccess, time, catalog), cancellationToken)).ToOk(CashFlowSeriesResponse.From);
 
         private static async Task<IResult> InstitutionsAsync(
-            ISender sender, IUserContext user, TimeProvider time, [AsParameters] InstitutionBreakdownRequest request, CancellationToken cancellationToken) =>
-            (await sender.Send(request.ToQuery(user.InstitutionAccess, time), cancellationToken)).ToOk(InstitutionBreakdownResponse.From);
+            ISender sender, IUserContext user, TimeProvider time, ICurrencyCatalog catalog, [AsParameters] InstitutionBreakdownRequest request, CancellationToken cancellationToken) =>
+            (await sender.Send(request.ToQuery(user.InstitutionAccess, time, catalog), cancellationToken)).ToOk(InstitutionBreakdownResponse.From);
 
         private static async Task<IResult> ComparisonAsync(
-            ISender sender, IUserContext user, TimeProvider time, [AsParameters] PeriodComparisonRequest request, CancellationToken cancellationToken) =>
-            (await sender.Send(request.ToQuery(user.InstitutionAccess, time), cancellationToken)).ToOk(PeriodComparisonResponse.From);
+            ISender sender, IUserContext user, TimeProvider time, ICurrencyCatalog catalog, [AsParameters] PeriodComparisonRequest request, CancellationToken cancellationToken) =>
+            (await sender.Send(request.ToQuery(user.InstitutionAccess, time, catalog), cancellationToken)).ToOk(PeriodComparisonResponse.From);
     }
 }

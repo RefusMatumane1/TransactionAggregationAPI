@@ -24,7 +24,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
         private readonly ILogger<InboxDispatcherBackgroundService> _logger;
         private readonly InboxOptions _options;
 
-        // While draining, the COUNT queries run once per Interval, not per batch.
         private DateTime _backlogRecordedAt = DateTime.MinValue;
 
         public InboxDispatcherBackgroundService(
@@ -90,8 +89,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
             }
         }
 
-        // Success: the handler commits everything with the Processed mark. Failure: the retry/dead-letter state
-        // commits here, before the next message, so no later rollback discards it.
         internal async Task ProcessMessageAsync(
             InboxMessage message, ISender sender, IMessagingDbContext messaging, ITransactionsDbContext context,
             CancellationToken cancellationToken)
@@ -119,7 +116,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
                     message.SourceName, payload.ExternalAccountId, payload.Institution, payload.Transactions, message.Id.Value,
                     message.Channel ?? AuditChannels.Unknown);
 
-                // Marked first so the handler's commit records it.
                 message.MarkProcessed();
 
                 var result = await sender.Send(command, cancellationToken);

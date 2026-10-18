@@ -37,7 +37,6 @@ namespace TransactionAggregationUI.Models.Banks
     {
         public const string UnknownColor = "#6C757D";
 
-        // A transaction can name a bank with no source row; it is shown under its code, in grey.
         public static BankModel Find(IReadOnlyDictionary<string, BankModel> banks, string code) =>
             banks.TryGetValue(code, out var bank)
                 ? bank

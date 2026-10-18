@@ -1,4 +1,3 @@
-// The UI is referenced under the "ui" alias: it has its own top-level Program, like the API.
 extern alias ui;
 
 using FluentAssertions;
@@ -13,8 +12,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.UI
 {
-    // Real components rendered to HTML by Blazor's own HtmlRenderer: what a user (and a screen
-    // reader) is given for a set of inputs.
     public partial class UiComponentTests
     {
         private static async Task<string> RenderAsync<TComponent>(Dictionary<string, object?> parameters) where TComponent : IComponent
@@ -71,7 +68,6 @@ namespace TransactionAggregation.Tests.Unit.UI
                 ["Points"] = new List<CashFlowPointModel> { Month(1, 30_000m, 12_000m, 40) }
             });
 
-            // Each column path runs H(left + r) ... H(right - r): its width is the H span plus 2r.
             foreach (Match bar in Bar().Matches(html))
             {
                 var xs = Regex.Matches(bar.Groups["d"].Value, @"H([\d.]+)").Select(m => double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture)).ToList();

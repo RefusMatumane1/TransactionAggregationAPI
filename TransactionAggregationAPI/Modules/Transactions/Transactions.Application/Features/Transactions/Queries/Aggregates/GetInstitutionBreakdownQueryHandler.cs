@@ -1,21 +1,26 @@
 using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggregates
 {
-    internal sealed class GetInstitutionBreakdownQueryHandler(ITransactionsDbContext context)
+    internal sealed class GetInstitutionBreakdownQueryHandler(ITransactionsDbContext context, ICurrencyCatalog catalog)
         : IQueryHandler<GetInstitutionBreakdownQuery, InstitutionBreakdownDto>
     {
         public async Task<Result<InstitutionBreakdownDto>> Handle(GetInstitutionBreakdownQuery request, CancellationToken cancellationToken)
         {
             var period = new ReportingPeriod(request.From, request.To);
+            var resolved = AmountBasis.Resolve(request.Currency, request.ConvertTo, catalog);
+            if (resolved.IsFailure)
+                return Result.Failure<InstitutionBreakdownDto>(resolved.Error);
+            var basis = resolved.Value;
 
             var rows = await context.DailyTotals
-                .Within(period, request.Filter, request.Currency)
+                .Within(period, request.Filter, basis)
                 .GroupBy(d => new { Institution = d.SourceName, d.ExternalAccountId })
                 .Select(g => new
                 {
@@ -45,7 +50,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
                 .ToList();
 
             return Result.Success(new InstitutionBreakdownDto(
-                new PeriodDto(period.From, period.To), request.Currency, institutions, asOf));
+                new PeriodDto(period.From, period.To), basis.Currency, institutions, asOf,
+                await context.DailyTotals.DescribeConversionAsync(period, request.Filter, basis, cancellationToken)));
         }
     }
 }

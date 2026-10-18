@@ -33,11 +33,18 @@ namespace TransactionAggregation.Tests.Unit.Domain
         [InlineData("XAU")]
         [InlineData("ABC")]
         [InlineData("XTS")]
-        public void Create_WithACodeThatIsNotAnAccountCurrency_ThrowsDomainException(string currency)
+        public void Create_AnyWellFormedCode_IsHeld_WhichCurrenciesAreAcceptedIsTheCatalogsDecision(string currency) =>
+            Money.Create(100m, currency).Currency.Should().Be(currency);
+
+        [Theory]
+        [InlineData("Z1R")]
+        [InlineData("Z R")]
+        [InlineData("ZÄR")]
+        public void Create_WithNonLetters_ThrowsDomainException(string currency)
         {
             var act = () => Money.Create(100m, currency);
 
-            act.Should().Throw<DomainException>().WithMessage("*ISO 4217*");
+            act.Should().Throw<DomainException>().WithMessage("*3-letter*");
         }
 
         [Fact]

@@ -13,7 +13,6 @@ namespace TransactionAggregationUI.Models.Transactions
         public TransactionCategory Category { get; set; }
         public DateTime RecordedAt { get; set; }
 
-        // The bank's own wording before normalisation, when it differed.
         public Dictionary<string, string> Metadata { get; set; } = [];
 
         public const string BankDescriptionKey = "bankDescription";

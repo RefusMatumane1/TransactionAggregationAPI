@@ -18,7 +18,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
         private readonly ILogger<OutboxDispatcherBackgroundService> _logger;
         private readonly OutboxOptions _options;
 
-        // While draining, the COUNT queries run once per Interval, not per batch.
         private DateTime _backlogRecordedAt = DateTime.MinValue;
 
         public OutboxDispatcherBackgroundService(
@@ -61,8 +60,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
             return more;
         }
 
-        // Published MaxConcurrency at a time, committed per chunk: a crash re-sends at most one chunk (consumers dedupe),
-        // and order within a chunk is not guaranteed.
         internal async Task DispatchAsync(
             IReadOnlyList<OutboxMessage> claimed,
             IReadOnlyDictionary<string, IOutboxMessageHandler> handlers,

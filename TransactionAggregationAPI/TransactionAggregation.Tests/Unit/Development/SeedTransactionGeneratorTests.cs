@@ -1,5 +1,4 @@
 using FluentAssertions;
-using SharedKernel.Common.ValueObjects;
 using TransactionAggregationAPI.Development;
 using Xunit;
 
@@ -12,8 +11,8 @@ namespace TransactionAggregation.Tests.Unit.Development
         private static SeedAccount Account(SeedAccountType type = SeedAccountType.Checking) =>
             new("ZA0010000001", "FNB", type, 5, SeedCatalog.Households[0].Profile);
 
-        private static SeedTransactionGenerator Generator(int seed, Guid? runId = null) =>
-            new(new Random(seed), runId ?? Guid.NewGuid(), Now);
+        private static SeedTransactionGenerator Generator(int seed, Guid? runId = null, string currency = "ZAR") =>
+            new(new Random(seed), runId ?? Guid.NewGuid(), Now, currency);
 
         [Theory]
         [InlineData(SeedAccountType.Checking)]
@@ -27,7 +26,15 @@ namespace TransactionAggregation.Tests.Unit.Development
             var earliestAllowed = new DateTime(2025, 7, 1, 0, 0, 0, DateTimeKind.Utc);
             transactions.Should().OnlyContain(t => t.Date >= earliestAllowed && t.Date <= Now);
             transactions.Select(t => (t.Date.Year, t.Date.Month)).Distinct().Should().HaveCount(SeedTransactionGenerator.HistoryMonths);
-            transactions.Should().OnlyContain(t => t.Amount.Currency == SupportedCurrency.Default);
+            transactions.Should().OnlyContain(t => t.Amount.Currency == "ZAR");
+        }
+
+        [Fact]
+        public void TheDemoData_IsInTheCurrencyItWasGiven_NotABuiltInDefault()
+        {
+            var transactions = Generator(3, currency: "USD").Generate(Account(), lastSeededUtc: null);
+
+            transactions.Should().NotBeEmpty().And.OnlyContain(t => t.Amount.Currency == "USD");
         }
 
         [Fact]

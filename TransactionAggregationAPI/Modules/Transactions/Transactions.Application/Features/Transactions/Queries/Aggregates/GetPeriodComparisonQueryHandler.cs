@@ -1,13 +1,14 @@
 using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggregates
 {
-    internal sealed class GetPeriodComparisonQueryHandler(ITransactionsDbContext context)
+    internal sealed class GetPeriodComparisonQueryHandler(ITransactionsDbContext context, ICurrencyCatalog catalog)
         : IQueryHandler<GetPeriodComparisonQuery, PeriodComparisonDto>
     {
         public async Task<Result<PeriodComparisonDto>> Handle(GetPeriodComparisonQuery request, CancellationToken cancellationToken)
@@ -15,9 +16,13 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
             var current = new ReportingPeriod(request.From, request.To);
             var previous = current.Previous();
             var currentFrom = current.From;
+            var resolved = AmountBasis.Resolve(request.Currency, request.ConvertTo, catalog);
+            if (resolved.IsFailure)
+                return Result.Failure<PeriodComparisonDto>(resolved.Error);
+            var basis = resolved.Value;
 
             var rows = await context.DailyTotals
-                .Within(previous.From, current.To, request.Filter, request.Currency)
+                .Within(previous.From, current.To, request.Filter, basis)
                 .GroupBy(d => new { IsCurrent = d.Day >= currentFrom, d.Category })
                 .Select(g => new
                 {
@@ -60,13 +65,14 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
             var previousTotals = Totals(previous, isCurrent: false);
 
             return Result.Success(new PeriodComparisonDto(
-                request.Currency,
+                basis.Currency,
                 currentTotals,
                 previousTotals,
                 PercentChange(currentTotals.Expenses, previousTotals.Expenses),
                 PercentChange(currentTotals.Income, previousTotals.Income),
                 categories,
-                asOf));
+                asOf,
+                await context.DailyTotals.DescribeConversionAsync(previous.From, current.To, request.Filter, basis, cancellationToken)));
         }
 
         private static decimal? PercentChange(decimal current, decimal previous) =>

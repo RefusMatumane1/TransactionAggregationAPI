@@ -10,7 +10,8 @@ namespace Modules.Transactions.Application.Common.DTOs
         int TotalTransactions,
         IReadOnlyList<MonthlySummaryDto> MonthlySummaries,
         string Currency,
-        DateTime? AsOf);
+        DateTime? AsOf,
+        ConversionDto? Conversion = null);
 
     public sealed record MonthlySummaryDto(
         int Year,

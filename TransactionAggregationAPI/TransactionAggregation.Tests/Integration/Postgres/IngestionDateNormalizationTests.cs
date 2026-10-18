@@ -70,7 +70,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             return new ProcessInboundTransactionsCommandHandler(
                 context, messaging, TestNormalizers.Shipped(), categorization,
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
         }
     }
 }

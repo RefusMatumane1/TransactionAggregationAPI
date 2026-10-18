@@ -29,7 +29,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         private async Task<List<string>> SearchAsync(string bank, string term)
         {
             using var context = fixture.CreateContext();
-            var page = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), new RowValueKeysetPaginator())
+            var page = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), new RowValueKeysetPaginator(), TestCurrencies.Catalog)
                 .Handle(new GetTransactionsQuery(TestFilters.For(bank)) { SearchTerm = term, PageSize = 100 }, CancellationToken.None)).Value;
             return page.Items.Select(i => i.Description).ToList();
         }

@@ -3,6 +3,17 @@ using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Presentation.Responses
 {
+    public sealed record ConversionResponse(
+        string Target, string RatesVersion, IReadOnlyList<ConversionRateResponse> Rates, IReadOnlyList<string> UnconvertedCurrencies)
+    {
+        internal static ConversionResponse? From(ConversionDto? dto) =>
+            dto is null
+                ? null
+                : new(dto.Target, dto.RatesVersion, dto.Rates.Select(r => new ConversionRateResponse(r.Currency, r.Rate)).ToList(), dto.UnconvertedCurrencies);
+    }
+
+    public sealed record ConversionRateResponse(string Currency, decimal Rate);
+
     public sealed record PeriodResponse(DateOnly From, DateOnly To)
     {
         internal static PeriodResponse Of(PeriodDto period) => new(period.From, period.To);
@@ -17,7 +28,8 @@ namespace Modules.Transactions.Presentation.Responses
         decimal Total,
         int TransactionCount,
         IReadOnlyList<CategoryTotalResponse> Categories,
-        DateTime? AsOf)
+        DateTime? AsOf,
+        ConversionResponse? Conversion = null)
     {
         internal static CategoryBreakdownResponse From(CategoryBreakdownDto dto) => new(
             PeriodResponse.Of(dto.Period),
@@ -26,7 +38,8 @@ namespace Modules.Transactions.Presentation.Responses
             dto.Total,
             dto.TransactionCount,
             dto.Categories.Select(c => new CategoryTotalResponse(c.Category, c.Category.ToString(), c.Amount, c.TransactionCount, c.Share)).ToList(),
-            dto.AsOf);
+            dto.AsOf,
+            ConversionResponse.From(dto.Conversion));
     }
 
     public sealed record CashFlowPointResponse(DateOnly PeriodStart, DateOnly PeriodEnd, decimal Income, decimal Expenses, decimal Net, int TransactionCount);
@@ -39,7 +52,8 @@ namespace Modules.Transactions.Presentation.Responses
         decimal TotalExpenses,
         decimal Net,
         IReadOnlyList<CashFlowPointResponse> Points,
-        DateTime? AsOf)
+        DateTime? AsOf,
+        ConversionResponse? Conversion = null)
     {
         internal static CashFlowSeriesResponse From(CashFlowSeriesDto dto) => new(
             PeriodResponse.Of(dto.Period),
@@ -49,7 +63,8 @@ namespace Modules.Transactions.Presentation.Responses
             dto.TotalExpenses,
             dto.Net,
             dto.Points.Select(p => new CashFlowPointResponse(p.PeriodStart, p.PeriodEnd, p.Income, p.Expenses, p.Net, p.TransactionCount)).ToList(),
-            dto.AsOf);
+            dto.AsOf,
+            ConversionResponse.From(dto.Conversion));
     }
 
     public sealed record AccountTotalResponse(string ExternalAccountId, decimal Income, decimal Expenses, decimal Net, int TransactionCount);
@@ -63,7 +78,8 @@ namespace Modules.Transactions.Presentation.Responses
         IReadOnlyList<AccountTotalResponse> Accounts);
 
     public sealed record InstitutionBreakdownResponse(
-        PeriodResponse Period, string Currency, IReadOnlyList<InstitutionTotalResponse> Institutions, DateTime? AsOf)
+        PeriodResponse Period, string Currency, IReadOnlyList<InstitutionTotalResponse> Institutions, DateTime? AsOf,
+        ConversionResponse? Conversion = null)
     {
         internal static InstitutionBreakdownResponse From(InstitutionBreakdownDto dto) => new(
             PeriodResponse.Of(dto.Period),
@@ -71,7 +87,8 @@ namespace Modules.Transactions.Presentation.Responses
             dto.Institutions.Select(i => new InstitutionTotalResponse(
                 i.Institution, i.Income, i.Expenses, i.Net, i.TransactionCount,
                 i.Accounts.Select(a => new AccountTotalResponse(a.ExternalAccountId, a.Income, a.Expenses, a.Net, a.TransactionCount)).ToList())).ToList(),
-            dto.AsOf);
+            dto.AsOf,
+            ConversionResponse.From(dto.Conversion));
     }
 
     public sealed record PeriodTotalsResponse(PeriodResponse Period, decimal Income, decimal Expenses, decimal Net, int TransactionCount)
@@ -95,7 +112,8 @@ namespace Modules.Transactions.Presentation.Responses
         decimal? ExpensesChangePercent,
         decimal? IncomeChangePercent,
         IReadOnlyList<CategoryChangeResponse> Categories,
-        DateTime? AsOf)
+        DateTime? AsOf,
+        ConversionResponse? Conversion = null)
     {
         internal static PeriodComparisonResponse From(PeriodComparisonDto dto) => new(
             dto.Currency,
@@ -105,6 +123,7 @@ namespace Modules.Transactions.Presentation.Responses
             dto.IncomeChangePercent,
             dto.Categories.Select(c => new CategoryChangeResponse(
                 c.Category, c.Category.ToString(), c.CurrentSpend, c.PreviousSpend, c.Change, c.ChangePercent)).ToList(),
-            dto.AsOf);
+            dto.AsOf,
+            ConversionResponse.From(dto.Conversion));
     }
 }

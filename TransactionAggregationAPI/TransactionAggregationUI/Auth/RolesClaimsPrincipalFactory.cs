@@ -5,7 +5,6 @@ using System.Text.Json;
 
 namespace TransactionAggregationUI.Auth
 {
-    // Keycloak sends roles as a JSON array, which the default factory keeps as one claim; split it into one role claim per entry.
     public sealed class RolesClaimsPrincipalFactory(IAccessTokenProviderAccessor accessor)
         : AccountClaimsPrincipalFactory<RemoteUserAccount>(accessor)
     {

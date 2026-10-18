@@ -10,7 +10,6 @@
     <Subtitle>Every ledger entry, live: new transactions appear here as soon as they are recorded.</Subtitle>
 </PageHeader>
 
-@* Filters edit a draft; "Apply" puts it in the URL, which the list follows. *@
 <form class="card mb-3" @onsubmit="ApplyDraft" @onsubmit:preventDefault>
     <div class="card-body">
         <div class="row g-2 align-items-end">
@@ -305,7 +304,6 @@
         };
         _openId = Tx;
 
-        // Opening or closing a transaction changes the URL too; only a different query reloads the list.
         if (_applied.Key == _loadedKey)
             return;
 

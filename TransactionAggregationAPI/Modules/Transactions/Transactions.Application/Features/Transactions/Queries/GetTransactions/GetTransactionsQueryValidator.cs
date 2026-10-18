@@ -19,7 +19,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 .InclusiveBetween(1, MaxPageSize).WithMessage($"Page size must be between 1 and {MaxPageSize}");
 
             RuleFor(x => x.Category).IsInEnum().When(x => x.Category.HasValue);
-            RuleFor(x => x.Currency!).IsoCurrency().When(x => x.Currency is not null);
+            RuleFor(x => x.Currency!).CurrencyCodeFormat().When(x => x.Currency is not null);
+            RuleFor(x => x.ConvertTo!).CurrencyCodeFormat().WithMessage("convertTo must be a 3-letter upper-case currency code, e.g. ZAR.").When(x => x.ConvertTo is not null).OverridePropertyName("convertTo");
 
             RuleFor(x => x.SearchTerm!.Trim())
                 .Length(MinSearchLength, MaxSearchLength)

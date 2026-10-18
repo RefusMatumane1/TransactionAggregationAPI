@@ -53,7 +53,6 @@ namespace TransactionAggregation.Tests.Integration
                 services.RemoveAll<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
                 services.AddDistributedMemoryCache();
 
-                // The real key ring lives in Redis, which this host does not have.
                 services.RemoveAll<Modules.Notifications.Application.Common.IAlertUrlProtector>();
                 services.AddSingleton<Modules.Notifications.Application.Common.IAlertUrlProtector>(
                     new TransactionAggregation.Hosting.Security.DataProtectionAlertUrlProtector(

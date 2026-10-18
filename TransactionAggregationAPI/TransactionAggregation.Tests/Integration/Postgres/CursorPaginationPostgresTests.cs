@@ -32,7 +32,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             do
             {
                 using var context = fixture.CreateContext();
-                var page = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), _paginator).Handle(
+                var page = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), _paginator, TestCurrencies.Catalog).Handle(
                     new GetTransactionsQuery(TestFilters.For(bank)) { PageSize = 5, SortBy = sortBy, SortDescending = descending, Cursor = cursor },
                     CancellationToken.None)).Value;
 

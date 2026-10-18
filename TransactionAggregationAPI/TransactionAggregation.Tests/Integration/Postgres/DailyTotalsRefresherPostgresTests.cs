@@ -12,7 +12,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // A database per test: the refresh and its checkpoint are global.
     [Collection(PostgresCollection.Name)]
     public class DailyTotalsRefresherPostgresTests(PostgresContainerFixture fixture)
     {
@@ -82,7 +81,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var db = await fixture.CreateIsolatedDatabaseAsync();
             var first = await fixture.RefreshDailyTotalsAsync(db);
 
-            // Recorded before the checkpoint but visible only after it: a slow commit.
             await RecordAsync(db, Entry(-60m, Utc(2, 3, 9), recordedAt: first!.AsOf.AddMinutes(-3)));
             await fixture.RefreshDailyTotalsAsync(db, overlap: TimeSpan.FromMinutes(10));
 
@@ -144,7 +142,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await RecordAsync(db, Entry(-1000m, Utc(5, 11, 9)));
 
             using var context = fixture.CreateContext(connectionString: db);
-            var cashFlow = (await new GetCashFlowQueryHandler(context).Handle(
+            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog).Handle(
                 new GetCashFlowQuery(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), TestFilters.For(Bank)),
                 CancellationToken.None)).Value;
 

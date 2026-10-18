@@ -4,7 +4,6 @@ using Modules.Notifications.Application.Common;
 using Modules.Notifications.Application.Contracts;
 using Modules.Notifications.Contracts;
 using Modules.Notifications.Domain;
-using Modules.Notifications.Infrastructure.Persistence;
 using NSubstitute;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;

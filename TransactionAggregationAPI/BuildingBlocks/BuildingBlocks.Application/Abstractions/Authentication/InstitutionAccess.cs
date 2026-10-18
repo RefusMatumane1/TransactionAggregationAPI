@@ -1,6 +1,5 @@
 namespace BuildingBlocks.Application.Abstractions.Authentication
 {
-    // Admins read every institution; staff only their assigned ones. Part of the query cache key.
     public sealed record InstitutionAccess
     {
         private InstitutionAccess(bool allInstitutions, IReadOnlyList<string> institutions)

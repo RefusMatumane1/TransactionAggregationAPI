@@ -1,10 +1,10 @@
 using FluentValidation;
 using Microsoft.Extensions.Options;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions
 {
@@ -16,7 +16,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
         public const int MaxIdempotencyKeyLength = 200;
         public const int MaxCategoryLength = 100;
 
-        public ReceiveBankTransactionsCommandValidator(IOptions<IngestionOptions> options)
+        public ReceiveBankTransactionsCommandValidator(IOptions<IngestionOptions> options, ICurrencyCatalog currencies)
         {
             var maxTransactions = options.Value.MaxTransactionsPerDelivery;
 
@@ -46,8 +46,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Receiv
                 transaction.RuleFor(t => t.Amount)
                     .Must(a => decimal.Round(a, MaxAmountScale) == a)
                     .WithMessage($"Amount may carry at most {MaxAmountScale} decimal places.");
-                transaction.RuleFor(t => t.Currency).Must(SupportedCurrency.IsSupported)
-                    .WithMessage("Currency must be an ISO 4217 currency code, e.g. ZAR.");
+                transaction.RuleFor(t => t.Currency).Must(currencies.IsSupported)
+                    .WithMessage($"Currency must be one of the supported currencies: {string.Join(", ", currencies.Supported)}.");
                 transaction.RuleFor(t => t.Description).NotEmpty().MaximumLength(Transaction.MaxDescriptionLength)
                     .Must(HaveNoControlCharacters).WithMessage(ControlCharacterMessage);
                 transaction.RuleFor(t => t.Category).MaximumLength(MaxCategoryLength)

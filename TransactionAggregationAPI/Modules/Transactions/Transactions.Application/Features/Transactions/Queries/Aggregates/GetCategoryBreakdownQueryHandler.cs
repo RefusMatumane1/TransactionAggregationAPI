@@ -1,19 +1,24 @@
 using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggregates
 {
-    internal sealed class GetCategoryBreakdownQueryHandler(ITransactionsDbContext context)
+    internal sealed class GetCategoryBreakdownQueryHandler(ITransactionsDbContext context, ICurrencyCatalog catalog)
         : IQueryHandler<GetCategoryBreakdownQuery, CategoryBreakdownDto>
     {
         public async Task<Result<CategoryBreakdownDto>> Handle(GetCategoryBreakdownQuery request, CancellationToken cancellationToken)
         {
             var period = new ReportingPeriod(request.From, request.To);
-            var totals = context.DailyTotals.Within(period, request.Filter, request.Currency);
+            var resolved = AmountBasis.Resolve(request.Currency, request.ConvertTo, catalog);
+            if (resolved.IsFailure)
+                return Result.Failure<CategoryBreakdownDto>(resolved.Error);
+            var basis = resolved.Value;
+            var totals = context.DailyTotals.Within(period, request.Filter, basis);
             var grouped = request.Direction == CashFlowDirection.Expense
                 ? totals.Where(d => d.ExpenseCount > 0)
                     .GroupBy(d => d.Category)
@@ -38,12 +43,13 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
 
             return Result.Success(new CategoryBreakdownDto(
                 new PeriodDto(period.From, period.To),
-                request.Currency,
+                basis.Currency,
                 request.Direction,
                 total,
                 rows.Sum(r => r.Count),
                 categories,
-                asOf));
+                asOf,
+                await context.DailyTotals.DescribeConversionAsync(period, request.Filter, basis, cancellationToken)));
         }
     }
 }

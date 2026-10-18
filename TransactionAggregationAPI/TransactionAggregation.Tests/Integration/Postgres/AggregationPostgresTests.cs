@@ -31,7 +31,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             ]);
 
             using var context = _fixture.CreateContext();
-            var handler = new GetTransactionSummaryQueryHandler(context);
+            var handler = new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog);
 
             var result = await handler.Handle(
                 new GetTransactionSummaryQuery(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TestFilters.For(TestInstitutions.FNB, account)), CancellationToken.None);

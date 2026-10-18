@@ -6,14 +6,11 @@ using BuildingBlocks.Messaging.Publishing;
 using FluentAssertions;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.Caching;
-using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Contracts.IntegrationEvents;
 using NSubstitute;
-using System.Net;
 using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using TransactionAggregation.Worker.BackgroundServices;
@@ -83,7 +80,6 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
             foreach (var message in messages)
                 message.Claim(DateTime.UtcNow);
 
-            // Each publish waits until all three are in flight: a sequential dispatcher never gets there.
             var started = 0;
             var allStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var publisher = Substitute.For<IIntegrationEventPublisher>();

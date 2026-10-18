@@ -2,7 +2,6 @@ using TransactionAggregationAPI.RateLimiting;
 
 namespace TransactionAggregationAPI.Middleware
 {
-    // Sits before authentication so a client that keeps failing it is turned away before any token is validated.
     internal sealed class AuthFailureThrottleMiddleware(RequestDelegate next, IAuthFailureThrottle throttle)
     {
         public async Task Invoke(HttpContext context)

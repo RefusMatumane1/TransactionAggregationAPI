@@ -8,7 +8,6 @@ namespace TransactionAggregationUI.Models.Shared
         public bool HasMore { get; set; }
         public int? TotalCount { get; set; }
 
-        // A lower bound: the server stops counting at its limit.
         public bool TotalCountCapped { get; set; }
     }
 }

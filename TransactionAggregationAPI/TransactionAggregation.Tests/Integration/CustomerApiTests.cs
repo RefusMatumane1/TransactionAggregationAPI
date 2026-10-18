@@ -12,9 +12,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration
 {
-    // Customers through the HTTP surface: admins register customers and link their bank accounts;
-    // staff read a customer's transactions and aggregates across banks, but only at the banks they
-    // are assigned, and a customer they can't see is a 404 exactly like a missing one (BOLA).
     public class CustomerApiTests(IntegrationTestWebAppFactory factory) : IClassFixture<IntegrationTestWebAppFactory>
     {
         private sealed record Seeded(Guid CrossBank, Guid CapitecOnly, string FnbAccount, string CapitecAccount);

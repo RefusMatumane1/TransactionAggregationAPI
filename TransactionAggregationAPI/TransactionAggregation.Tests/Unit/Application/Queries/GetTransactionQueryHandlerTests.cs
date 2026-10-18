@@ -17,7 +17,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             context.Transactions.Add(tx);
             await context.SaveChangesAsync();
 
-            var result = await new GetTransactionQueryHandler(context).Handle(
+            var result = await new GetTransactionQueryHandler(context, TestCurrencies.Catalog).Handle(
                 new GetTransactionQuery(tx.Id.Value, InstitutionAccess.All), CancellationToken.None);
 
             result.IsSuccess.Should().BeTrue();
@@ -33,7 +33,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         {
             var context = InMemoryDbContextFactory.Create();
 
-            var result = await new GetTransactionQueryHandler(context).Handle(
+            var result = await new GetTransactionQueryHandler(context, TestCurrencies.Catalog).Handle(
                 new GetTransactionQuery(Guid.NewGuid(), InstitutionAccess.All), CancellationToken.None);
 
             result.Error.Type.Should().Be(ErrorType.NotFound);
@@ -47,7 +47,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             context.Transactions.Add(tx);
             await context.SaveChangesAsync();
 
-            var result = await new GetTransactionQueryHandler(context).Handle(
+            var result = await new GetTransactionQueryHandler(context, TestCurrencies.Catalog).Handle(
                 new GetTransactionQuery(tx.Id.Value, InstitutionAccess.Only([TestInstitutions.FNB])), CancellationToken.None);
 
             result.Error.Type.Should().Be(ErrorType.NotFound, "a 403 would confirm the id exists");

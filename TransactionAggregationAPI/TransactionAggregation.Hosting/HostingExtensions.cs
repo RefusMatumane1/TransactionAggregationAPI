@@ -40,6 +40,7 @@ namespace TransactionAggregation.Hosting
 
         private const string CategorizationRulesFile = "categorization-rules.json";
         private const string NormalizationRulesFile = "normalization-rules.json";
+        private const string CurrenciesFile = "currencies.json";
 
         public static WebApplicationBuilder AddSerilogLogging(this WebApplicationBuilder builder)
         {
@@ -64,6 +65,7 @@ namespace TransactionAggregation.Hosting
         {
             builder.AddRulesFile(CategorizationRulesFile);
             builder.AddRulesFile(NormalizationRulesFile);
+            builder.AddRulesFile(CurrenciesFile);
 
             var connectionString = builder.Configuration.GetConnectionString(ModuleDbContextRegistration.ConnectionStringName);
             if (string.IsNullOrWhiteSpace(connectionString))

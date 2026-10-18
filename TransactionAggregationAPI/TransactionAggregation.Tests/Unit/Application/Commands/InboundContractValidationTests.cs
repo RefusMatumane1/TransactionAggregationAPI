@@ -3,13 +3,14 @@ using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Commands
 {
     public class InboundContractValidationTests
     {
-        private static readonly ReceiveBankTransactionsCommandValidator Validator = new(Options.Create(new IngestionOptions()));
+        private static readonly ReceiveBankTransactionsCommandValidator Validator = new(Options.Create(new IngestionOptions()), TestCurrencies.Catalog);
 
         private static ReceiveBankTransactionsCommand Command(decimal amount = -10m, string currency = "ZAR", int schemaVersion = BankTransactionsMessage.CurrentSchemaVersion, string? institution = null) =>
             new("source", "ext-acc", institution, [new ExternalTransactionDTO
@@ -63,12 +64,30 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
         [Theory]
         [InlineData("ZAR", true)]
         [InlineData("zar", true)]
-        [InlineData("KWD", true)]
+        [InlineData("KWD", false)]
         [InlineData("USD", true)]
         [InlineData("ZA", false)]
         [InlineData("XAU", false)]
         [InlineData("ABC", false)]
-        public void Currency_MustBeAnIso4217AccountCurrency(string currency, bool valid) =>
+        public void Currency_MustBeAConfiguredCurrency(string currency, bool valid) =>
             Validator.Validate(Command(currency: currency)).IsValid.Should().Be(valid);
+
+        [Fact]
+        public void Currency_AnIsoCodeIsAcceptedOnceItIsConfigured()
+        {
+            var validator = new ReceiveBankTransactionsCommandValidator(
+                Options.Create(new IngestionOptions()), TestCurrencies.Create(("KWD", 58m)));
+
+            validator.Validate(Command(currency: "KWD")).IsValid.Should().BeTrue();
+            validator.Validate(Command(currency: "USD")).IsValid.Should().BeFalse("USD is not in this table");
+        }
+
+        [Fact]
+        public void Currency_TheErrorListsWhatIsSupported()
+        {
+            var result = Validator.Validate(Command(currency: "KWD"));
+
+            result.Errors.Should().ContainSingle(e => e.ErrorMessage.Contains("EUR, GBP, USD, ZAR"));
+        }
     }
 }

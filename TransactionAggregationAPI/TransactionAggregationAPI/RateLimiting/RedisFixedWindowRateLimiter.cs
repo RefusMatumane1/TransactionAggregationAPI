@@ -19,8 +19,6 @@ namespace TransactionAggregationAPI.RateLimiting
         private readonly string _key = $"ratelimit:{scope}:{partitionKey}";
         private long _lastUsedTimestamp = (timeProvider ?? TimeProvider.System).GetTimestamp();
 
-        // While Redis is unreachable each instance enforces the same limit on its own, so an outage
-        // degrades to per-instance limiting instead of no limiting at all.
         private readonly Lazy<FixedWindowRateLimiter> _localFallback = new(() => new FixedWindowRateLimiter(
             new FixedWindowRateLimiterOptions
             {

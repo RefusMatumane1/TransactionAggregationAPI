@@ -57,8 +57,9 @@ rebuilds `DailyTotals` for the aggregate endpoints.**
    transaction or its category. The database refuses them (triggers; grants revoked from `tagg_app`).
    A correction is a new entry. *Enforced by:* the triggers and grants, `LeastPrivilegeRolesTests`,
    `ProcessingGuaranteesPostgresTests`.
-2. **Money is `decimal` through `Money`.** Non-zero, at most 4 decimal places, below 10^15, ISO 4217
-   currency. Never `double` or `float`; never add amounts of different currencies.
+2. **Money is `decimal` through `Money`.** Non-zero, at most 4 decimal places, below 10^15, a 3-letter
+   currency code. Never `double` or `float`; never add amounts of different currencies, convert them with
+   `ICurrencyCatalog` (configured rates, four decimals) or leave them apart.
 3. **Dates are UTC** in the domain and the database. Bank-local times are converted during
    normalization using the bank's time zone. Reporting days are South African calendar days (UTC+2).
 4. **Uniqueness is the database's job.** Do not replace a unique index with a check-then-insert.
@@ -166,6 +167,18 @@ Ports: UI 7200, API 5001, Keycloak 8081, mock aggregator 5090, Seq 5341, Kafka U
 Prometheus 9090 and Grafana 3000 (monitoring). The API also serves `/metrics` on port 9464 only.
 
 ## 4. Recipes
+
+### Add, change or remove a currency
+Edit `TransactionAggregation.Hosting/currencies.json` (`Currencies:Rates`: `"USD": 18.00` is base
+units per one unit), or override one rate with `Currencies__Rates__USD=18.25`; `0` switches a currency
+off. `currencies.json` is the **only** list of currencies and the only base: never add a list of codes or a
+literal `"ZAR"` to code (`CurrencyConsistencyTests` fails the build), and read the base from
+`ICurrencyCatalog.BaseCurrency`. A currency must be configured to be accepted at ingestion, at
+recording and as a `convertTo` target. No code change.
+The host refuses to start with an invalid table. A new rate re-values every converted figure on the
+next start, and `ratesVersion` changes so cached responses are not reused. To make a new read
+convertible, resolve an `AmountBasis` and read through `DailyTotals.Within(..., basis)`; do not
+multiply by a rate by hand.
 
 ### Add or change a categorization keyword
 Edit `TransactionAggregation.Hosting/categorization-rules.json` (`CategorizationRules:Keywords`:

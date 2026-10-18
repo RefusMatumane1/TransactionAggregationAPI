@@ -1,6 +1,8 @@
 using BuildingBlocks.Application;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Services;
@@ -25,6 +27,12 @@ namespace Modules.Transactions
                 .Validate(IngestionOptions.IsValid,
                     $"Ingestion:MaxTransactionsPerDelivery must be between 1 and {IngestionOptions.MaxAllowedTransactionsPerDelivery}.")
                 .ValidateOnStart();
+
+            services.AddOptions<CurrencyOptions>()
+                .Bind(configuration.GetSection(CurrencyOptions.SectionName))
+                .ValidateOnStart();
+            services.AddSingleton<IValidateOptions<CurrencyOptions>, CurrencyOptionsValidator>();
+            services.AddSingleton<ICurrencyCatalog, CurrencyCatalog>();
 
             services.AddModuleApplication(Assembly.GetExecutingAssembly());
 

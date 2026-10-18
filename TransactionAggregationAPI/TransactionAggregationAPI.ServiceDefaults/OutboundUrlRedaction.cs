@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 namespace Microsoft.Extensions.Hosting
 {
-    // Marked requests are traced as scheme://host/[redacted]; pair with an HttpClient that has no request loggers.
     public static class OutboundUrlRedaction
     {
         private static readonly HttpRequestOptionsKey<bool> RedactKey = new("TransactionAggregation.RedactUrl");

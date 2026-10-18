@@ -15,7 +15,6 @@ namespace Modules.Notifications.Infrastructure
 
             using var response = await httpClientFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
 
-            // 4xx other than 408/429 is permanent; the rest is transient.
             response.EnsureSuccessStatusCode();
         }
     }

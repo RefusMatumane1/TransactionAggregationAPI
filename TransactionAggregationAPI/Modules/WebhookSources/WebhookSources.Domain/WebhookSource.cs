@@ -126,7 +126,6 @@ namespace Modules.WebhookSources.Domain
 
         public static readonly TimeSpan UsageRecordingInterval = TimeSpan.FromMinutes(1);
 
-        // Throttled: writing it on every delivery would make the row a write hot spot.
         public bool RecordUsage(DateTime now)
         {
             if (LastUsedAt is { } last && now - last < UsageRecordingInterval)

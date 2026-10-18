@@ -122,7 +122,8 @@ namespace TransactionAggregation.Tests.Unit.Audit
             categorization.Categorize(Arg.Any<string>(), Arg.Any<decimal>(), Arg.Any<TransactionCategory?>())
                 .Returns(TransactionCategory.Uncategorized);
             return new(context, messaging, TestNormalizers.Neutral, categorization,
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
         }
 
         [Fact]

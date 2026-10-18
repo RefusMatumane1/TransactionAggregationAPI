@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Presentation.Requests;
 using Modules.Transactions.Presentation.Responses;
 
@@ -19,9 +20,9 @@ namespace Modules.Transactions.Presentation.Endpoints.Reporting
                  .ProducesValidationProblem();
 
         private static async Task<IResult> HandleAsync(
-            ISender sender, IUserContext user, TimeProvider time, [AsParameters] TransactionSummaryRequest request, CancellationToken cancellationToken)
+            ISender sender, IUserContext user, TimeProvider time, ICurrencyCatalog catalog, [AsParameters] TransactionSummaryRequest request, CancellationToken cancellationToken)
         {
-            var result = await sender.Send(request.ToQuery(user.InstitutionAccess, time), cancellationToken);
+            var result = await sender.Send(request.ToQuery(user.InstitutionAccess, time, catalog), cancellationToken);
 
             return result.ToOk(TransactionSummaryResponse.From);
         }

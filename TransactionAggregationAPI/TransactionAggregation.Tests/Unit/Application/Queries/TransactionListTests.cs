@@ -34,7 +34,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         }
 
         private static GetTransactionsQueryHandler Handler(TransactionsDbContext context) =>
-            new(context, new InMemoryTransactionSearch(), new InMemoryKeysetPaginator());
+            new(context, new InMemoryTransactionSearch(), new InMemoryKeysetPaginator(), TestCurrencies.Catalog);
 
         private static async Task<IReadOnlyList<string>> ListAsync(
             Func<GetTransactionsQuery, GetTransactionsQuery> configure, TransactionFilter? filter = null)
@@ -198,8 +198,9 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
 
         [Theory]
         [InlineData("zar")]
-        [InlineData("XYZ")]
-        public void Validator_RejectsCurrenciesThatAreNotUpperCaseIso4217(string currency) =>
+        [InlineData("ZA")]
+        [InlineData("Z1R")]
+        public void Validator_RejectsCurrencyCodesThatAreNotThreeUpperCaseLetters(string currency) =>
             new GetTransactionsQueryValidator()
                 .Validate(new GetTransactionsQuery(TestFilters.All) { Currency = currency })
                 .IsValid.Should().BeFalse();

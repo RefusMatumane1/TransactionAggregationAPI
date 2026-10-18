@@ -31,7 +31,6 @@ namespace TransactionAggregation.Tests.Helpers
             ((RecordingAuditTrail)((InMemoryTransactionsDbContext)context).AuditTrail).Recorded;
     }
 
-    // InMemory has no transactions: contexts and audit events save one after another.
     internal sealed class InMemoryTransactionsDbContext(
         DbContextOptions<TransactionsDbContext> options, MessagingDbContext messaging, IAuditTrail auditTrail)
         : TransactionsDbContext(options, messaging, auditTrail)

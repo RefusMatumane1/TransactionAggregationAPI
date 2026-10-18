@@ -46,7 +46,6 @@ namespace Modules.Transactions.Domain.Entities
 
         public TransactionId Id { get; private set; } = null!;
 
-        // Unique only within its institution.
         public string ExternalAccountId { get; private set; } = null!;
         public Money Amount { get; private set; } = null!;
         public string Description { get; private set; } = null!;

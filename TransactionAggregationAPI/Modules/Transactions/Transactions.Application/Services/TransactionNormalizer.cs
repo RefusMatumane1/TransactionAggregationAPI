@@ -3,6 +3,7 @@ using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Domain.Enums;
+using SharedKernel.Common.ValueObjects;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -39,7 +40,7 @@ namespace Modules.Transactions.Application.Services
             return new NormalizedTransaction(
                 ExternalId: raw.Id,
                 Amount: raw.Amount,
-                Currency: raw.Currency.Trim().ToUpperInvariant(),
+                Currency: CurrencyCode.Normalize(raw.Currency),
                 Description: description,
                 DateUtc: ToUtc(raw.Date, profile.TimeZone),
                 IsPending: BankTransactionStatus.IsPending(raw.Status),

@@ -1,3 +1,4 @@
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
 
@@ -15,6 +16,12 @@ namespace Modules.Transactions.Application.Common.DTOs
         public DateTime Date { get; init; }
         public DateTime CreatedAt { get; init; }
         public Dictionary<string, string> Metadata { get; init; } = new();
+
+        public decimal? ConvertedAmount { get; init; }
+        public string? ConvertedCurrency { get; init; }
+
+        public TransactionListItemDto Converted(ICurrencyCatalog catalog, string? target) =>
+            target is null ? this : this with { ConvertedAmount = catalog.Convert(Amount, Currency, target), ConvertedCurrency = target };
 
         public static TransactionListItemDto From(Transaction transaction) => new()
         {

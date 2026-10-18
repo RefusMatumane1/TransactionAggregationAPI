@@ -4,7 +4,6 @@ namespace BuildingBlocks.Application.Pagination
     {
         public const int Limit = 10_000;
 
-        // COUNT over a LIMIT subquery: bounded cost however large the filtered set.
         public static async Task<BoundedCount> OfAsync<T>(
             IQueryable<T> query, Func<IQueryable<T>, CancellationToken, Task<int>> countAsync, CancellationToken cancellationToken)
         {

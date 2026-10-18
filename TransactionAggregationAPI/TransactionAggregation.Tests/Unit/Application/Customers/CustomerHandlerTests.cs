@@ -36,7 +36,6 @@ namespace TransactionAggregation.Tests.Unit.Application.Customers
             return user;
         }
 
-        // The registered banks, as WebhookSources reports them: lookups are case-insensitive.
         private static IWebhookSourceDirectory Banks(params string[] codes)
         {
             var banks = Substitute.For<IWebhookSourceDirectory>();

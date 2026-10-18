@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Infrastructure.Persistence;
 
@@ -22,7 +23,8 @@ namespace TransactionAggregationAPI.Development
             var randomSeed = configuration.GetValue<int?>(RandomSeedKey) ?? Random.Shared.Next();
             var runId = Guid.NewGuid();
             var now = time.GetUtcNow().UtcDateTime;
-            var generator = new SeedTransactionGenerator(new Random(randomSeed), runId, now);
+            var currency = scope.ServiceProvider.GetRequiredService<ICurrencyCatalog>().BaseCurrency;
+            var generator = new SeedTransactionGenerator(new Random(randomSeed), runId, now, currency);
 
             var transactions = new List<Transaction>();
             var backfilled = 0;

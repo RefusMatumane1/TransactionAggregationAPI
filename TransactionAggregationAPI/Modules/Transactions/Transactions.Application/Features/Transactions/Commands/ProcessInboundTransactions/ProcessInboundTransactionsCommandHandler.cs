@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Modules.Audit.Contracts;
 using Modules.Transactions.Application.Common.Audit;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Errors;
 using Modules.Transactions.Application.Common.Inbox;
@@ -17,6 +18,7 @@ using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Services;
 using SharedKernel.Common.Models;
+using SharedKernel.Common.ValueObjects;
 using System.Globalization;
 using System.Text.Json;
 
@@ -27,7 +29,8 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Proces
         IMessagingDbContext messaging,
         ITransactionNormalizer normalizer,
         ITransactionCategorizationService categorizationService,
-        ILogger<ProcessInboundTransactionsCommandHandler> logger)
+        ILogger<ProcessInboundTransactionsCommandHandler> logger,
+        ICurrencyCatalog currencies)
         : ICommandHandler<ProcessInboundTransactionsCommand, int>
     {
         private const int MaxConflictAttempts = 3;
@@ -51,6 +54,20 @@ namespace Modules.Transactions.Application.Features.Transactions.Commands.Proces
                     "Delivery from {SourceName} names institution {Institution} (account {AccountRef}) — refused",
                     request.SourceName, request.Institution, LogRedaction.Account(request.ExternalAccountId));
                 return Result.Failure<int>(TransactionErrors.SourceNotAuthorizedForInstitution(request.SourceName, request.Institution!));
+            }
+
+            var unsupported = request.Transactions
+                .Select(t => CurrencyCode.Normalize(t.Currency))
+                .Where(c => !currencies.IsSupported(c))
+                .Distinct()
+                .Order(StringComparer.Ordinal)
+                .ToList();
+            if (unsupported.Count > 0)
+            {
+                logger.LogWarning(
+                    "Delivery from {SourceName} for account {AccountRef} is in unsupported currency {Currencies} — refused",
+                    request.SourceName, LogRedaction.Account(request.ExternalAccountId), string.Join(",", unsupported));
+                return Result.Failure<int>(TransactionErrors.UnsupportedCurrency(unsupported, currencies.Supported));
             }
 
             for (var attempt = 1; ; attempt++)

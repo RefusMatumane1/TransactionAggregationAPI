@@ -3,7 +3,6 @@ using Modules.Transactions.Domain.Enums;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Pending/Expired rows the domain can no longer create, seeded with SQL to prove reads leave them out.
     internal static class PreLedgerRows
     {
         public static Task<int> InsertAsync(

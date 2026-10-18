@@ -146,6 +146,28 @@ namespace TransactionAggregation.Tests.Integration
             listed.TryGetProperty("keyHash", out _).Should().BeFalse("the list response must never surface key material");
         }
 
+        [Fact]
+        public async Task CreateSource_WithoutACode_Returns400_SayingItIsRequired()
+        {
+            using var admin = AsAdmin();
+
+            foreach (var body in new object[]
+            {
+                new { DisplayName = "No code", Color = "#0033A1" },
+                new { Code = (string?)null, DisplayName = "Null code", Color = "#0033A1" },
+                new { Code = "", DisplayName = "Empty code", Color = "#0033A1" },
+                new { Code = "   ", DisplayName = "Blank code", Color = "#0033A1" }
+            })
+            {
+                var response = await admin.PostAsJsonAsync(BasePath, body);
+
+                response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+                var messages = (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors").GetProperty("code");
+                messages.EnumerateArray().Select(m => m.GetString()).Should().Equal(
+                    ["Code is required."], "one clear message, not the format rule on top of it");
+            }
+        }
+
         [Theory]
         [InlineData("has space", "Bank", "#0033A1", "code")]
         [InlineData("dotted.code", "Bank", "#0033A1", "code")]
@@ -283,7 +305,6 @@ namespace TransactionAggregation.Tests.Integration
             response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         }
 
-        // Other tests add sources, so a source may be on any page.
         private static async Task<List<JsonElement>> ListAllSourcesAsync(HttpClient admin)
         {
             var sources = new List<JsonElement>();

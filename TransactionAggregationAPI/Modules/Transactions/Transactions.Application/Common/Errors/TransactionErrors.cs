@@ -6,6 +6,10 @@ namespace Modules.Transactions.Application.Common.Errors
     {
         public static Error NotFound(Guid transactionId) => Error.NotFound("Transaction", transactionId);
 
+        public static Error UnsupportedCurrency(IEnumerable<string> currencies, IEnumerable<string> supported) =>
+            Error.Validation(
+                $"Currency {string.Join(", ", currencies)} is not a supported currency ({string.Join(", ", supported)}).");
+
         public static Error SourceNotAuthorizedForInstitution(string sourceName, string institution) =>
             Error.NotPermitted(
                 "Ingestion.SourceNotAuthorized",

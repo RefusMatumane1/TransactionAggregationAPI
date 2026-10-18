@@ -10,14 +10,12 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
     {
         public const string TableName = "DailyTotals";
 
-        // Wider than one ledger amount.
         private const int TotalPrecision = 28;
 
         public void Configure(EntityTypeBuilder<DailyTotal> builder)
         {
             builder.ToTable(TableName);
 
-            // Account first, so bank- or account-filtered reads are key range scans.
             builder.HasKey(d => new { d.SourceName, d.ExternalAccountId, d.Day, d.Category, d.Currency });
 
             builder.Property(d => d.SourceName).HasMaxLength(TransactionSource.MaxNameLength);

@@ -23,7 +23,6 @@ namespace TransactionAggregationUI.Services
 
         public const int MaxPagesPerList = 20;
 
-        // Capped, so a server fault can't turn into an endless loop in the browser.
         public async Task<List<T>> GetAllPagesAsync<T>(string url)
         {
             var items = new List<T>();

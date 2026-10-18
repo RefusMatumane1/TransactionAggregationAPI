@@ -416,7 +416,6 @@ else
     private int _loadVersion;
     private (Guid Customer, string Range)? _loaded;
 
-    // The period is in the URL; a new customer or period reloads everything.
     protected override async Task OnParametersSetAsync()
     {
         _range = ReportRange.Resolve(Range, Format.TodayInSouthAfrica()) is null ? ReportRange.Default : Range!;
@@ -562,7 +561,6 @@ else
             await ApplyCustomerChangeAsync(updated);
     }
 
-    // A link change takes effect on the next read: the reports and the list are reloaded.
     private async Task ApplyCustomerChangeAsync(CustomerModel updated)
     {
         _customer = updated;

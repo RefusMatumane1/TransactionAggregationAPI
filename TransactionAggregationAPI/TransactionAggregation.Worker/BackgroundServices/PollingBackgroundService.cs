@@ -4,7 +4,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
 {
     public abstract class PollingBackgroundService(ILogger logger) : BackgroundService
     {
-        // A job failing run after run is otherwise visible only in logs; liveness stays green.
         internal static readonly Counter FailedRuns = Metrics.CreateCounter(
             "background_job_failed_runs_total",
             "Runs of a polling background job that threw, by job.",

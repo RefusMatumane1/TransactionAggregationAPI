@@ -8,7 +8,7 @@ namespace Modules.Transactions.Infrastructure.Persistence
     internal sealed class PostgresDailyTotalsRefresher(TransactionsDbContext context, TimeProvider time) : IDailyTotalsRefresher
     {
 
-        internal const long LockKey = 0x5441_4747_5245_4731; // "TAGGREG1"
+        internal const long LockKey = 0x5441_4747_5245_4731;
 
         private static readonly TimeSpan CommandTimeout = TimeSpan.FromMinutes(10);
 
@@ -36,8 +36,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
                 var mark = watermark ?? Beginning;
                 var since = mark - overlap;
 
-                // A full batch stops at its last entry's timestamp and the checkpoint stops there too, so a
-                // backlog is worked off in bounded transactions instead of one that can outrun the timeout.
                 var cutoff = await FindBatchCutoffAsync(mark, maxRows, ct);
                 var until = cutoff ?? startedAt;
 
@@ -49,7 +47,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
             }, cancellationToken);
         }
 
-        // The recorded-at of the maxRows-th booked entry after the checkpoint; null when fewer are waiting.
         private async Task<DateTime?> FindBatchCutoffAsync(DateTime mark, int maxRows, CancellationToken cancellationToken)
         {
             if (maxRows == int.MaxValue)
@@ -89,7 +86,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
                 WHERE "Status" = {booked} AND "CreatedAt" > {since} AND "CreatedAt" <= {until};
                 """, cancellationToken);
 
-            // CREATE TABLE AS reports no row count, so the account-days are counted here.
             var touched = await context.Database
                 .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM touched_account_days")
                 .SingleAsync(cancellationToken);
@@ -102,7 +98,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
                   AND d."Day" = t."Day";
                 """, cancellationToken);
 
-            // Ranges on "Date" let the ledger's account index serve them.
             await context.Database.ExecuteSqlAsync($"""
                 INSERT INTO transactions."DailyTotals"
                     ("SourceName", "ExternalAccountId", "Day", "Category", "Currency",

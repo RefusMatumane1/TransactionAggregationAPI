@@ -3,13 +3,14 @@ using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
+using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Application.Commands
 {
     public class ReceiveBankTransactionsCommandValidatorTests
     {
-        private readonly ReceiveBankTransactionsCommandValidator _validator = new(Options.Create(new IngestionOptions()));
+        private readonly ReceiveBankTransactionsCommandValidator _validator = new(Options.Create(new IngestionOptions()), TestCurrencies.Catalog);
 
         private static ExternalTransactionDTO MakeDto(string id) => new()
         {
@@ -52,7 +53,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
         public void Validate_UsesTheConfiguredLimit(int limit, int count, bool valid)
         {
             var validator = new ReceiveBankTransactionsCommandValidator(
-                Options.Create(new IngestionOptions { MaxTransactionsPerDelivery = limit }));
+                Options.Create(new IngestionOptions { MaxTransactionsPerDelivery = limit }), TestCurrencies.Catalog);
             var transactions = Enumerable.Range(1, count).Select(i => MakeDto($"txn-{i}")).ToList();
 
             var result = validator.Validate(new ReceiveBankTransactionsCommand("test-source", "ext-acc-1", null, transactions));

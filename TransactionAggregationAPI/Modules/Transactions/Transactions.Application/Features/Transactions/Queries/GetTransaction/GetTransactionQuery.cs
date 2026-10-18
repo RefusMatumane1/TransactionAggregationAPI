@@ -8,6 +8,10 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
 {
     public sealed record GetTransactionQuery(Guid TransactionId, InstitutionAccess Access) : IQuery<TransactionDto>, ICacheableQuery
     {
+        public string? ConvertTo { get; init; }
+
+        public string? RatesVersion { get; init; }
+
         public TimeSpan? CacheExpiration => TimeSpan.FromMinutes(5);
 
         public string CacheScope => TransactionCacheScopes.All;

@@ -8,8 +8,6 @@ using Modules.Notifications.Contracts;
 
 namespace Modules.Notifications.Application.Contracts
 {
-    // Duplicates are per bank, so are their destinations: the bank's own URL, else the configured default, else only the log.
-    // A URL embeds its credential: it is never logged, only which kind of destination was used.
     internal sealed class DuplicateAlertNotifier(
         INotificationsDbContext context,
         IAlertUrlProtector protector,

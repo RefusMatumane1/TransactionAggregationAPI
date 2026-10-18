@@ -22,11 +22,11 @@ namespace Modules.Transactions.Domain.Common.ValueObjects
             if (decimal.Round(amount, MaxScale) != amount)
                 throw new DomainException($"Amount may carry at most {MaxScale} decimal places");
 
-            if (!SupportedCurrency.IsSupported(currency))
-                throw new DomainException($"'{currency}' is not an ISO 4217 currency code");
+            if (!CurrencyCode.IsWellFormed(currency))
+                throw new DomainException($"'{currency}' is not a 3-letter currency code");
 
             Amount = amount;
-            Currency = SupportedCurrency.Normalize(currency);
+            Currency = CurrencyCode.Normalize(currency);
         }
 
         public static Money Create(decimal amount, string currency) => new(amount, currency);

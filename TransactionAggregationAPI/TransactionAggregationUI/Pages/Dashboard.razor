@@ -352,7 +352,6 @@ else
     private AccountSort _accountSort = AccountSort.Count;
     private int _loadVersion;
 
-    // The URL is the state: back/forward, refresh and shared links show the same report.
     protected override async Task OnParametersSetAsync()
     {
         var today = Format.TodayInSouthAfrica();
@@ -390,7 +389,6 @@ else
         var comparison = Aggregates.GetComparisonAsync(_filter);
         await Task.WhenAll(institutions, categories, cashFlow, comparison);
 
-        // A newer filter started: its results win.
         if (version != _loadVersion)
             return;
 
@@ -424,7 +422,6 @@ else
         _cashFlow = cashFlow.Result.Value;
         _comparison = comparison.Result.Value;
 
-        // The oldest stamp is the honest one.
         _asOf = new[] { _institutions?.AsOf, _categories?.AsOf, _cashFlow?.AsOf, _comparison?.AsOf }
             .Where(a => a is not null)
             .Min();

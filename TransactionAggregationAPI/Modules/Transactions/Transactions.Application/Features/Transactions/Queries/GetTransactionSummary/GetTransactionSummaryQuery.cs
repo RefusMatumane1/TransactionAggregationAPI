@@ -3,7 +3,6 @@ using BuildingBlocks.Application.Caching;
 using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.Caching;
 using Modules.Transactions.Application.Common.DTOs;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
 {
@@ -11,7 +10,9 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
         DateTime StartDate,
         DateTime EndDate,
         TransactionFilter Filter,
-        string Currency = SupportedCurrency.Default) : IQuery<TransactionSummaryDto>, ICacheableQuery
+        string? Currency = null,
+        string? ConvertTo = null,
+        string? RatesVersion = null) : IQuery<TransactionSummaryDto>, ICacheableQuery
     {
         public TimeSpan? CacheExpiration => TransactionCacheScopes.AggregatesExpiration;
 

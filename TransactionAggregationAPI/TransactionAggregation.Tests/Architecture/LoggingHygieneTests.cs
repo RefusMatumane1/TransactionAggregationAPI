@@ -18,7 +18,6 @@ namespace TransactionAggregation.Tests.Architecture
         [GeneratedRegex(@"LogContext\.PushProperty\(\s*""Request""|\{@Request\}")]
         private static partial Regex WholeRequestInLogContext();
 
-        // A message-template placeholder, not an interpolation hole. Templates can continue on the next line, so every line is checked.
         [GeneratedRegex(@"(?<![.\w])\{@?ExternalAccountId\}")]
         private static partial Regex AccountIdPlaceholder();
 

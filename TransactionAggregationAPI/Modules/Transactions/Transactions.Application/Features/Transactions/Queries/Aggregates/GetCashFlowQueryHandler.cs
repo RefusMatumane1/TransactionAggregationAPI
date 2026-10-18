@@ -1,21 +1,26 @@
 using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggregates
 {
-    internal sealed class GetCashFlowQueryHandler(ITransactionsDbContext context)
+    internal sealed class GetCashFlowQueryHandler(ITransactionsDbContext context, ICurrencyCatalog catalog)
         : IQueryHandler<GetCashFlowQuery, CashFlowSeriesDto>
     {
         public async Task<Result<CashFlowSeriesDto>> Handle(GetCashFlowQuery request, CancellationToken cancellationToken)
         {
             var period = new ReportingPeriod(request.From, request.To);
+            var resolved = AmountBasis.Resolve(request.Currency, request.ConvertTo, catalog);
+            if (resolved.IsFailure)
+                return Result.Failure<CashFlowSeriesDto>(resolved.Error);
+            var basis = resolved.Value;
 
             var days = await context.DailyTotals
-                .Within(period, request.Filter, request.Currency)
+                .Within(period, request.Filter, basis)
                 .GroupBy(d => d.Day)
                 .Select(g => new
                 {
@@ -52,13 +57,14 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
 
             return Result.Success(new CashFlowSeriesDto(
                 new PeriodDto(period.From, period.To),
-                request.Currency,
+                basis.Currency,
                 request.Granularity,
                 income,
                 expenses,
                 income - expenses,
                 points,
-                asOf));
+                asOf,
+                await context.DailyTotals.DescribeConversionAsync(period, request.Filter, basis, cancellationToken)));
         }
 
         private static DateOnly BucketStart(DateOnly date, TimeGranularity granularity) => granularity switch

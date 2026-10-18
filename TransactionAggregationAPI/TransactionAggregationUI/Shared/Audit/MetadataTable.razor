@@ -32,7 +32,6 @@
             yield return (key, value);
     }
 
-    // A gap between OccurredAt and RecordedAt means the write was retried.
     private string Lag()
     {
         var lag = Event.RecordedAt - Event.OccurredAt;

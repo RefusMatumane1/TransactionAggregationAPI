@@ -39,7 +39,7 @@ and Kubernetes manifests.
 - Records posted transactions from multiple banks (mock FNB, Absa, Capitec and Standard Bank feeds in development), received by REST webhook or signed Kafka records, with idempotent ingestion, in an **insert-only ledger** enforced by the database
 - Publishes a `TransactionRecorded` integration event to Kafka for every ledger entry
 - Categorises transactions automatically by keyword (Groceries, Dining, Transport …)
-- Aggregates by bank, account, category and period (cash flow, breakdowns and period-over-period comparison) in any ISO 4217 currency, one currency per view
+- Aggregates by bank, account, category and period (cash flow, breakdowns and period-over-period comparison) in one currency per view, or converted into a configured currency with `convertTo`
 - Admins manage the banks (each one a source with its own API key, display name and colour) from the UI
 - Exposes a versioned REST API (`/api/v1/…`) secured with Keycloak-issued JWT bearer tokens; users hold the `staff` (read-only, limited to their assigned banks) or `admin` realm role
 - Audits every delivery, every ledger entry and every admin change (with the admin who made it) in an append-only trail
@@ -602,8 +602,11 @@ requires `institution`).
 | `GET` | `/transactions/aggregates/comparison` | staff | Period against the previous equal period |
 
 Aggregate periods are South African calendar days (`from`, `to`; default the last 12 months).
-Every aggregate is computed in one currency, `currency` (ISO 4217, default `ZAR`), so amounts in
-different currencies are never added together.
+By default every aggregate is computed in one currency, `currency` (a 3-letter upper-case code; when
+omitted, the configured base currency, see [Currencies and conversion](#currencies-and-conversion)), so
+amounts in different currencies are never added together. Add `convertTo=ZAR` (any [supported
+currency](#currencies-and-conversion)) to see every configured currency converted into one and
+summed instead; `currency` is then ignored.
 
 Aggregates are never computed on the request path. The worker rebuilds a daily read model
 (`transactions."DailyTotals"`: one row per day, bank, account, category and currency) every
@@ -615,6 +618,63 @@ entries; a larger backlog is worked off in back-to-back rebuilds. Every aggregat
 transaction recorded since then is in the transaction list but not yet in the totals.
 `/transactions/summary` reads the same model, so its `startDate`/`endDate` are rounded to the South
 African days they fall on (both inclusive).
+
+#### Currencies and conversion
+
+The currencies the platform accepts, and what each is worth in a base currency, are configuration
+(`TransactionAggregation.Hosting/currencies.json`, overridable like any setting):
+
+```json
+{ "Currencies": { "BaseCurrency": "ZAR", "Rates": { "USD": 18.00, "EUR": 20.50, "JPY": 0.12 } } }
+```
+
+A rate says how many units of the base one unit of the currency is worth (USD 18.00 means 1 USD =
+18.00 ZAR); the base is always 1. The shipped rates are indicative placeholders. Replace them with
+your own before relying on a converted figure.
+
+**`currencies.json` is the only list of currencies in the platform.** There is no second, built-in
+list and no hardcoded base:
+- A currency is accepted for ingestion, is a valid `convertTo` target and is convertible **if and
+  only if** it is in this file (or is the base). Add a code and it works everywhere; remove one and
+  it is refused everywhere. Codes are checked for shape only (three upper-case letters, the same
+  rule the database enforces), so type them carefully: nothing else knows which codes are real.
+- Everything that needs "the" currency reads `Currencies:BaseCurrency`: aggregate views with no
+  `currency`, the Development demo data, and the default of `convertTo`. Changing the base changes
+  all of them together.
+- The domain (`Money`) keeps only the shape of a code. Which currencies are acceptable is decided by
+  the catalog, at the edges: when a delivery arrives, **again when it is recorded** (so a currency
+  removed in between never reaches the ledger; the delivery is dead-lettered), and for `convertTo`.
+- Recorded data is always readable in the currency it was recorded in, even if that currency has
+  since been removed from the file (filter by `currency=`); it just can't be converted or newly
+  delivered.
+- `GET /api/v1/currencies` (any signed-in staff or admin) returns the table the running instance is
+  using: `{ baseCurrency, ratesVersion, currencies: [{ code, rateToBase }] }`. Clients should read
+  the list of valid codes from it rather than keeping their own.
+
+- **Ingestion.** A delivery in a currency that is not configured is refused (`400`, or dead-lettered
+  and audited on Kafka), with the list of supported currencies. The ledger always keeps the amount and currency the bank sent; nothing is
+  converted on the way in.
+- **Conversion is a view, not data.** Pass `convertTo=<code>` to `GET /transactions`,
+  `GET /transactions/{id}`, `/transactions/summary` and the four `/transactions/aggregates/*` views
+  (and the same views under `/customers/{id}/...`).
+  - *Aggregates and summary:* every configured currency is converted with the configured rate,
+    **per daily row, rounded to four decimals (halves away from zero)**, then summed, so totals add
+    up exactly what the rows show. The response carries `conversion`: `target`, `ratesVersion` (a
+    fingerprint of the table that was used), the `rates` applied per currency present in the data,
+    and `unconvertedCurrencies`, currencies that were in the data but have no rate and were
+    **left out** rather than silently guessed.
+  - *Transaction list and detail:* each entry gains `convertedAmount` and `convertedCurrency`
+    (`convertedAmount` is `null` when its currency has no rate). Sorting and `minAmount`/`maxAmount`
+    still use the recorded amount, because the indexes are on it.
+  - `convertTo` must be an upper-case code that is configured; otherwise `400`.
+- **Cross rates** go through the base: EUR to USD is `rate(EUR) / rate(USD)`.
+- **Rates are applied at read time.** Changing a rate changes every converted figure, past ones
+  included, and takes effect when the API and worker restart with the new configuration. Cached
+  responses are keyed by `ratesVersion`, so a new table never serves figures built from the old one.
+  A rate of `0` switches a currency off (for example `Currencies__Rates__JPY=0` removes a shipped
+  default).
+- The configuration is validated at start-up: unknown or lower-case codes, negative or absurd rates,
+  or a base with a rate other than 1 stop the host with the reason.
 
 #### Customers
 
@@ -687,7 +747,7 @@ Content-Type: application/json
 
 The response is `202 Accepted` with `{ "inboxMessageId", "isDuplicate", "requeued" }`.
 Validation failures are `400` ProblemDetails with per-field messages under `errors`
-(e.g. `{"errors": {"transactions[0].currency": ["Currency must be a 3-letter ISO 4217 code."]}}`),
+(e.g. `{"errors": {"transactions[0].currency": ["Currency must be one of the supported currencies: EUR, GBP, USD, ZAR."]}}`),
 and every response carries an `X-Correlation-Id` header (the caller's own when it is a short
 `[A-Za-z0-9._-]` token, otherwise the trace id) that ties it to the logs.
 
@@ -717,7 +777,7 @@ and a bank's profile under `Institutions` only adds to it.
 |---|---|
 | `date` | UTC. A date without an offset is read in the bank's time zone (default `Africa/Johannesburg`). |
 | `description` | Trimmed, whitespace collapsed, known statement prefixes (e.g. `POS PURCHASE`) stripped |
-| `currency` | Upper-case ISO 4217 |
+| `currency` | Upper-case, 3 letters; accepted only if it is a configured currency |
 | `category` | Mapped to our categories as a hint: our keyword rules win, then the bank's category, then income for money in |
 | `id` | Never changed — duplicates are detected on it |
 
@@ -832,7 +892,7 @@ Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/admin/webhook-sources` | List banks (never includes key material) |
-| `POST` | `/admin/webhook-sources` | Add a bank: `{ "code": "Nedbank", "displayName": "Nedbank", "color": "#007A4D" }`. The code (letters, digits, `-`, `_`) is fixed and stamped on its transactions. The response includes the API key once |
+| `POST` | `/admin/webhook-sources` | Add a bank: `{ "code": "Nedbank", "displayName": "Nedbank", "color": "#007A4D" }`. `code` and `displayName` are required (`400` with `"Code is required."` otherwise); the code (letters, digits, `-`, `_`) is fixed and stamped on its transactions. The response includes the API key once |
 | `PUT` | `/admin/webhook-sources/{id}` | Change a bank's display name and colour: `{ "displayName", "color" }` |
 | `PUT` | `/admin/webhook-sources/{id}/signing-key` | Register the bank's Kafka signing key (ECDSA P-256) |
 | `POST` | `/admin/webhook-sources/{id}/rotate` | Replace the key — old one stops working immediately |
@@ -872,7 +932,8 @@ case-insensitive and must be a registered bank (`404` otherwise).
 | `fromDate` | datetime | Transaction date lower bound |
 | `toDate` | datetime | Transaction date upper bound |
 | `category` | int | `0`=Uncategorized `1`=Groceries `2`=Dining `3`=Transportation `4`=Entertainment `5`=Utilities `6`=Housing `7`=Healthcare `8`=Income `9`=Transfer `10`=Shopping `11`=Subscriptions |
-| `currency` | string | ISO 4217 code, upper case (e.g. `ZAR`, `USD`) |
+| `currency` | string | 3-letter upper-case code (e.g. `ZAR`, `USD`): the currency an entry was recorded in. Recorded data can be read in any currency it was recorded in, whether or not it is still configured |
+| `convertTo` | string | A configured currency, upper case: adds `convertedAmount` / `convertedCurrency` to each entry ([details](#currencies-and-conversion)) |
 | `minAmount` | decimal | Absolute amount lower bound |
 | `maxAmount` | decimal | Absolute amount upper bound |
 | `searchTerm` | string | 3–100 characters; case-insensitive substring of the description (trigram index) |
@@ -927,6 +988,8 @@ Environment variables use `__` as a section separator:
 | `ConnectionStrings:transactiondb` | PostgreSQL connection string (secret) | built from `POSTGRES_PASSWORD` in `.env` |
 | `ConnectionStrings:kafka` | Kafka bootstrap servers (worker: required) | `kafka:9093` |
 | `Secrets:FilePath` | Absolute path of the secrets file (clusters: the Vault-rendered file) | not set: `secrets.json` in the content root, optional |
+| `Currencies:BaseCurrency` | **Required.** The base: rates are quoted against it, and every default follows it (views that name no `currency`, the demo data) | `ZAR` in `currencies.json` |
+| `Currencies:Rates:<CODE>` | Base units per one unit of `<CODE>`; the currency is accepted for ingestion and convertible. `0` switches one off. Defaults ship in `currencies.json`; override with `Currencies__Rates__USD=18.25` | see `currencies.json` |
 | `Ingestion:MaxTransactionsPerDelivery` | Most transactions one webhook call or Kafka record may carry (1–5000; startup fails outside that). Set the same value on the API and the worker; the 1 MiB request-body limit still applies | `500` |
 | `Kafka:IntegrationEventsTopic` | Topic for `TransactionRecorded` events | `transaction-events` |
 | `NotificationOptions:DuplicateAlertWebhookUrl` | Optional *default* duplicate-alert hook for banks without their own (secret: it embeds a token). Per-bank URLs are set through the admin API, not configuration | `DUPLICATE_ALERT_WEBHOOK_URL` in `.env` |

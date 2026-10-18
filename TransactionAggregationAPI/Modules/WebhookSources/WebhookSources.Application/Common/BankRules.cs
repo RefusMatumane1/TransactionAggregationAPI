@@ -7,7 +7,9 @@ namespace Modules.WebhookSources.Application.Common
     {
         public static IRuleBuilderOptions<T, string> BankCode<T>(this IRuleBuilder<T, string> rule) =>
             rule.Must(WebhookSource.IsValidCode)
-                .WithMessage($"Code must be 1-{WebhookSource.MaximumCodeLength} letters, digits, '-' or '_' (e.g. FNB, StandardBank).");
+                .WithMessage((_, code) => string.IsNullOrWhiteSpace(code)
+                    ? "Code is required."
+                    : $"Code must be 1-{WebhookSource.MaximumCodeLength} letters, digits, '-' or '_' (e.g. FNB, StandardBank).");
 
         public static IRuleBuilderOptions<T, string> BankDisplayName<T>(this IRuleBuilder<T, string> rule) =>
             rule.NotEmpty().MaximumLength(WebhookSource.MaximumDisplayNameLength);

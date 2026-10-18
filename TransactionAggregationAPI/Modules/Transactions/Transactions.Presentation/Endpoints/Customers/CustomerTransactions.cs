@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Modules.Customers.Contracts;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Presentation.Requests;
 using Modules.Transactions.Presentation.Responses;
 using SharedKernel.Common.Models;
@@ -60,61 +61,61 @@ namespace Modules.Transactions.Presentation.Endpoints.Customers
         }
 
         private static async Task<IResult> ListAsync(
-            ISender sender, IUserContext user, ICustomerAccounts customers, Guid customerId,
+            ISender sender, IUserContext user, ICustomerAccounts customers, ICurrencyCatalog catalog, Guid customerId,
             [AsParameters] FilterTransactionsRequest request, CancellationToken cancellationToken)
         {
             if (await VisibleAccountsAsync(customers, customerId, user.InstitutionAccess, cancellationToken) is not { } accounts)
                 return NotFound(customerId);
 
-            var query = request.ToQuery(user.InstitutionAccess);
+            var query = request.ToQuery(user.InstitutionAccess, catalog);
             var result = await sender.Send(query with { Filter = query.Filter with { Accounts = accounts } }, cancellationToken);
             return result.ToOk(page => CursorPagedResponse<TransactionListItemResponse>.From(page, TransactionListItemResponse.From));
         }
 
         private static async Task<IResult> CategoriesAsync(
-            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, Guid customerId,
+            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, ICurrencyCatalog catalog, Guid customerId,
             [AsParameters] CategoryBreakdownRequest request, CancellationToken cancellationToken)
         {
             if (await VisibleAccountsAsync(customers, customerId, user.InstitutionAccess, cancellationToken) is not { } accounts)
                 return NotFound(customerId);
 
-            var query = request.ToQuery(user.InstitutionAccess, time);
+            var query = request.ToQuery(user.InstitutionAccess, time, catalog);
             return (await sender.Send(query with { Filter = query.Filter with { Accounts = accounts } }, cancellationToken))
                 .ToOk(CategoryBreakdownResponse.From);
         }
 
         private static async Task<IResult> CashFlowAsync(
-            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, Guid customerId,
+            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, ICurrencyCatalog catalog, Guid customerId,
             [AsParameters] CashFlowRequest request, CancellationToken cancellationToken)
         {
             if (await VisibleAccountsAsync(customers, customerId, user.InstitutionAccess, cancellationToken) is not { } accounts)
                 return NotFound(customerId);
 
-            var query = request.ToQuery(user.InstitutionAccess, time);
+            var query = request.ToQuery(user.InstitutionAccess, time, catalog);
             return (await sender.Send(query with { Filter = query.Filter with { Accounts = accounts } }, cancellationToken))
                 .ToOk(CashFlowSeriesResponse.From);
         }
 
         private static async Task<IResult> InstitutionsAsync(
-            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, Guid customerId,
+            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, ICurrencyCatalog catalog, Guid customerId,
             [AsParameters] InstitutionBreakdownRequest request, CancellationToken cancellationToken)
         {
             if (await VisibleAccountsAsync(customers, customerId, user.InstitutionAccess, cancellationToken) is not { } accounts)
                 return NotFound(customerId);
 
-            var query = request.ToQuery(user.InstitutionAccess, time);
+            var query = request.ToQuery(user.InstitutionAccess, time, catalog);
             return (await sender.Send(query with { Filter = query.Filter with { Accounts = accounts } }, cancellationToken))
                 .ToOk(InstitutionBreakdownResponse.From);
         }
 
         private static async Task<IResult> ComparisonAsync(
-            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, Guid customerId,
+            ISender sender, IUserContext user, ICustomerAccounts customers, TimeProvider time, ICurrencyCatalog catalog, Guid customerId,
             [AsParameters] PeriodComparisonRequest request, CancellationToken cancellationToken)
         {
             if (await VisibleAccountsAsync(customers, customerId, user.InstitutionAccess, cancellationToken) is not { } accounts)
                 return NotFound(customerId);
 
-            var query = request.ToQuery(user.InstitutionAccess, time);
+            var query = request.ToQuery(user.InstitutionAccess, time, catalog);
             return (await sender.Send(query with { Filter = query.Filter with { Accounts = accounts } }, cancellationToken))
                 .ToOk(PeriodComparisonResponse.From);
         }

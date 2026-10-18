@@ -3,7 +3,6 @@ using BuildingBlocks.Application.Caching;
 using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.Caching;
 using Modules.Transactions.Application.Common.DTOs;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggregates
 {
@@ -12,7 +11,9 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.Aggrega
         DateOnly To,
         TransactionFilter Filter,
         TimeGranularity Granularity = TimeGranularity.Month,
-        string Currency = SupportedCurrency.Default) : IQuery<CashFlowSeriesDto>, ICacheableQuery
+        string? Currency = null,
+        string? ConvertTo = null,
+        string? RatesVersion = null) : IQuery<CashFlowSeriesDto>, ICacheableQuery
     {
         public TimeSpan? CacheExpiration => TransactionCacheScopes.AggregatesExpiration;
         public string CacheScope => TransactionCacheScopes.Aggregates;

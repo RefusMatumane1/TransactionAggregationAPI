@@ -14,8 +14,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // A customer view is a set of (bank, account) pairs applied to the ledger and to the daily read
-    // model: these run it against real PostgreSQL, and check the customer tables' own invariants.
     [Collection(PostgresCollection.Name)]
     public class CustomerPostgresTests(PostgresContainerFixture fixture)
     {
@@ -33,7 +31,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                     TestTransactions.Create(-100m, "Mine at A", TransactionCategory.Groceries, institution: bankA, account: "shared-id", date: Utc(3, 9)),
                     TestTransactions.Create(-40m, "Mine at B", TransactionCategory.Dining, institution: bankB, account: "acc-b", date: Utc(4, 9)),
                     TestTransactions.Create(2500m, "Salary at B", TransactionCategory.Income, institution: bankB, account: "acc-b", date: Utc(5, 9)),
-                    // The same account id at the other bank belongs to someone else.
                     TestTransactions.Create(-999m, "Not mine", TransactionCategory.Shopping, institution: bankB, account: "shared-id", date: Utc(3, 9)));
                 await seed.SaveChangesAsync();
             }
@@ -43,11 +40,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 [new AccountKey(bankA, "shared-id"), new AccountKey(bankB, "acc-b")]);
 
             using var context = fixture.CreateContext(connectionString: db);
-            var list = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), new RowValueKeysetPaginator())
+            var list = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), new RowValueKeysetPaginator(), TestCurrencies.Catalog)
                 .Handle(new GetTransactionsQuery(filter) { PageSize = 50 }, CancellationToken.None)).Value;
-            var cashFlow = (await new GetCashFlowQueryHandler(context)
+            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30), filter), CancellationToken.None)).Value;
-            var nothing = (await new GetCashFlowQueryHandler(context)
+            var nothing = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30),
                     new TransactionFilter(InstitutionAccess.All, Accounts: [])), CancellationToken.None)).Value;
 

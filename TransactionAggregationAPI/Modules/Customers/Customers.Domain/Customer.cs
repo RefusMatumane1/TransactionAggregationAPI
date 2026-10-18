@@ -22,8 +22,6 @@ namespace Modules.Customers.Domain
 
         public CustomerId Id { get; private set; } = null!;
 
-        // The organisation's own customer number (e.g. "CUST-0001"): unique, immutable, and safe to
-        // log, unlike the name.
         public string Reference { get; private set; } = null!;
 
         public string Name { get; private set; } = null!;
@@ -80,7 +78,6 @@ namespace Modules.Customers.Domain
             return true;
         }
 
-        // Returns false when the account was not linked.
         public bool Unlink(string institution, string externalAccountId)
         {
             var account = FindAccount(institution, externalAccountId);

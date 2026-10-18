@@ -26,8 +26,8 @@ namespace Modules.Transactions.Application.Common.Aggregation
 
     public static class CurrencyRules
     {
-        public static IRuleBuilderOptions<T, string> IsoCurrency<T>(this IRuleBuilder<T, string> rule) =>
-            rule.Must(c => SupportedCurrency.IsSupported(c) && c == SupportedCurrency.Normalize(c))
-                .WithMessage("currency must be an upper-case ISO 4217 code, e.g. ZAR.");
+        public static IRuleBuilderOptions<T, string> CurrencyCodeFormat<T>(this IRuleBuilder<T, string> rule) =>
+            rule.Must(CurrencyCode.IsCanonical)
+                .WithMessage("currency must be a 3-letter upper-case currency code, e.g. ZAR.");
     }
 }

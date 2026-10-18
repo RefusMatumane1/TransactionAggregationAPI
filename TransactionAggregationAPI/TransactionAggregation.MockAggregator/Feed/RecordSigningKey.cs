@@ -4,7 +4,6 @@ using System.Text;
 
 namespace TransactionAggregation.MockAggregator.Feed
 {
-    // Generated on first use and kept in the data directory, so the registered public key survives restarts.
     public sealed class RecordSigningKey : IDisposable
     {
         public const string FileName = "kafka-signing-key.pem";

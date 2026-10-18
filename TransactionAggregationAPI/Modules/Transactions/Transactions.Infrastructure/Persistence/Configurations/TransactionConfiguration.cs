@@ -77,7 +77,6 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
             builder.Property(t => t.CreatedAt)
                 .IsRequired();
 
-            // Legacy lifecycle values: kept, never written now.
             builder.Property<DateTime?>("UpdatedAt");
 
             builder.Ignore(t => t.Metadata);
@@ -93,12 +92,8 @@ namespace Modules.Transactions.Infrastructure.Persistence.Configurations
                         c => c == null ? 0 : c.Aggregate(0, (a, v) => HashCode.Combine(a, v.GetHashCode())),
                         c => c == null ? new() : new Dictionary<string, string>(c)))
                 .HasColumnType("jsonb");
-
-            // Indexes are raw SQL in migrations (CONCURRENTLY, partial, INCLUDE, GIN): EF can't express them on owned
-            // columns. SchemaContractTests pins them.
         }
 
-        // Statuses with gaps must be listed, or the constraint admits retired ones.
         private static string EnumRange<TEnum>(string column) where TEnum : struct, Enum
         {
             var values = Enum.GetValues<TEnum>().Select(v => Convert.ToInt32(v)).Order().ToList();

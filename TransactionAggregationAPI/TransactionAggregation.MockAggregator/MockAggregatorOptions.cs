@@ -27,7 +27,6 @@ namespace TransactionAggregation.MockAggregator
 
         public string ApiKey { get; set; } = string.Empty;
 
-        // Each bank's key is ApiKey + "-" + its code in lower case, as in the API's Development registration.
         public string KeyFor(string bankCode) => $"{ApiKey}-{bankCode.ToLowerInvariant()}";
 
         public string KafkaTopic { get; set; } = "bank-transactions";

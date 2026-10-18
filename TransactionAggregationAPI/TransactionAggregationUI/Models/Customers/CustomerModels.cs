@@ -1,6 +1,5 @@
 namespace TransactionAggregationUI.Models.Customers
 {
-    // GET /api/v1/customers: one row per customer the caller can see.
     public class CustomerSummaryModel
     {
         public Guid Id { get; set; }
@@ -8,11 +7,9 @@ namespace TransactionAggregationUI.Models.Customers
         public string Name { get; set; } = string.Empty;
         public int AccountCount { get; set; }
 
-        // Bank codes of the linked accounts the caller may read.
         public List<string> Institutions { get; set; } = [];
     }
 
-    // GET /api/v1/customers/{id}: the customer and the linked accounts the caller may read.
     public class CustomerModel
     {
         public Guid Id { get; set; }

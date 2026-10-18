@@ -2,6 +2,5 @@
 @inject NavigationManager Nav
 
 @code {
-    // NavigateToLogin keeps the return URL in navigation state, not the query string (see MainLayout).
     protected override void OnInitialized() => Nav.NavigateToLogin("authentication/login");
 }

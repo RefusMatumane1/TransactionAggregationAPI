@@ -1,13 +1,14 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
 using Microsoft.EntityFrameworkCore;
+using Modules.Transactions.Application.Common.Currency;
+using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Services;
 using System.Linq.Expressions;
 
 namespace Modules.Transactions.Application.Common.Aggregation
 {
-    // The one specification every read applies: ledger entries only, restricted to the caller's institutions,
-    // then narrowed by the filter.
     internal static class AggregationScope
     {
         public static IQueryable<Transaction> Ledger(this IQueryable<Transaction> transactions, TransactionFilter filter) =>
@@ -17,10 +18,10 @@ namespace Modules.Transactions.Application.Common.Aggregation
                 .VisibleTo(filter.Access)
                 .Matching(filter);
 
-        public static IQueryable<DailyTotal> Within(
-            this IQueryable<DailyTotal> totals, DateOnly from, DateOnly to, TransactionFilter filter, string currency)
+        public static IQueryable<DailyTotal> InScope(
+            this IQueryable<DailyTotal> totals, DateOnly from, DateOnly to, TransactionFilter filter)
         {
-            totals = totals.AsNoTracking().Where(d => d.Currency == currency && d.Day >= from && d.Day <= to);
+            totals = totals.AsNoTracking().Where(d => d.Day >= from && d.Day <= to);
 
             if (!filter.Access.AllInstitutions)
             {
@@ -37,9 +38,103 @@ namespace Modules.Transactions.Application.Common.Aggregation
             return totals;
         }
 
-        public static IQueryable<DailyTotal> Within(
-            this IQueryable<DailyTotal> totals, ReportingPeriod period, TransactionFilter filter, string currency) =>
-            totals.Within(period.From, period.To, filter, currency);
+        public static IQueryable<TotalRow> Within(
+            this IQueryable<DailyTotal> totals, DateOnly from, DateOnly to, TransactionFilter filter, AmountBasis basis)
+        {
+            var scoped = totals.InScope(from, to, filter);
+
+            if (!basis.IsConverting)
+            {
+                var currency = basis.Currency;
+                return scoped.Where(d => d.Currency == currency).Select(Identity);
+            }
+
+            var target = basis.ConvertTo!;
+            var convertible = basis.Catalog.Supported.ToList();
+            return scoped.Where(d => convertible.Contains(d.Currency)).Select(Converting(basis.Catalog, target));
+        }
+
+        public static IQueryable<TotalRow> Within(
+            this IQueryable<DailyTotal> totals, ReportingPeriod period, TransactionFilter filter, AmountBasis basis) =>
+            totals.Within(period.From, period.To, filter, basis);
+
+        public static async Task<ConversionDto?> DescribeConversionAsync(
+            this IQueryable<DailyTotal> totals, DateOnly from, DateOnly to, TransactionFilter filter, AmountBasis basis,
+            CancellationToken cancellationToken)
+        {
+            if (!basis.IsConverting)
+                return null;
+
+            var catalog = basis.Catalog;
+            var target = basis.ConvertTo!;
+            var present = await totals.InScope(from, to, filter).Select(d => d.Currency).Distinct().ToListAsync(cancellationToken);
+
+            return new ConversionDto(
+                target,
+                catalog.Version,
+                [.. present.Where(catalog.IsSupported).Order(StringComparer.Ordinal)
+                    .Select(c => new ConversionRateDto(c, catalog.Rate(c, target)!.Value))],
+                [.. present.Where(c => !catalog.IsSupported(c)).Order(StringComparer.Ordinal)]);
+        }
+
+        public static Task<ConversionDto?> DescribeConversionAsync(
+            this IQueryable<DailyTotal> totals, ReportingPeriod period, TransactionFilter filter, AmountBasis basis,
+            CancellationToken cancellationToken) =>
+            totals.DescribeConversionAsync(period.From, period.To, filter, basis, cancellationToken);
+
+        private static readonly Expression<Func<DailyTotal, TotalRow>> Identity = d => new TotalRow
+        {
+            Day = d.Day,
+            SourceName = d.SourceName,
+            ExternalAccountId = d.ExternalAccountId,
+            Category = d.Category,
+            Currency = d.Currency,
+            Income = d.Income,
+            Expenses = d.Expenses,
+            IncomeCount = d.IncomeCount,
+            ExpenseCount = d.ExpenseCount
+        };
+
+        private static decimal RateFor(DailyTotal row) => throw new InvalidOperationException("Replaced before translation.");
+
+        private static readonly Expression<Func<DailyTotal, TotalRow>> ConvertingTemplate = d => new TotalRow
+        {
+            Day = d.Day,
+            SourceName = d.SourceName,
+            ExternalAccountId = d.ExternalAccountId,
+            Category = d.Category,
+            Currency = d.Currency,
+            Income = Math.Round(d.Income * RateFor(d), Money.MaxScale),
+            Expenses = Math.Round(d.Expenses * RateFor(d), Money.MaxScale),
+            IncomeCount = d.IncomeCount,
+            ExpenseCount = d.ExpenseCount
+        };
+
+        private static Expression<Func<DailyTotal, TotalRow>> Converting(ICurrencyCatalog catalog, string target)
+        {
+            var row = Expression.Parameter(typeof(DailyTotal), "row");
+            Expression rate = Expression.Constant(0m);
+            foreach (var code in catalog.Supported)
+            {
+                rate = Expression.Condition(
+                    Expression.Equal(Expression.Property(row, nameof(DailyTotal.Currency)), Expression.Constant(code)),
+                    Expression.Constant(catalog.Rate(code, target)!.Value),
+                    rate);
+            }
+
+            return (Expression<Func<DailyTotal, TotalRow>>)new RateSubstitution(row, rate).Visit(ConvertingTemplate);
+        }
+
+        private sealed class RateSubstitution(ParameterExpression row, Expression rate) : ExpressionVisitor
+        {
+            protected override Expression VisitMethodCall(MethodCallExpression node)
+            {
+                if (node.Method.Name != nameof(RateFor))
+                    return base.VisitMethodCall(node);
+
+                return new Rebind(row, (ParameterExpression)node.Arguments[0]).Visit(rate);
+            }
+        }
 
         public static Task<DateTime?> AsOfAsync(this IQueryable<AggregationCheckpoint> checkpoints, CancellationToken cancellationToken) =>
             checkpoints
@@ -68,8 +163,6 @@ namespace Modules.Transactions.Application.Common.Aggregation
             return transactions;
         }
 
-        // (bank = b1 AND account = a1) OR ...: equality seeks on the (bank, account, ...) indexes; values stay
-        // SQL parameters, so the plan is shared across customers.
         private static Expression<Func<T, bool>> AnyAccount<T>(
             IReadOnlyList<AccountKey> accounts,
             Expression<Func<T, string>> institution,

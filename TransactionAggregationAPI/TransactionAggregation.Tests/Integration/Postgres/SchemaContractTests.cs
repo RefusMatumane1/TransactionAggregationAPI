@@ -4,7 +4,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Raw-SQL indexes EF can't see; this pins what migrations must produce.
     [Collection(PostgresCollection.Name)]
     public class SchemaContractTests(PostgresContainerFixture fixture)
     {

@@ -42,7 +42,6 @@ namespace Modules.Notifications.Application.Features.SetDuplicateAlertWebhook
                     existing.Replace(protectedUrl);
             }
 
-            // The address embeds a credential: the audit trail and the log record that it changed, never what it is.
             var detail = clearing ? "Duplicate-alert webhook cleared" : "Duplicate-alert webhook set";
             context.StageAudit([AdminAudit.Of(AuditEventTypes.DuplicateAlertWebhookChanged, bankCode, userContext.UserId, detail)]);
             await context.SaveChangesAsync(cancellationToken);

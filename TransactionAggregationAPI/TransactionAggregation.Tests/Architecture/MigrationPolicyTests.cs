@@ -7,7 +7,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture
 {
-    // From the insert-only ledger on, migrations only change the schema (expand/contract) and build every index CONCURRENTLY.
     public partial class MigrationPolicyTests
     {
         private const string PolicyStart = "20261003000000";

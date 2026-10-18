@@ -1,7 +1,6 @@
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Domain.Enums;
-using SharedKernel.Common.ValueObjects;
 
 namespace TransactionAggregationAPI.Development
 {
@@ -25,7 +24,7 @@ namespace TransactionAggregationAPI.Development
     internal sealed record SeedAccount(
         string ExternalAccountId, string Institution, SeedAccountType Type, int VariablePerMonth, SeedProfile Profile);
 
-    internal sealed class SeedTransactionGenerator(Random rng, Guid runId, DateTime nowUtc)
+    internal sealed class SeedTransactionGenerator(Random rng, Guid runId, DateTime nowUtc, string currency)
     {
         public const int HistoryMonths = 15;
         public static readonly TimeSpan RecentActivityWindow = TimeSpan.FromHours(48);
@@ -111,7 +110,6 @@ namespace TransactionAggregationAPI.Development
 
         private Transaction Variable(SeedAccount account, DateTime date)
         {
-            var p = account.Profile;
             return account.Type switch
             {
                 SeedAccountType.Savings => FromTemplate(account, SeedCatalog.SavingsTemplates, account.Institution, date),
@@ -140,7 +138,7 @@ namespace TransactionAggregationAPI.Development
 
         private Transaction Booked(SeedAccount account, decimal amount, string description, TransactionCategory category, string institution, DateTime date) =>
             Transaction.Record(account.ExternalAccountId,
-                Money.Create(amount, SupportedCurrency.Default),
+                Money.Create(amount, currency),
                 description,
                 category,
                 TransactionSource.Create(institution, $"seed-{runId:N}-{++_sequence:D6}"),

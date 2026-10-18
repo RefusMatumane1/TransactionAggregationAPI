@@ -15,7 +15,6 @@ namespace Modules.Customers.Application.Features.GetCustomer
             var id = CustomerId.CreateFrom(request.CustomerId);
             var customer = await context.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
-            // Not visible is reported exactly like not found.
             return customer is not null && request.Access.CanSee(customer)
                 ? Result.Success(CustomerDto.From(customer, request.Access))
                 : Result.Failure<CustomerDto>(CustomerRules.NotFound(request.CustomerId));

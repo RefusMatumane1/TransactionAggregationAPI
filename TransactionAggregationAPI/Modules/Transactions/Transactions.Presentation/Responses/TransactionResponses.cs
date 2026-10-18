@@ -14,11 +14,14 @@ namespace Modules.Transactions.Presentation.Responses
         string Description,
         TransactionCategory Category,
         DateTime RecordedAt,
-        IReadOnlyDictionary<string, string> Metadata)
+        IReadOnlyDictionary<string, string> Metadata,
+        decimal? ConvertedAmount = null,
+        string? ConvertedCurrency = null)
     {
         internal static TransactionResponse From(TransactionDto t) => new(
             t.Id, t.Institution, t.ExternalAccountId, t.ExternalTransactionId,
-            t.Amount, t.Currency, t.TransactionDate, t.Description, t.Category, t.RecordedAt, t.Metadata);
+            t.Amount, t.Currency, t.TransactionDate, t.Description, t.Category, t.RecordedAt, t.Metadata,
+            t.ConvertedAmount, t.ConvertedCurrency);
     }
 
     public sealed record TransactionListItemResponse(
@@ -36,7 +39,9 @@ namespace Modules.Transactions.Presentation.Responses
         Dictionary<string, string> Metadata,
         bool IsExpense,
         bool IsIncome,
-        string Age)
+        string Age,
+        decimal? ConvertedAmount = null,
+        string? ConvertedCurrency = null)
     {
         internal static TransactionListItemResponse From(TransactionListItemDto t) => new(
             t.Id, t.ExternalAccountId, t.Amount, t.Currency,
@@ -46,7 +51,9 @@ namespace Modules.Transactions.Presentation.Responses
             t.Source, t.Date, t.CreatedAt, t.Metadata,
             IsExpense: t.Amount < 0,
             IsIncome: t.Amount > 0,
-            Age: DescribeAge(t.Date));
+            Age: DescribeAge(t.Date),
+            ConvertedAmount: t.ConvertedAmount,
+            ConvertedCurrency: t.ConvertedCurrency);
 
         private static string DescribeAge(DateTime date)
         {
@@ -71,7 +78,8 @@ namespace Modules.Transactions.Presentation.Responses
         int TotalTransactions,
         IReadOnlyList<MonthlySummaryResponse> MonthlySummaries,
         string Currency,
-        DateTime? AsOf)
+        DateTime? AsOf,
+        ConversionResponse? Conversion = null)
     {
         internal static TransactionSummaryResponse From(TransactionSummaryDto summary) => new(
             summary.TotalIncome,
@@ -81,7 +89,8 @@ namespace Modules.Transactions.Presentation.Responses
             summary.TotalTransactions,
             summary.MonthlySummaries.Select(MonthlySummaryResponse.From).ToList(),
             summary.Currency,
-            summary.AsOf);
+            summary.AsOf,
+            ConversionResponse.From(summary.Conversion));
     }
 
     public sealed record MonthlySummaryResponse(

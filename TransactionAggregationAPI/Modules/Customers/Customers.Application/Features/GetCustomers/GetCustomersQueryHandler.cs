@@ -15,7 +15,6 @@ namespace Modules.Customers.Application.Features.GetCustomers
         {
             var query = context.Customers.AsNoTracking();
 
-            // Staff see a customer only through an account at one of their banks.
             if (!request.Access.AllInstitutions)
             {
                 var institutions = request.Access.Institutions.ToList();

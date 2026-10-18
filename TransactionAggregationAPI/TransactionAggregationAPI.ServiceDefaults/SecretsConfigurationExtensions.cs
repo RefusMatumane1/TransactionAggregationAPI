@@ -3,8 +3,6 @@ using Microsoft.Extensions.Configuration.Json;
 
 namespace Microsoft.Extensions.Hosting
 {
-    // Same shape as appsettings.json: secrets.json locally, a Vault-rendered file (Secrets:FilePath) in a cluster.
-    // Precedence: appsettings < appsettings.{Environment} < secrets < environment variables < command line.
     public static class SecretsConfigurationExtensions
     {
         public const string FilePathKey = "Secrets:FilePath";
@@ -24,7 +22,6 @@ namespace Microsoft.Extensions.Hosting
                 ? Path.GetFullPath(configuredPath!, contentRootPath)
                 : Path.Combine(contentRootPath, DefaultFileName);
 
-            // An explicitly configured path must exist: fail start-up rather than run without credentials.
             if (isConfigured && !File.Exists(path))
                 throw new InvalidOperationException(
                     $"{FilePathKey} points to '{path}', which does not exist. The secrets file must be rendered before the host starts.");

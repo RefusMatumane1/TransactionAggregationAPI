@@ -40,7 +40,8 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
 
             var handler = new ProcessInboundTransactionsCommandHandler(
                 context, messaging, TestNormalizers.Neutral, categorization,
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
             return new Sut(handler, context, messaging);
         }
 
@@ -173,7 +174,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
         {
             var command = new ReceiveBankTransactionsCommand("source-1", "ext-acc-1", null, [Dto("txn-1", status)]);
 
-            new ReceiveBankTransactionsCommandValidator(Options.Create(new IngestionOptions())).Validate(command).IsValid.Should().Be(valid);
+            new ReceiveBankTransactionsCommandValidator(Options.Create(new IngestionOptions()), TestCurrencies.Catalog).Validate(command).IsValid.Should().Be(valid);
         }
     }
 }

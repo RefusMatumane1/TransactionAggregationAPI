@@ -34,7 +34,6 @@ namespace TransactionAggregation.Tests.Integration.Kafka
 
         public async Task InitializeAsync()
         {
-            // The broker advertises the host port clients use, so it is known before start.
             var hostPort = FreeTcpPort();
             _container = new ContainerBuilder("confluentinc/confluent-local:8.1.1")
                 .WithPortBinding(hostPort, 9092)
@@ -191,7 +190,6 @@ namespace TransactionAggregation.Tests.Integration.Kafka
                 Arg.Is<IReadOnlyCollection<AuditEventRecord>>(events => events.Single().SourceName == AuditSources.Unauthenticated),
                 Arg.Any<CancellationToken>());
 
-            // Same group: committed offsets mean nothing is redelivered.
             var restarted = Consumer(harness);
             await restarted.StartAsync(CancellationToken.None);
             await Task.Delay(TimeSpan.FromSeconds(8));

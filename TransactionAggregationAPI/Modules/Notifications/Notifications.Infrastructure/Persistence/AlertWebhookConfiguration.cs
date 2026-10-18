@@ -10,7 +10,6 @@ namespace Modules.Notifications.Infrastructure.Persistence
         {
             builder.ToTable("AlertWebhooks");
 
-            // One destination per bank: the bank code is the key, so a second row for a bank cannot exist.
             builder.HasKey(w => w.BankCode);
 
             builder.Property(w => w.BankCode)

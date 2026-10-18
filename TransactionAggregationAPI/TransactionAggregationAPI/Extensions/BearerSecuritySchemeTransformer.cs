@@ -64,10 +64,6 @@ namespace TransactionAggregationAPI.Extensions
 
         private static readonly Regex RouteConstraintSuffix = new(@"\{([^:}]+):[^}]+\}", RegexOptions.Compiled);
 
-        /// <summary>
-        /// Normalizes ApiDescription.RelativePath (leading slash, query suffix, route constraints, group-root trailing
-        /// slash) to OpenAPI Paths keys; a miss silently leaves the operation without a security requirement.
-        /// </summary>
         private static string NormalizeRoutePath(string? relativePath)
         {
             if (string.IsNullOrEmpty(relativePath))

@@ -21,7 +21,6 @@ namespace Modules.Notifications
                     npgsql => npgsql.UseModuleDefaults<NotificationsDbContext>()));
             services.AddScoped<INotificationsDbContext>(provider => provider.GetRequiredService<NotificationsDbContext>());
 
-            // No request loggers: the URL embeds the hook's credential.
             services.AddHttpClient(AlertWebhookPoster.HttpClientName).RemoveAllLoggers();
             services.AddScoped<IAlertWebhookPoster, AlertWebhookPoster>();
 

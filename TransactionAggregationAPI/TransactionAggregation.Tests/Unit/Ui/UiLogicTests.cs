@@ -1,4 +1,3 @@
-// The UI is referenced under the "ui" alias: it has its own top-level Program, like the API.
 extern alias ui;
 
 using FluentAssertions;
@@ -11,8 +10,6 @@ using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.UI
 {
-    // The UI's pure logic: how money, dates and changes are shown, the period presets, the query
-    // strings sent to the API, and how API failures become messages a user can act on.
     public class UiLogicTests
     {
         [Theory]

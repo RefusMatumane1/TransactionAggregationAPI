@@ -33,7 +33,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
 
         internal static readonly TimeSpan FirstRetry = TimeSpan.FromSeconds(30);
 
-        // Failed refreshes retry after 30 s, 1 min, 2 min... capped at the interval.
         protected override TimeSpan DelayAfterFailure(int consecutiveFailures) => RetryDelay(consecutiveFailures, Interval);
 
         internal static TimeSpan RetryDelay(int consecutiveFailures, TimeSpan interval)
@@ -66,7 +65,6 @@ namespace TransactionAggregation.Worker.BackgroundServices
             return refresh.HasMore;
         }
 
-        // Totals are committed; a cache failure only delays fresh totals until entries expire.
         private async Task InvalidateCachedAggregatesAsync(ICacheService cache, CancellationToken cancellationToken)
         {
             try

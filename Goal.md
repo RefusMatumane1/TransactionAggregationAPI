@@ -21,7 +21,7 @@ How the system reads each phrase:
 |---|---|
 | **Customer** | The person whose money it is. A customer holds bank accounts at several banks; an administrator links them. Customers are data, not users: nobody signs in as a customer. |
 | **Multiple mock data sources** | Four mock banks (FNB, Absa, Capitec, Standard Bank). Each is a *source* with its own API key and its own wire format, delivered by REST webhook or signed Kafka record. `TransactionAggregation.MockAggregator` produces their feeds (Development only). |
-| **Aggregates** | Totals by customer, bank, account, category and period, one ISO 4217 currency at a time, served from a read model the worker rebuilds every 5 minutes. |
+| **Aggregates** | Totals by customer, bank, account, category and period, one currency at a time, or converted into one with configured rates (`convertTo`), served from a read model the worker rebuilds every 5 minutes. |
 | **Categorizes** | Keyword rules in `TransactionAggregation.Hosting/categorization-rules.json`, applied once when a transaction is recorded. |
 | **Extensive API** | A versioned REST API under `/api/v1`: transactions (list, detail, search, filters, keyset paging), four aggregate views plus a summary, the same views per customer, and administration of banks and customers. |
 
@@ -111,7 +111,7 @@ Each row: the guarantee, what provides it, and the test that checks it.
 |---|---|---|
 | A ledger entry is never updated, deleted or truncated | Trigger `TR_Transactions_InsertOnly` and `TR_Transactions_NoTruncate`; `UPDATE`, `DELETE`, `TRUNCATE` revoked from `tagg_app` (migration `MakeLedgerInsertOnly`) | `Integration/Postgres/ProcessingGuaranteesPostgresTests.cs`, `Integration/Postgres/LeastPrivilegeRolesTests.cs`, `Architecture/MigrationPolicyTests.cs` |
 | One ledger row per bank, account and bank transaction id | Unique partial index `IX_Transactions_Ledger_Key` on `(SourceName, ExternalAccountId, SourceExternalId)` where booked | `Integration/Postgres/IngestionIntegrityTests.cs`, `Integration/Postgres/ConcurrentIngestionTests.cs` |
-| Money is exact and never zero | `Money` value object: `decimal`, ≤ 4 decimal places, \|amount\| < 10^15, ISO 4217 currency; column `numeric(19,4)`; `CK_Transactions_Amount_NonZero`, `CK_Transactions_Currency_Iso4217` | `Unit/Domain/MoneyValueObjectTests.cs`, `Integration/Postgres/SchemaContractTests.cs` |
+| Money is exact and never zero | `Money` value object: `decimal`, ≤ 4 decimal places, \|amount\| < 10^15, 3-letter currency code (which codes are accepted is `currencies.json`, see 4.6); column `numeric(19,4)`; `CK_Transactions_Amount_NonZero`, `CK_Transactions_Currency_Iso4217` | `Unit/Domain/MoneyValueObjectTests.cs`, `Integration/Postgres/SchemaContractTests.cs` |
 | Category and status are valid | `CK_Transactions_Category_Defined`, `CK_Transactions_Status_Defined` | `Integration/Postgres/SchemaContractTests.cs` |
 | Only posted transactions are recorded | `pending` notices are acknowledged, audited as `transaction.pending_skipped`, and skipped | `Unit/Application/Commands/LedgerIngestionTests.cs` |
 | Timestamps are UTC | `Transaction` rejects a non-UTC booking date; normalization converts bank-local times using the bank's time zone (default `Africa/Johannesburg`) | `Unit/Domain/TransactionEntityTests.cs`, `Integration/MockBanks/MockBankFormatsTests.cs` |
@@ -181,7 +181,10 @@ releases unworked claims within 5 s (`ClaimRelease`). Tests: `Unit/Resilience/Re
 | Page N costs the same as page 1 | Keyset (cursor) pagination on every list; default page 20, max 100 (audit: 200) |
 | Totals are cheap and honest | `includeTotal` counts up to 10,000 and reports `totalCountCapped` beyond |
 | Hot queries are index-backed | Partial indexes `WHERE Status = booked`: covering `(Date DESC, Id DESC)`, amount `(Amount, Id)`, account `(SourceName, ExternalAccountId, Date DESC, Id DESC)`, trigram GIN on `Description` for `searchTerm`; sorting is limited to `date` and `amount` for that reason |
-| Currencies never mix | Every aggregate takes one `currency` (default `ZAR`) |
+| Currencies never mix by accident | An aggregate reads one `currency` (default: `Currencies:BaseCurrency`) unless `convertTo` is given |
+| One source of truth for currencies | `currencies.json` (`Currencies:BaseCurrency`, `Currencies:Rates`) is the only list and the only base: ingestion, re-check at recording, `convertTo`, view defaults and demo data all read `ICurrencyCatalog`; `Money` holds only the 3-letter shape; `GET /currencies` publishes the table (tests: `Architecture/CurrencyConsistencyTests.cs`, `Unit/Currency/CurrencyCatalogTests.cs`) |
+| Conversion is explicit, exact and reproducible | `Currencies:BaseCurrency` and `Currencies:Rates` (`currencies.json`, validated at start-up); `convertTo` converts per daily row in the database, rounded to four decimals, then sums; the response states the target, `ratesVersion`, the rates used and the currencies it could not convert; cache keys include `ratesVersion` |
+| Only configured currencies are ingested | A delivery in a currency without a rate is refused with the list of supported ones; the ledger keeps what the bank sent and nothing is converted on the way in |
 | Cached reads stay correct | Ledger reads cache 5 min and are invalidated by the outbox after a dispatch cycle that recorded something; aggregate reads cache up to 55 min and are invalidated when a refresh commits. If invalidation fails, entries expire on their own. |
 
 Tests: `Integration/Postgres/TransactionAggregatesPostgresTests.cs`,
@@ -207,6 +210,7 @@ All routes are under `/api/v1`. Reads need `staff` or `admin`; changes and admin
 |---|---|
 | Transactions | `GET /transactions`, `GET /transactions/{id}`, `GET /transactions/summary` |
 | Aggregates | `GET /transactions/aggregates/{institutions, categories, cash-flow, comparison}` |
+| Currencies | `GET /currencies` (staff): the base currency and every supported currency with its rate |
 | Banks | `GET /banks` (staff); `/admin/webhook-sources` list, create, update, rotate key, register signing key, activate, deactivate (admin) |
 | Customers | `GET /customers`, `/customers/{id}`, `/customers/{id}/transactions`, `/customers/{id}/aggregates/{cash-flow, categories, institutions, comparison}` (staff); `POST /customers`, `POST /customers/{id}/accounts`, `DELETE /customers/{id}/accounts` (admin) |
 | Notifications | `GET`, `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (admin) |
@@ -277,7 +281,11 @@ Stated as failure and consequence.
 - **Staff scope lives in the application**, not in PostgreSQL row-level security, which would need
   the caller's banks set on every pooled transaction. A bug in a new query could bypass it; the
   institution-access tests exist to catch that.
-- **No currency conversion.** Aggregates never mix currencies, by design.
+- **Conversion uses static configured rates.** There is no FX feed. A rate applies at read time to all
+  history, takes effect on restart, and is only as good as what was configured; the shipped rates
+  are placeholders. A currency without a rate is left out of a converted view and reported in
+  `conversion.unconvertedCurrencies`. Sorting and amount filters on the transaction list use the
+  recorded amount, not the converted one, because the indexes are on it.
 - **No partitioning, no saga, no microservices.** Volumes fit one table with the indexes above, no
   workflow spans separately committed steps, and the modules scale together. Revisit partitioning
   at roughly 100 million ledger rows.

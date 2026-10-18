@@ -1,6 +1,5 @@
 namespace TransactionAggregation.Worker.BackgroundServices
 {
-    // On shutdown, unworked claims go back so another replica takes them at once; best effort, else they expire.
     internal static class ClaimRelease
     {
         private static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);

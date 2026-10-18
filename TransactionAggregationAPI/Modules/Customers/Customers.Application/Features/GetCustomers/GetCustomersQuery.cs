@@ -8,7 +8,6 @@ using Modules.Customers.Domain.ValueObjects;
 
 namespace Modules.Customers.Application.Features.GetCustomers
 {
-    // Customers the caller can see, by name. Search matches the name or the reference.
     public sealed record GetCustomersQuery(InstitutionAccess Access, string? Search = null, string? Cursor = null, int PageSize = GetCustomersQuery.DefaultPageSize)
         : IQuery<CursorPage<CustomerSummaryDto>>
     {

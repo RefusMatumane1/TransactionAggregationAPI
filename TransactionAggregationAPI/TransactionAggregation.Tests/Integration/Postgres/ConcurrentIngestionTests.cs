@@ -30,7 +30,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             return service;
         }
 
-        // Runs once, as the context is about to write: after the existence check, before the insert.
         private sealed class RunInsideTheRaceWindow(Func<Task> action) : SaveChangesInterceptor
         {
             public bool Fired { get; private set; }
@@ -67,14 +66,14 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             using var messagingB = _fixture.CreateMessagingContext();
             using var contextB = _fixture.CreateContext(messagingB);
-            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, TestNormalizers.Neutral, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerB = new ProcessInboundTransactionsCommandHandler(contextB, messagingB, TestNormalizers.Neutral, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance, TestCurrencies.Catalog);
 
             var resultB = default(SharedKernel.Common.Models.Result<int>);
             var raceWindow = new RunInsideTheRaceWindow(async () => resultB = await handlerB.Handle(command, CancellationToken.None));
 
             using var messagingA = _fixture.CreateMessagingContext();
             using var contextA = _fixture.CreateContext(messagingA, interceptors: raceWindow);
-            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, messagingA, TestNormalizers.Neutral, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+            var handlerA = new ProcessInboundTransactionsCommandHandler(contextA, messagingA, TestNormalizers.Neutral, BuildCategorizationService(), NullLogger<ProcessInboundTransactionsCommandHandler>.Instance, TestCurrencies.Catalog);
 
             var resultA = await handlerA.Handle(command, CancellationToken.None);
 
@@ -116,7 +115,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 using var context = _fixture.CreateContext(messaging);
                 var handler = new ProcessInboundTransactionsCommandHandler(
                 context, messaging, TestNormalizers.Neutral, BuildCategorizationService(),
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
 
                 var result = await handler.Handle(
                     new ProcessInboundTransactionsCommand("overlap-test-source", externalAccountId, null, ids.Select(Dto).ToList()),

@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {
-    // Raw SQL: the current EF model can't write the pre-RemoveCustomerOwnership shape.
     internal static class LegacyTransactionRows
     {
         public static Task<int> InsertAsync(

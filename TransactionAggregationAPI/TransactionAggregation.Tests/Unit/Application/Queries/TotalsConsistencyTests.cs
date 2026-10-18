@@ -36,7 +36,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         }
 
         private static Task<TransactionSummaryDto> SummaryAsync(TransactionsDbContext context, TransactionFilter filter, string currency = "ZAR") =>
-            new GetTransactionSummaryQueryHandler(context)
+            new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetTransactionSummaryQuery(Day.AddDays(-1), Day.AddDays(1), filter, currency), CancellationToken.None)
                 .ContinueWith(t => t.Result.Value);
 
@@ -64,9 +64,9 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             var context = await SeedAsync();
 
             var summary = await SummaryAsync(context, TestFilters.All);
-            var cashFlow = (await new GetCashFlowQueryHandler(context)
+            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(ReportDay, ReportDay, TestFilters.All, TimeGranularity.Day), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context)
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, TestFilters.All), CancellationToken.None)).Value;
 
             summary.NetBalance.Should().Be(500m);
@@ -83,9 +83,9 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             var absaOnly = TestFilters.Only(TestInstitutions.Absa);
 
             var summary = await SummaryAsync(context, absaOnly);
-            var cashFlow = (await new GetCashFlowQueryHandler(context)
+            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(ReportDay, ReportDay, absaOnly, TimeGranularity.Day), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context)
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, TestCurrencies.Catalog)
                 .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, absaOnly), CancellationToken.None)).Value;
 
             summary.NetBalance.Should().Be(-200m);

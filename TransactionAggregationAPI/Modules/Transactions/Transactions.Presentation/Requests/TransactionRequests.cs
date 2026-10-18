@@ -1,9 +1,9 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
 using Modules.Transactions.Domain.Enums;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Presentation.Requests
 {
@@ -21,9 +21,10 @@ namespace Modules.Transactions.Presentation.Requests
         string? Institution = null,
         string? ExternalAccountId = null,
         string? SortBy = null,
-        bool SortDescending = true)
+        bool SortDescending = true,
+        string? ConvertTo = null)
     {
-        internal GetTransactionsQuery ToQuery(InstitutionAccess access) =>
+        internal GetTransactionsQuery ToQuery(InstitutionAccess access, ICurrencyCatalog catalog) =>
             new(new TransactionFilter(access, Institution, ExternalAccountId))
             {
                 Cursor = Cursor,
@@ -37,7 +38,9 @@ namespace Modules.Transactions.Presentation.Requests
                 MaxAmount = MaxAmount,
                 SearchTerm = SearchTerm,
                 SortBy = SortBy,
-                SortDescending = SortDescending
+                SortDescending = SortDescending,
+                ConvertTo = ConvertTo,
+                RatesVersion = ConvertTo is null ? null : catalog.Version
             };
     }
 
@@ -46,13 +49,15 @@ namespace Modules.Transactions.Presentation.Requests
         DateTime? EndDate = null,
         string? Institution = null,
         string? ExternalAccountId = null,
-        string Currency = SupportedCurrency.Default)
+        string? Currency = null,
+        string? ConvertTo = null)
     {
-        internal GetTransactionSummaryQuery ToQuery(InstitutionAccess access, TimeProvider time)
+        internal GetTransactionSummaryQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
         {
             var now = time.GetUtcNow().UtcDateTime;
             return new(StartDate ?? now.AddMonths(-12), EndDate ?? now,
-                new TransactionFilter(access, Institution, ExternalAccountId), Currency);
+                new TransactionFilter(access, Institution, ExternalAccountId), Currency ?? catalog.BaseCurrency,
+                ConvertTo, ConvertTo is null ? null : catalog.Version);
         }
     }
 }

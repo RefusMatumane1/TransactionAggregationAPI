@@ -1,6 +1,7 @@
 using BuildingBlocks.Application.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using SharedKernel.Common.Models;
@@ -8,7 +9,7 @@ using System.Globalization;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary
 {
-    internal sealed class GetTransactionSummaryQueryHandler(ITransactionsDbContext context)
+    internal sealed class GetTransactionSummaryQueryHandler(ITransactionsDbContext context, ICurrencyCatalog catalog)
         : IQueryHandler<GetTransactionSummaryQuery, TransactionSummaryDto>
     {
         public async Task<Result<TransactionSummaryDto>> Handle(
@@ -17,9 +18,13 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
         {
             var from = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.StartDate, DateTimeKind.Utc));
             var to = SouthAfricanCalendar.DayOf(DateTime.SpecifyKind(request.EndDate, DateTimeKind.Utc));
+            var resolved = AmountBasis.Resolve(request.Currency, request.ConvertTo, catalog);
+            if (resolved.IsFailure)
+                return Result.Failure<TransactionSummaryDto>(resolved.Error);
+            var basis = resolved.Value;
 
             var buckets = await context.DailyTotals
-                .Within(from, to, request.Filter, request.Currency)
+                .Within(from, to, request.Filter, basis)
                 .GroupBy(d => new { d.Day.Year, d.Day.Month, d.Category })
                 .Select(g => new
                 {
@@ -68,8 +73,9 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
                 SpendingByCategory: spendingByCategory,
                 TotalTransactions: monthlySummaries.Sum(m => m.TransactionCount),
                 MonthlySummaries: monthlySummaries,
-                Currency: request.Currency,
-                AsOf: asOf));
+                Currency: basis.Currency,
+                AsOf: asOf,
+                Conversion: await context.DailyTotals.DescribeConversionAsync(from, to, request.Filter, basis, cancellationToken)));
         }
     }
 }

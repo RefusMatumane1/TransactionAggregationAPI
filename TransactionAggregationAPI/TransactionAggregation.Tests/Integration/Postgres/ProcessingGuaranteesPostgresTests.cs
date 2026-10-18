@@ -37,14 +37,13 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var externalAccountId = $"atomic-acc-{Guid.NewGuid():N}";
             var inboxId = await EnqueueAsync(database, externalAccountId, [Transaction("atomic-t1", -42.10m), Transaction("atomic-t2", -7m)]);
 
-            // Process, then crash: the batch save never runs.
             await using (var messaging = _fixture.CreateMessagingContext(database))
             {
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 claimed.Should().ContainSingle(m => m.Id.Value == inboxId);
 
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(claimed[0], SenderFor(context, messaging, database), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(claimed[0], SenderFor(context, messaging), messaging, context, CancellationToken.None);
             }
 
             (await StatusOfAsync(database, inboxId)).Should().Be(InboxMessageStatus.Processed,
@@ -66,7 +65,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var externalAccountId = $"stale-acc-{Guid.NewGuid():N}";
             var inboxId = await EnqueueAsync(database, externalAccountId, [Transaction("stale-t1", -5m)]);
 
-            // Claimed, then the worker dies.
             await using (var messaging = _fixture.CreateMessagingContext(database))
                 (await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5)).Should().ContainSingle();
             (await StatusOfAsync(database, inboxId)).Should().Be(InboxMessageStatus.Processing);
@@ -78,7 +76,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 reclaimed.Should().ContainSingle(m => m.Id.Value == inboxId, "a stale claim is recoverable, not stuck forever");
 
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(reclaimed[0], SenderFor(context, messaging, database), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(reclaimed[0], SenderFor(context, messaging), messaging, context, CancellationToken.None);
             }
 
             (await StatusOfAsync(database, inboxId)).Should().Be(InboxMessageStatus.Processed);
@@ -93,8 +91,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var externalAccountId = $"crash-acc-{Guid.NewGuid():N}";
             IReadOnlyList<ExternalTransactionDTO> batch = [Transaction("crash-t1", -42.10m), Transaction("crash-t2", -7m)];
 
-            // Committed but not acknowledged, so the bank redelivers with a new idempotency key:
-            // only the transaction key stands in the way.
             for (var attempt = 1; attempt <= 2; attempt++)
             {
                 var delivery = await EnqueueAsync(database, externalAccountId, batch);
@@ -102,7 +98,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 await using var context = _fixture.CreateContext(messaging, database);
                 foreach (var message in claimed)
-                    await Dispatcher().ProcessMessageAsync(message, SenderFor(context, messaging, database), messaging, context, CancellationToken.None);
+                    await Dispatcher().ProcessMessageAsync(message, SenderFor(context, messaging), messaging, context, CancellationToken.None);
                 await context.SaveChangesAsync();
                 (await StatusOfAsync(database, delivery)).Should().Be(InboxMessageStatus.Processed);
             }
@@ -119,7 +115,6 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var database = await _fixture.CreateIsolatedDatabaseAsync();
             var inboxId = await EnqueueAsync(database, $"conflict-acc-{Guid.NewGuid():N}", [Transaction("conflict-t1", -1m)]);
 
-            // Transient failures retry; they are not dead-lettered.
             var conflicted = Substitute.For<ISender>();
             conflicted.Send(Arg.Any<ProcessInboundTransactionsCommand>(), Arg.Any<CancellationToken>())
                 .Returns(Result.Failure<int>(Error.Conflict("Concurrent ingestion kept conflicting")));
@@ -155,7 +150,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             {
                 var claimed = await messaging.ClaimInboxMessagesAsync(10, TimeSpan.FromMinutes(10), maxAttempts: 5);
                 await using var context = _fixture.CreateContext(messaging, database);
-                await Dispatcher().ProcessMessageAsync(claimed.Single(), SenderFor(context, messaging, database), messaging, context, CancellationToken.None);
+                await Dispatcher().ProcessMessageAsync(claimed.Single(), SenderFor(context, messaging), messaging, context, CancellationToken.None);
                 await context.SaveChangesAsync();
             }
 
@@ -187,14 +182,12 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             (await act.Should().ThrowAsync<PostgresException>()).Which.ConstraintName.Should().Be(constraint);
         }
 
-        // Every ledger query shape against 50 000 rows (10% pre-ledger): each must use its partial index.
         [Fact]
         public async Task LedgerQueries_UseTheirIndexes_AndStayFastAtVolume()
         {
             var database = await _fixture.CreateIsolatedDatabaseAsync();
             for (var i = 0; i < 200; i++)
                 await ExecuteAsync(database, InsertTransactionsSql($"bulk-acc-{i}", 250, $"bulk-{i}"));
-            // A rare term: a common one is cheaper to find via the date index.
             await ExecuteAsync(database, """
                 INSERT INTO transactions."Transactions"
                     ("Id", "ExternalAccountId", "Amount", "Currency", "Description", "Category", "SourceName",
@@ -257,7 +250,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 Options.Create(new InboxOptions()));
 
         private ISender SenderFor(
-            Modules.Transactions.Infrastructure.Persistence.TransactionsDbContext context, MessagingDbContext messaging, string database)
+            Modules.Transactions.Infrastructure.Persistence.TransactionsDbContext context, MessagingDbContext messaging)
         {
             var sender = Substitute.For<ISender>();
             sender.Send(Arg.Any<ProcessInboundTransactionsCommand>(), Arg.Any<CancellationToken>())

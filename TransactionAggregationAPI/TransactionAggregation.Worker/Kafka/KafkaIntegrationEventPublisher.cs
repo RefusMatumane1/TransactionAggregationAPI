@@ -7,7 +7,6 @@ using System.Text;
 
 namespace TransactionAggregation.Worker.Kafka
 {
-    // One long-lived idempotent producer (acks=all); a duplicate after a lost acknowledgement is left to consumers.
     internal sealed class KafkaIntegrationEventPublisher : IIntegrationEventPublisher, IDisposable
     {
         public const string MessageIdHeader = "message-id";
@@ -59,7 +58,6 @@ namespace TransactionAggregation.Worker.Kafka
             }
         }
 
-        // Errors a retry can't fix; the rest is transient.
         private static bool IsPermanent(Error error) =>
             error.IsFatal
             || error.Code is ErrorCode.MsgSizeTooLarge

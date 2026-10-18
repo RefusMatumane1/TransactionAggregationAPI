@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 namespace Modules.Audit.Contracts
 {
-    // Who looked at a customer's financial data. Reads leave no other trace, so each one is recorded here.
     public static class AccessAudit
     {
         public const string CustomersRegistry = "customers";

@@ -4,13 +4,8 @@ using Modules.Customers.Infrastructure.Persistence;
 
 namespace TransactionAggregationAPI.Development
 {
-    // Development only: a customer for every seeded household, and three customers who hold the mock
-    // aggregator's live-feed accounts across banks, so customer views have data from the first run.
-    // Idempotent: existing customers keep their links, and missing links are added.
     internal static class CustomerSeed
     {
-        // The mock aggregator's account ids (TransactionAggregation.MockAggregator/Catalog/MockCatalog.cs),
-        // grouped into people who bank at several institutions.
         private static readonly (string Reference, string Name, (string Institution, string Account)[] Accounts)[] MockFeedCustomers =
         [
             ("CUST-0101", "Lerato Mokoena", [("FNB", "mock-fnb-chq-1001"), ("Absa", "mock-absa-cc-2002"), ("Capitec", "mock-capitec-sav-3002")]),

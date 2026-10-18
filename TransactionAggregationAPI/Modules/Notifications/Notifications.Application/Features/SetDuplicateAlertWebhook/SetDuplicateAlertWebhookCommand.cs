@@ -4,7 +4,6 @@ using Modules.Notifications.Domain;
 
 namespace Modules.Notifications.Application.Features.SetDuplicateAlertWebhook
 {
-    // A null or blank Url clears the bank's alert webhook.
     public sealed record SetDuplicateAlertWebhookCommand(string BankCode, string? Url) : ICommand;
 
     public sealed class SetDuplicateAlertWebhookCommandValidator : AbstractValidator<SetDuplicateAlertWebhookCommand>

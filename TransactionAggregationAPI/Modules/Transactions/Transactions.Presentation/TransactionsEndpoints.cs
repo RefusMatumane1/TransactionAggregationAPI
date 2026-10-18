@@ -20,6 +20,10 @@ namespace Modules.Transactions
             transactions.MapGetTransactionSummary();
             transactions.MapTransactionAggregates();
 
+            app.MapApiGroup("currencies", "Currencies")
+               .RequireAuthorization(AuthorizationPolicies.Staff)
+               .MapGetCurrencies();
+
             app.MapApiGroup("customers", "Customers")
                .RequireAuthorization(AuthorizationPolicies.Staff)
                .MapCustomerTransactions();

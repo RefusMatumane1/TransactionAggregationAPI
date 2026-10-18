@@ -3,7 +3,6 @@ using System.Net;
 
 namespace Modules.Notifications.Domain
 {
-    // Where one bank's duplicate alerts are posted. The URL embeds a credential, so only its protected (encrypted) form is held.
     public sealed class AlertWebhook
     {
         public const int MaxBankCodeLength = 50;
@@ -35,9 +34,6 @@ namespace Modules.Notifications.Domain
             UpdatedAt = DateTime.UtcNow;
         }
 
-        // An https URL to a public host: an admin types this address in and the worker then calls it, so it must not
-        // point at the machine or network the worker runs in. (A hostname that resolves to a private address is not
-        // caught here; the cluster's network policy is the second line.)
         public static bool IsValidUrl(string? url)
         {
             if (string.IsNullOrWhiteSpace(url) || url.Length > MaximumUrlLength || url.Any(char.IsControl))

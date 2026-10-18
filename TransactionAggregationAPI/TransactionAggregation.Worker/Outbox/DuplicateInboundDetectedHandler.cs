@@ -6,7 +6,6 @@ using System.Text.Json;
 
 namespace TransactionAggregation.Worker.Outbox
 {
-    // Translates the outbox message into the Notifications module's contract; where the alert goes is that module's business.
     internal sealed class DuplicateInboundDetectedHandler(IDuplicateAlertNotifier notifier) : IOutboxMessageHandler
     {
         public string MessageType => OutboxMessageTypes.DuplicateInboundDetected;

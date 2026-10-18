@@ -22,6 +22,10 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
         public decimal? MaxAmount { get; init; }
         public string? SearchTerm { get; init; }
 
+        public string? ConvertTo { get; init; }
+
+        public string? RatesVersion { get; init; }
+
         public string? SortBy { get; init; }
         public bool SortDescending { get; init; } = true;
 

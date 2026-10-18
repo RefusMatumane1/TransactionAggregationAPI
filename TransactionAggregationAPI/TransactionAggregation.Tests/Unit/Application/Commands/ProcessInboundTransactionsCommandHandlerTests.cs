@@ -30,7 +30,8 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
                 messaging,
                 TestNormalizers.Neutral,
                 categorizationService ?? BuildCategorizationService(),
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
 
         private static ITransactionCategorizationService BuildCategorizationService(TransactionCategory category = TransactionCategory.Uncategorized)
         {
@@ -57,6 +58,35 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
             Category = string.Empty,
             Date = DateTime.UtcNow
         };
+
+        [Theory]
+        [InlineData("JPY")]
+        [InlineData("jpy")]
+        public async Task Handle_ACurrencyThatIsNotConfigured_IsRefused_AndNothingIsRecorded(string currency)
+        {
+            var (context, messaging) = NewContexts();
+
+            var result = await BuildHandler(context, messaging).Handle(
+                Command([MakeDto("fine"), MakeDto("yen") with { Currency = currency }]), CancellationToken.None);
+
+            result.IsFailure.Should().BeTrue();
+            result.Error.Type.Should().Be(ErrorType.Validation, "a permanent failure: the delivery is dead-lettered, not retried");
+            result.Error.Description.Should().Contain("JPY").And.Contain("EUR, GBP, USD, ZAR");
+            context.Transactions.Should().BeEmpty("the whole delivery is refused, including the supported entry");
+            messaging.OutboxMessages.Should().BeEmpty();
+        }
+
+        [Fact]
+        public async Task Handle_AConfiguredCurrency_IsRecorded_InAnyCase()
+        {
+            var (context, messaging) = NewContexts();
+
+            var result = await BuildHandler(context, messaging).Handle(
+                Command([MakeDto("lower") with { Currency = "usd" }]), CancellationToken.None);
+
+            result.IsSuccess.Should().BeTrue();
+            context.Transactions.Single().Amount.Currency.Should().Be("USD");
+        }
 
         private static (TransactionsDbContext Context, MessagingDbContext Messaging) NewContexts()
         {
@@ -278,7 +308,8 @@ namespace TransactionAggregation.Tests.Unit.Application.Commands
                 }));
             var handler = new ProcessInboundTransactionsCommandHandler(
                 context, messaging, normalizer, categorization,
-                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance);
+                NullLogger<ProcessInboundTransactionsCommandHandler>.Instance,
+                TestCurrencies.Catalog);
 
             var raw = MakeDto() with
             {

@@ -1,8 +1,8 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
 using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Transactions.Application.Common.Currency;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
-using SharedKernel.Common.ValueObjects;
 
 namespace Modules.Transactions.Presentation.Requests
 {
@@ -12,12 +12,14 @@ namespace Modules.Transactions.Presentation.Requests
         string? Institution = null,
         string? ExternalAccountId = null,
         CashFlowDirection Direction = CashFlowDirection.Expense,
-        string Currency = SupportedCurrency.Default)
+        string? Currency = null,
+        string? ConvertTo = null)
     {
-        internal GetCategoryBreakdownQuery ToQuery(InstitutionAccess access, TimeProvider time)
+        internal GetCategoryBreakdownQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
         {
             var period = ReportingPeriod.Resolve(From, To, time);
-            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Direction, Currency);
+            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Direction, Currency ?? catalog.BaseCurrency,
+                ConvertTo, ConvertTo is null ? null : catalog.Version);
         }
     }
 
@@ -27,12 +29,14 @@ namespace Modules.Transactions.Presentation.Requests
         string? Institution = null,
         string? ExternalAccountId = null,
         TimeGranularity Granularity = TimeGranularity.Month,
-        string Currency = SupportedCurrency.Default)
+        string? Currency = null,
+        string? ConvertTo = null)
     {
-        internal GetCashFlowQuery ToQuery(InstitutionAccess access, TimeProvider time)
+        internal GetCashFlowQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
         {
             var period = ReportingPeriod.Resolve(From, To, time);
-            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Granularity, Currency);
+            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Granularity, Currency ?? catalog.BaseCurrency,
+                ConvertTo, ConvertTo is null ? null : catalog.Version);
         }
     }
 
@@ -40,12 +44,14 @@ namespace Modules.Transactions.Presentation.Requests
         DateOnly? From = null,
         DateOnly? To = null,
         string? Institution = null,
-        string Currency = SupportedCurrency.Default)
+        string? Currency = null,
+        string? ConvertTo = null)
     {
-        internal GetInstitutionBreakdownQuery ToQuery(InstitutionAccess access, TimeProvider time)
+        internal GetInstitutionBreakdownQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
         {
             var period = ReportingPeriod.Resolve(From, To, time);
-            return new(period.From, period.To, new TransactionFilter(access, Institution), Currency);
+            return new(period.From, period.To, new TransactionFilter(access, Institution), Currency ?? catalog.BaseCurrency,
+                ConvertTo, ConvertTo is null ? null : catalog.Version);
         }
     }
 
@@ -54,12 +60,14 @@ namespace Modules.Transactions.Presentation.Requests
         DateOnly? To = null,
         string? Institution = null,
         string? ExternalAccountId = null,
-        string Currency = SupportedCurrency.Default)
+        string? Currency = null,
+        string? ConvertTo = null)
     {
-        internal GetPeriodComparisonQuery ToQuery(InstitutionAccess access, TimeProvider time)
+        internal GetPeriodComparisonQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
         {
             var period = ReportingPeriod.Resolve(From, To, time);
-            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Currency);
+            return new(period.From, period.To, new TransactionFilter(access, Institution, ExternalAccountId), Currency ?? catalog.BaseCurrency,
+                ConvertTo, ConvertTo is null ? null : catalog.Version);
         }
     }
 }

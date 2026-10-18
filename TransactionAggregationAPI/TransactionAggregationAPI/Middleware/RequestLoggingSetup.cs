@@ -4,7 +4,6 @@ using Serilog.Events;
 
 namespace TransactionAggregationAPI.Middleware
 {
-    // Logs the route pattern, never the raw path (caller-supplied values), plus the subject id for attribution.
     internal static class RequestLoggingSetup
     {
         public const string UnmatchedRoute = "(unmatched)";

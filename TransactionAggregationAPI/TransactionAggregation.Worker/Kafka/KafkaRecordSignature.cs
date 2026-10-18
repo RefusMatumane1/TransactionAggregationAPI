@@ -3,7 +3,6 @@ using System.Text;
 
 namespace TransactionAggregation.Worker.Kafka
 {
-    // Binding the source name stops a record signed by one provider being replayed under another.
     public static class KafkaRecordSignature
     {
         public const string Version = "tagg-kafka-record-v1";

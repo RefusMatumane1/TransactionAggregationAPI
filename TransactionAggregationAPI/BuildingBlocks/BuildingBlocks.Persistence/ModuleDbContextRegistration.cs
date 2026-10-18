@@ -3,7 +3,6 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure;
 
 namespace BuildingBlocks.Persistence
 {
-    // Module contexts share the request's NpgsqlConnection so their writes join one transaction.
     public static class ModuleDbContextRegistration
     {
         public const string ConnectionStringName = "transactiondb";

@@ -46,7 +46,6 @@
 @code {
     private bool _navOpen;
 
-    // Fragment links resolve against <base href>, so the skip link carries the current path.
     private string SkipHref => $"{new Uri(Nav.Uri).PathAndQuery}#main";
 
     protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
@@ -63,8 +62,6 @@
 
     private void Logout()
     {
-        // NavigateToLogout, not a plain navigation: RemoteAuthenticatorView refuses logouts the app didn't start,
-        // leaving the tokens and the Keycloak session intact.
         Nav.NavigateToLogout("authentication/logout");
     }
 

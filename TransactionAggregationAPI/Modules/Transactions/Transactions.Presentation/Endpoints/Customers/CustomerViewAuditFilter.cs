@@ -1,12 +1,10 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
 using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Routing;
 using Modules.Audit.Contracts;
 
 namespace Modules.Transactions.Presentation.Endpoints.Customers
 {
-    // A customer's data leaves only after the view is recorded: if the audit write fails, so does the read.
     internal sealed class CustomerViewAuditFilter(IAuditTrail auditTrail, IUserContext user) : IEndpointFilter
     {
         public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)

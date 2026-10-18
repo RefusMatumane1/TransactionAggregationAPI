@@ -2,7 +2,6 @@ using System.Globalization;
 
 namespace TransactionAggregationUI.Shared
 {
-    // Booking dates use the South African calendar (UTC+2, no DST), matching the server's aggregation days.
     public static class Format
     {
         private static readonly CultureInfo Zar = CreateZar();
@@ -11,14 +10,13 @@ namespace TransactionAggregationUI.Shared
         private static CultureInfo CreateZar()
         {
             var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-ZA").Clone();
-            // en-ZA groups with a non-breaking space and a decimal comma, which reads unambiguously next to ISO amounts.
             culture.NumberFormat.CurrencyDecimalSeparator = ".";
             culture.NumberFormat.CurrencyGroupSeparator = ",";
             culture.NumberFormat.NumberDecimalSeparator = ".";
             culture.NumberFormat.NumberGroupSeparator = ",";
             culture.NumberFormat.CurrencySymbol = "R";
-            culture.NumberFormat.CurrencyPositivePattern = 0; // R1.00
-            culture.NumberFormat.CurrencyNegativePattern = 1; // -R1.00
+            culture.NumberFormat.CurrencyPositivePattern = 0;
+            culture.NumberFormat.CurrencyNegativePattern = 1;
             return culture;
         }
 

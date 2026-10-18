@@ -2,11 +2,8 @@ using StackExchange.Redis;
 
 namespace TransactionAggregationAPI.RateLimiting
 {
-    // Requests that fail authentication never reach the rate limiter (it runs after authorization),
-    // so a client sending bad tokens or keys would otherwise be free to do so without limit.
     internal interface IAuthFailureThrottle
     {
-        // How much longer the client is blocked for, or null when it may proceed.
         Task<TimeSpan?> BlockedForAsync(string client, CancellationToken cancellationToken);
 
         Task RecordFailureAsync(string client, CancellationToken cancellationToken);

@@ -21,6 +21,7 @@ namespace Modules.Audit.Contracts
         public const string SourceDeactivated = "admin.source_deactivated";
         public const string SourceKeyRotated = "admin.source_key_rotated";
         public const string SourceSigningKeyRegistered = "admin.source_signing_key_registered";
+        public const string DuplicateAlertWebhookChanged = "admin.duplicate_alert_webhook_changed";
 
         public const string CustomerCreated = "admin.customer_created";
         public const string CustomerAccountLinked = "admin.customer_account_linked";

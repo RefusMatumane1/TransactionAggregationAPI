@@ -1,7 +1,6 @@
 using BuildingBlocks.Messaging.Publishing;
 using TransactionAggregation.Worker.BackgroundServices;
 using TransactionAggregation.Worker.Kafka;
-using TransactionAggregation.Worker.Notifications;
 using TransactionAggregation.Worker.Outbox;
 
 namespace TransactionAggregation.Worker
@@ -36,11 +35,6 @@ namespace TransactionAggregation.Worker
                 throw new InvalidOperationException(
                     $"ConnectionStrings:{KafkaOptions.ConnectionStringName} must be configured: the outbox publishes integration events to Kafka.");
             services.AddSingleton<IIntegrationEventPublisher, KafkaIntegrationEventPublisher>();
-
-            // No request loggers: the URL embeds the hook's credential.
-            services.AddHttpClient(NotificationService.HttpClientName).RemoveAllLoggers();
-            services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
-            services.AddScoped<INotificationService, NotificationService>();
 
             return services;
         }

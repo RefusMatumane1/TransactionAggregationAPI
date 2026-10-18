@@ -125,6 +125,7 @@ TransactionAggregationAPI/              ← solution root
 │   │                                     Requests/ and Responses/. Application DTOs are always mapped to a response, never serialized
 │   │                                     directly. Referenced only by the API host — the worker runs every module without it.
 │   ├── WebhookSources/                 ← First fully-extracted module — own DbContext, `webhooksources` schema, depends only on SharedKernel
+│   ├── Notifications/                  ← Duplicate alerts — own DbContext, `notifications` schema; other modules and the worker use only Notifications.Contracts
 │   └── Audit/                          ← Append-only inbound audit trail — own DbContext, `audit` schema, depends on no other module
 │
 ├── monitoring/                         ← Docker Compose monitoring stack
@@ -774,10 +775,14 @@ Every duplicate at either level:
 
 - increments `inbound_duplicates_total{source_name, level}`
 - writes a `DuplicateInboundDetected` outbox message. The outbox dispatcher logs it (account id
-  masked) and, if `NotificationOptions:DuplicateAlertWebhookUrl` is set, POSTs an alert there.
+  masked) and POSTs an alert to **that bank's own alert URL**, set by an admin with
+  `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (the Notifications module). A bank with no URL of its own falls back to
+  `NotificationOptions:DuplicateAlertWebhookUrl` if that is set; with neither, the duplicate is only
+  logged. The log line says which destination was used (`bank`, `default` or `none`).
   It runs asynchronously, so a failing alert channel can't block ingestion. A failed alert is
   retried by the outbox (408, 429, 5xx) or dead-lettered (other 4xx), never silently dropped.
-  The hook URL can embed a token, so it is never logged.
+  A URL can embed a token, so it is stored encrypted (Data Protection), is write-only through the
+  API (a read says only `configured: true/false`), and is never logged.
 
 #### Audit trail (admin)
 
@@ -833,6 +838,16 @@ Requires the Keycloak `admin` realm role — a `staff` token gets `403`.
 | `POST` | `/admin/webhook-sources/{id}/rotate` | Replace the key — old one stops working immediately |
 | `POST` | `/admin/webhook-sources/{id}/activate` | Re-enable a deactivated source |
 | `POST` | `/admin/webhook-sources/{id}/deactivate` | Disable without deleting (key stops authenticating) |
+
+#### Admin — duplicate-alert webhooks
+
+Owned by the Notifications module. Requires the Keycloak `admin` realm role. `{bankCode}` is
+case-insensitive and must be a registered bank (`404` otherwise).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/notifications/duplicate-alert-webhooks/{bankCode}` | `{ "bankCode", "configured", "updatedAt" }`. The URL is never returned |
+| `PUT` | `/admin/notifications/duplicate-alert-webhooks/{bankCode}` | Set where this bank's duplicate alerts are posted: `{ "url": "https://hooks.example.com/…" }` → `204`. A blank `url` clears it. The URL must be `https`, on a public host (no `localhost`, private or link-local addresses, `.local`/`.internal` names), with no `user:password@`; otherwise `400`. Audited as `admin.duplicate_alert_webhook_changed` (the URL is never recorded) |
 
 #### Health & Metrics
 
@@ -914,7 +929,7 @@ Environment variables use `__` as a section separator:
 | `Secrets:FilePath` | Absolute path of the secrets file (clusters: the Vault-rendered file) | not set: `secrets.json` in the content root, optional |
 | `Ingestion:MaxTransactionsPerDelivery` | Most transactions one webhook call or Kafka record may carry (1–5000; startup fails outside that). Set the same value on the API and the worker; the 1 MiB request-body limit still applies | `500` |
 | `Kafka:IntegrationEventsTopic` | Topic for `TransactionRecorded` events | `transaction-events` |
-| `NotificationOptions:DuplicateAlertWebhookUrl` | Optional alert hook (secret: it embeds a token) | `DUPLICATE_ALERT_WEBHOOK_URL` in `.env` |
+| `NotificationOptions:DuplicateAlertWebhookUrl` | Optional *default* duplicate-alert hook for banks without their own (secret: it embeds a token). Per-bank URLs are set through the admin API, not configuration | `DUPLICATE_ALERT_WEBHOOK_URL` in `.env` |
 | `ConnectionStrings:redis` | Redis connection string | `redis:6379` |
 | `ConnectionStrings:seq` | Seq ingestion URL | `http://seq:80` |
 | `Keycloak:Authority` | Keycloak server root the API itself calls (in-cluster/compose service address) | `http://keycloak:8080` |

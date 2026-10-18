@@ -46,7 +46,7 @@ Principles that decide trade-offs:
 
 ## 3. Architecture
 
-One deployable API, one background worker, four business modules, one PostgreSQL database.
+One deployable API, one background worker, five business modules, one PostgreSQL database.
 
 ```
 Mock banks ── webhook (X-Api-Key) ──▶ API ──┐
@@ -89,6 +89,7 @@ talk only through `*.Contracts` projects, enforced by architecture tests
 | Transactions | `transactions` | Ingestion processing, the ledger, the `DailyTotals` read model, transaction and aggregate queries (including per customer), the `TransactionRecorded` v1 contract |
 | Customers | `customerdirectory` | Customers and the (bank, account id) pairs linked to them; resolves a customer to its accounts for other modules |
 | WebhookSources | `webhooksources` | The banks: one source per bank with its API-key hash, display name, colour and Kafka signing public key |
+| Notifications | `notifications` | Where each bank's duplicate alerts go: its alert URL (stored encrypted), the default from configuration, and the sending of the alert. Exposes `IDuplicateAlertNotifier`; the worker's outbox handler hands it duplicates |
 | Audit | `audit` | The append-only audit trail |
 
 Shared technical code lives in `BuildingBlocks/` and depends on no module: `SharedKernel` (domain
@@ -158,7 +159,7 @@ Each row: the guarantee, what provides it, and the test that checks it.
 | Redis | Reads run uncached, rate limits fall back per replica, events still publish; `/readiness` stays `200` (Redis degrades it only) |
 | Kafka (inbound) | Transient failures retry the same record with exponential backoff (cap `Kafka:MaxRetryBackoffSeconds`, 60 s) and pause the partition; records that can never succeed go to `bank-transactions.dlq` with `dlq-*` headers |
 | Kafka (outbound) | Idempotent producer, `acks=all`, 30 s message timeout; failures are retried by the outbox |
-| Duplicate-alert webhook | Retried by the outbox on 408/429/5xx, dead-lettered on other 4xx; its URL (which can embed a token) is never logged |
+| Duplicate-alert webhook | Posted to the duplicating bank's own URL (set per bank by an admin, stored encrypted with Data Protection, https to a public host only), else to the configured default, else only logged. Retried by the outbox on 408/429/5xx, dead-lettered on other 4xx; if the key ring cannot decrypt it (for example Redis is down) the attempt is transient and retried. A URL can embed a token, so it is write-only through the API and never logged |
 
 Failures are classified in `BuildingBlocks.Messaging/FailureClassifier.cs`:
 **permanent** (malformed JSON, domain violations, validation, most 4xx, SQL state classes 22 and 23
@@ -208,6 +209,7 @@ All routes are under `/api/v1`. Reads need `staff` or `admin`; changes and admin
 | Aggregates | `GET /transactions/aggregates/{institutions, categories, cash-flow, comparison}` |
 | Banks | `GET /banks` (staff); `/admin/webhook-sources` list, create, update, rotate key, register signing key, activate, deactivate (admin) |
 | Customers | `GET /customers`, `/customers/{id}`, `/customers/{id}/transactions`, `/customers/{id}/aggregates/{cash-flow, categories, institutions, comparison}` (staff); `POST /customers`, `POST /customers/{id}/accounts`, `DELETE /customers/{id}/accounts` (admin) |
+| Notifications | `GET`, `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (admin) |
 | Audit | `GET /admin/audit/events`, `GET /admin/audit/transactions/{id}/lineage` (admin) |
 | Ingestion | `POST /webhooks/bank-aggregator/transactions` (API key); Kafka topic `bank-transactions` |
 | Events out | Kafka topic `transaction-events`: `TransactionRecorded` v1, keyed `{institution}:{externalAccountId}` |
@@ -286,6 +288,11 @@ Stated as failure and consequence.
 - **Deployment.** The CI deploy job is a notice and a post-deployment smoke test hook, not an
   automated rollout. Third-party images in the manifests are pinned by tag; the application images'
   base layers are pinned by digest.
+- **Alert URLs are screened by name, not by DNS.** Setting a bank's alert URL (Notifications module) rejects non-https,
+  credentials in the address, `localhost`, `.local`/`.internal` names and private, loopback and
+  link-local IP literals. A public-looking hostname that resolves to a private address is not caught,
+  so a malicious admin could aim the worker at an internal service. The cluster's network policy is
+  the second line.
 - **Mock data.** The bank formats in `normalization-rules.Development.json` are invented for the
   mock aggregator; real banks need their own profiles.
 - **Retention.** Processed messages are archived after 30 days; no rule deletes ledger or audit

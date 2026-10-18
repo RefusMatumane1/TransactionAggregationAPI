@@ -36,6 +36,13 @@
     <Project Path="Modules/Customers/Customers.Infrastructure/Customers.Infrastructure.csproj" />
     <Project Path="Modules/Customers/Customers.Presentation/Customers.Presentation.csproj" />
   </Folder>
+  <Folder Name="/Modules/Notifications/">
+    <Project Path="Modules/Notifications/Notifications.Application/Notifications.Application.csproj" />
+    <Project Path="Modules/Notifications/Notifications.Contracts/Notifications.Contracts.csproj" />
+    <Project Path="Modules/Notifications/Notifications.Domain/Notifications.Domain.csproj" />
+    <Project Path="Modules/Notifications/Notifications.Infrastructure/Notifications.Infrastructure.csproj" />
+    <Project Path="Modules/Notifications/Notifications.Presentation/Notifications.Presentation.csproj" />
+  </Folder>
   <Folder Name="/Modules/WebhookSources/">
     <Project Path="Modules/WebhookSources/WebhookSources.Application/WebhookSources.Application.csproj" />
     <Project Path="Modules/WebhookSources/WebhookSources.Contracts/WebhookSources.Contracts.csproj" />

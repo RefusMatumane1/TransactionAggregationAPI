@@ -16,6 +16,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Modules.Audit;
+using Modules.Notifications;
+using Modules.Notifications.Application.Common;
 using Modules.Transactions;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources;
@@ -25,6 +27,7 @@ using StackExchange.Redis;
 using TransactionAggregation.Hosting.Caching;
 using TransactionAggregation.Hosting.Health;
 using TransactionAggregation.Hosting.Logging;
+using TransactionAggregation.Hosting.Security;
 
 namespace TransactionAggregation.Hosting
 {
@@ -76,6 +79,8 @@ namespace TransactionAggregation.Hosting
             builder.Services.AddMessagingBuildingBlock();
             builder.Services.AddAuditModule();
             builder.Services.AddWebhookSourcesModule();
+            builder.Services.AddNotificationsModule(builder.Configuration);
+            builder.Services.AddSingleton<IAlertUrlProtector, DataProtectionAlertUrlProtector>();
             builder.Services.AddTransactionsModule(builder.Configuration, builder.Environment.IsDevelopment());
 
             builder.EnrichNpgsqlDbContext<TransactionsDbContext>(settings => settings.DisableHealthChecks = true);

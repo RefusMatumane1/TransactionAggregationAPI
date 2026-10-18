@@ -33,6 +33,7 @@ TransactionAggregationAPI/              solution root
 │   ├── Transactions/    (schema `transactions`)         ledger, ingestion processing, read model, queries
 │   ├── Customers/       (schema `customerdirectory`)    customers and their linked accounts
 │   ├── WebhookSources/  (schema `webhooksources`)       the banks: keys, display names, signing keys
+│   ├── Notifications/   (schema `notifications`)        per-bank duplicate-alert URLs (encrypted) and sending the alert
 │   └── Audit/           (schema `audit`)                append-only audit trail
 │       each: Domain · Application · Infrastructure · Presentation · Contracts
 ├── k8s/  keycloak/  monitoring/  perf/  scripts/  docker-compose*.yml  deploy-k8s.sh
@@ -183,8 +184,11 @@ is never altered. Cover it in `Unit/Services/TransactionNormalizerTests.cs`.
 ### Add a bank
 Create it through `POST /api/v1/admin/webhook-sources` (or the UI's Banks page): the code is fixed,
 the key is shown once. For Kafka, register its ECDSA P-256 public key with
-`PUT /admin/webhook-sources/{id}/signing-key`. Nothing in code changes. Staff reach it only if the
-bank code is in their Keycloak `institutions` attribute.
+`PUT /admin/webhook-sources/{id}/signing-key`. To receive duplicate alerts for that bank, set its own
+URL with `PUT /admin/notifications/duplicate-alert-webhooks/{bankCode}` (https, public host; stored
+encrypted by the Notifications module; a bank without one uses
+`NotificationOptions:DuplicateAlertWebhookUrl`, if set). Nothing in code changes. Staff reach it only
+if the bank code is in their Keycloak `institutions` attribute.
 
 ### Add a read endpoint
 1. Put a query record and handler in the module's `Application/Features/<Area>/Queries/…`

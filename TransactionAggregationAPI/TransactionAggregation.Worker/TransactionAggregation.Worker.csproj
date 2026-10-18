@@ -18,6 +18,8 @@
 		<ProjectReference Include="..\TransactionAggregation.Hosting\TransactionAggregation.Hosting.csproj" />
 		<!-- IWebhookSourceDirectory: the Kafka consumer verifies each record's "source" header and signature. -->
 		<ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+		<!-- IDuplicateAlertNotifier: the outbox handler for DuplicateInboundDetected hands the alert to the Notifications module. -->
+		<ProjectReference Include="..\Modules\Notifications\Notifications.Contracts\Notifications.Contracts.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

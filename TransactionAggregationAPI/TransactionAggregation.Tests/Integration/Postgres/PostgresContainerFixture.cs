@@ -47,6 +47,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             using var customers = CreateCustomersContext();
             await customers.Database.MigrateAsync();
+
+            using var notifications = CreateNotificationsContext();
+            await notifications.Database.MigrateAsync();
         }
 
         public async Task<string> CreateIsolatedDatabaseAsync()
@@ -71,6 +74,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await audit.Database.MigrateAsync();
             using var customers = CreateCustomersContext(connectionString);
             await customers.Database.MigrateAsync();
+
+            using var notifications = CreateNotificationsContext(connectionString);
+            await notifications.Database.MigrateAsync();
 
             return connectionString;
         }
@@ -158,6 +164,15 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 .Options;
 
             return new CustomersDbContext(options, new UnavailableAuditTrail());
+        }
+
+        public Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext CreateNotificationsContext(string? connectionString = null)
+        {
+            var options = new DbContextOptionsBuilder<Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext>()
+                .UseNpgsql(connectionString ?? ConnectionString)
+                .Options;
+
+            return new Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext(options, new UnavailableAuditTrail());
         }
 
         public AuditDbContext CreateAuditContext(string? connectionString = null)

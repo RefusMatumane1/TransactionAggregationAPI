@@ -1,7 +1,7 @@
-using Modules.Transactions.Application.Common.Options;
-using Microsoft.Extensions.Options;
 using FluentAssertions;
+using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
 using Xunit;
 

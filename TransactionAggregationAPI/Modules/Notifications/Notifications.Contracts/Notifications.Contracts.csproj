@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Notifications.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Published cross-module contracts (IDuplicateAlertNotifier). Depends on nothing. -->
+
+</Project>

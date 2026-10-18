@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Notifications.Infrastructure</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Http" />
+
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Persistence\BuildingBlocks.Persistence.csproj" />
+		<!-- OutboundUrlRedaction: keeps a webhook URL (it embeds a credential) out of traces. -->
+		<ProjectReference Include="..\..\..\TransactionAggregationAPI.ServiceDefaults\TransactionAggregationAPI.ServiceDefaults.csproj" />
+		<ProjectReference Include="..\Notifications.Application\Notifications.Application.csproj" />
+		<ProjectReference Include="..\Notifications.Domain\Notifications.Domain.csproj" />
+		<ProjectReference Include="..\Notifications.Contracts\Notifications.Contracts.csproj" />
+		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+	</ItemGroup>
+</Project>

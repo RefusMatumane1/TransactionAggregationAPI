@@ -45,6 +45,7 @@
 		<ProjectReference Include="..\Modules\Transactions\Transactions.Presentation\Transactions.Presentation.csproj" />
 		<ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Presentation\WebhookSources.Presentation.csproj" />
 		<ProjectReference Include="..\Modules\Customers\Customers.Presentation\Customers.Presentation.csproj" />
+		<ProjectReference Include="..\Modules\Notifications\Notifications.Presentation\Notifications.Presentation.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -46,11 +46,18 @@ namespace TransactionAggregation.Tests.Integration
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
                 ReplaceWithInMemory<AuditDbContext>(services);
                 ReplaceWithInMemory<CustomersDbContext>(services);
+                ReplaceWithInMemory<Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext>(services);
 
                 services.RemoveAll<IHostedService>();
 
                 services.RemoveAll<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
                 services.AddDistributedMemoryCache();
+
+                // The real key ring lives in Redis, which this host does not have.
+                services.RemoveAll<Modules.Notifications.Application.Common.IAlertUrlProtector>();
+                services.AddSingleton<Modules.Notifications.Application.Common.IAlertUrlProtector>(
+                    new TransactionAggregation.Hosting.Security.DataProtectionAlertUrlProtector(
+                        new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider()));
 
                 services.Configure<HealthCheckServiceOptions>(opts => opts.Registrations.Clear());
                 services.AddHealthChecks()

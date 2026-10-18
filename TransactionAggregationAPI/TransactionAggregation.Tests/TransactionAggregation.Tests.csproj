@@ -42,6 +42,11 @@
     <ProjectReference Include="..\Modules\Audit\Audit.Presentation\Audit.Presentation.csproj" />
     <ProjectReference Include="..\Modules\Transactions\Transactions.Presentation\Transactions.Presentation.csproj" />
     <ProjectReference Include="..\Modules\WebhookSources\WebhookSources.Presentation\WebhookSources.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\Notifications.Domain\Notifications.Domain.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\Notifications.Application\Notifications.Application.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\Notifications.Contracts\Notifications.Contracts.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\Notifications.Presentation\Notifications.Presentation.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Domain\Customers.Domain.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Application\Customers.Application.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Infrastructure\Customers.Infrastructure.csproj" />

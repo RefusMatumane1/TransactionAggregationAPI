@@ -1,5 +1,6 @@
 using Modules.Audit;
 using Modules.Customers;
+using Modules.Notifications;
 using Modules.Transactions;
 using Modules.WebhookSources;
 using Prometheus;
@@ -71,6 +72,7 @@ try
     app.MapWebhookSourcesEndpoints();
     app.MapAuditEndpoints();
     app.MapCustomersEndpoints();
+    app.MapNotificationsEndpoints();
 
     app.MapFallback("api/{**path}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound));
     app.MapFallbackToFile("index.html");

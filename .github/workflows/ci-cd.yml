@@ -87,6 +87,7 @@ jobs:
           check Modules/WebhookSources/WebhookSources.Infrastructure WebhookSourcesDbContext
           check Modules/Audit/Audit.Infrastructure AuditDbContext
           check Modules/Customers/Customers.Infrastructure CustomersDbContext
+          check Modules/Notifications/Notifications.Infrastructure NotificationsDbContext
 
       # Includes the Testcontainers PostgreSQL suites (Docker is available on ubuntu-latest).
       - name: Test

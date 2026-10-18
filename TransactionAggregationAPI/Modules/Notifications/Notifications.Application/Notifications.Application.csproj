@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Notifications.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+		<!-- INotificationsDbContext exposes DbSet<T>: EF Core is referenced for that type only. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+		<ProjectReference Include="..\Notifications.Domain\Notifications.Domain.csproj" />
+		<ProjectReference Include="..\Notifications.Contracts\Notifications.Contracts.csproj" />
+		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+		<!-- Setting a bank's alert URL checks the bank exists and takes its canonical code. -->
+		<ProjectReference Include="..\..\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
+	</ItemGroup>
+</Project>

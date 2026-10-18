@@ -1,11 +1,11 @@
-using Modules.Transactions.Application.Common.Options;
-using Microsoft.Extensions.Options;
 using BuildingBlocks.Messaging.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Modules.Audit.Contracts;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Common.Outbox;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;

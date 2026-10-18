@@ -17,7 +17,6 @@ using System.Net;
 using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
 using TransactionAggregation.Worker.BackgroundServices;
-using TransactionAggregation.Worker.Notifications;
 using TransactionAggregation.Worker.Outbox;
 using Xunit;
 
@@ -241,84 +240,5 @@ namespace TransactionAggregation.Tests.Unit.BackgroundServices
             messages.Should().OnlyContain(m => m.Status == InboxMessageStatus.Pending && m.Attempts == 0);
             messaging.ChangeTracker.HasChanges().Should().BeFalse("the release was saved");
         }
-    }
-
-    public class DuplicateAlertTests
-    {
-        private const string HookUrl = "https://hooks.example.test/services/T000/B000/SECRET-TOKEN";
-
-        private static readonly DuplicateInboundDetectedOutboxPayload Duplicate =
-            new("transaction", "FNB", "1234567890", ["bank-1"], Guid.NewGuid(), DateTime.UtcNow);
-
-        private static (NotificationService Service, RecordingLogger<NotificationService> Logs) Build(HttpStatusCode status)
-        {
-            var factory = Substitute.For<IHttpClientFactory>();
-            factory.CreateClient(NotificationService.HttpClientName).Returns(_ => new HttpClient(new StubHandler(status)));
-            var logs = new RecordingLogger<NotificationService>();
-            return (new NotificationService(logs, factory,
-                Options.Create(new NotificationOptions { DuplicateAlertWebhookUrl = HookUrl })), logs);
-        }
-
-        [Theory]
-        [InlineData(HttpStatusCode.TooManyRequests, FailureKind.Transient)]
-        [InlineData(HttpStatusCode.InternalServerError, FailureKind.Transient)]
-        [InlineData(HttpStatusCode.BadGateway, FailureKind.Transient)]
-        [InlineData(HttpStatusCode.BadRequest, FailureKind.Permanent)]
-        [InlineData(HttpStatusCode.Forbidden, FailureKind.Permanent)]
-        public async Task AFailedAlert_Throws_SoTheOutboxRetriesOrDeadLettersIt(HttpStatusCode status, FailureKind expected)
-        {
-            var (service, _) = Build(status);
-
-            var act = () => service.SendDuplicateInboundAlertAsync(Duplicate);
-
-            var thrown = (await act.Should().ThrowAsync<HttpRequestException>()).Which;
-            FailureClassifier.Classify(thrown).Should().Be(expected);
-        }
-
-        [Fact]
-        public async Task ATimeout_IsTransient()
-        {
-            var factory = Substitute.For<IHttpClientFactory>();
-            factory.CreateClient(NotificationService.HttpClientName).Returns(_ => new HttpClient(new StubHandler(timeout: true)));
-            var service = new NotificationService(NullLogger<NotificationService>.Instance, factory,
-                Options.Create(new NotificationOptions { DuplicateAlertWebhookUrl = HookUrl }));
-
-            var act = () => service.SendDuplicateInboundAlertAsync(Duplicate);
-
-            var thrown = (await act.Should().ThrowAsync<Exception>()).Which;
-            FailureClassifier.Classify(thrown).Should().Be(FailureKind.Transient);
-        }
-
-        [Fact]
-        public async Task TheHookUrl_IsNeverLogged_AndTheAccountIsMasked()
-        {
-            var (service, logs) = Build(HttpStatusCode.OK);
-
-            await service.SendDuplicateInboundAlertAsync(Duplicate);
-
-            logs.Messages.Should().NotContain(m => m.Contains("SECRET-TOKEN") || m.Contains("hooks.example.test"));
-            logs.Messages.Should().NotContain(m => m.Contains("1234567890"));
-            logs.Messages.Should().Contain(m => m.Contains("***7890"));
-        }
-
-        private sealed class StubHandler(HttpStatusCode status = HttpStatusCode.OK, bool timeout = false) : HttpMessageHandler
-        {
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-                timeout
-                    ? throw new TaskCanceledException("The request was canceled due to the configured HttpClient.Timeout", new TimeoutException())
-                    : Task.FromResult(new HttpResponseMessage(status));
-        }
-    }
-
-    public sealed class RecordingLogger<T> : ILogger<T>
-    {
-        public List<string> Messages { get; } = [];
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
-            Messages.Add(formatter(state, exception));
     }
 }

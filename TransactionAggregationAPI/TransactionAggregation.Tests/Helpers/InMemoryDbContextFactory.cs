@@ -70,6 +70,12 @@ namespace TransactionAggregation.Tests.Helpers
             new(InMemoryDb.Options<CustomersDbContext>(dbName), auditTrail ?? new RecordingAuditTrail());
     }
 
+    public static class InMemoryNotificationsDbContextFactory
+    {
+        public static Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext Create(string? dbName = null, IAuditTrail? auditTrail = null) =>
+            new(InMemoryDb.Options<Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext>(dbName), auditTrail ?? new RecordingAuditTrail());
+    }
+
     public static class InMemoryWebhookSourcesDbContextFactory
     {
         public static WebhookSourcesDbContext Create(string? dbName = null, IAuditTrail? auditTrail = null) =>

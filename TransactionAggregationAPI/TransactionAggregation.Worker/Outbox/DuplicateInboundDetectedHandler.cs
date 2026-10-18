@@ -1,12 +1,13 @@
 using BuildingBlocks.Messaging;
 using BuildingBlocks.Messaging.Outbox;
+using Modules.Notifications.Contracts;
 using Modules.Transactions.Application.Common.Outbox;
 using System.Text.Json;
-using TransactionAggregation.Worker.Notifications;
 
 namespace TransactionAggregation.Worker.Outbox
 {
-    internal sealed class DuplicateInboundDetectedHandler(INotificationService notifications) : IOutboxMessageHandler
+    // Translates the outbox message into the Notifications module's contract; where the alert goes is that module's business.
+    internal sealed class DuplicateInboundDetectedHandler(IDuplicateAlertNotifier notifier) : IOutboxMessageHandler
     {
         public string MessageType => OutboxMessageTypes.DuplicateInboundDetected;
 
@@ -17,7 +18,15 @@ namespace TransactionAggregation.Worker.Outbox
             var duplicate = JsonSerializer.Deserialize<DuplicateInboundDetectedOutboxPayload>(message.Payload)
                 ?? throw new PoisonMessageException($"Outbox message {message.Id.Value} has an empty payload");
 
-            return notifications.SendDuplicateInboundAlertAsync(duplicate, cancellationToken);
+            return notifier.NotifyAsync(
+                new DuplicateAlert(
+                    duplicate.Level,
+                    duplicate.SourceName,
+                    duplicate.ExternalAccountId,
+                    duplicate.DuplicateExternalIds,
+                    duplicate.InboxMessageId,
+                    duplicate.DetectedAt),
+                cancellationToken);
         }
     }
 }

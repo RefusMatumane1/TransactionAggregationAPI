@@ -2,6 +2,7 @@ using BuildingBlocks.Messaging.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Modules.Audit.Infrastructure.Persistence;
 using Modules.Customers.Infrastructure.Persistence;
+using Modules.Notifications.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using Npgsql;
@@ -17,6 +18,7 @@ namespace TransactionAggregationAPI.Extensions
             await host.ApplyMigrationsAsync<WebhookSourcesDbContext>();
             await host.ApplyMigrationsAsync<AuditDbContext>();
             await host.ApplyMigrationsAsync<CustomersDbContext>();
+            await host.ApplyMigrationsAsync<NotificationsDbContext>();
         }
 
         private const long MigrationLockId = 7_27_2024;

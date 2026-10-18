@@ -127,7 +127,7 @@ flowchart LR
     rest -. cached reads .-> redis
 ```
 
-The system is one deployable API, one background worker, and four modules with explicit
+The system is one deployable API, one background worker, and five modules with explicit
 boundaries. Each module has its own PostgreSQL schema and migrations. Modules talk to each other
 only through `*.Contracts` interfaces, and architecture tests enforce that.
 
@@ -136,6 +136,7 @@ only through `*.Contracts` interfaces, and architecture tests enforce that.
 | Transactions | ingestion pipeline, the insert-only ledger, the daily read model, queries and aggregates (including per customer), the `TransactionRecorded` contract |
 | Customers | customers and the bank accounts linked to them; resolves a customer to its accounts for other modules |
 | WebhookSources | the banks: one source per bank, its API key, display name and Kafka signing key |
+| Notifications | where each bank's duplicate alerts go: its own encrypted webhook URL, else the configured default; sends the alert |
 | Audit | the append-only audit trail of deliveries, ledger entries and admin changes |
 
 ### Moving parts
@@ -189,6 +190,7 @@ routes need `admin`; staff are confined to their banks.
 | Aggregates | institutions, categories, cash flow, period comparison, each also per customer |
 | Customers | list, detail, register, link and unlink accounts |
 | Banks | the banks the caller may read; admins manage webhook sources |
+| Notifications | a bank's duplicate-alert webhook: set, clear, and whether one is set (admin) |
 | Audit | inbound deliveries and transaction lineage (admin) |
 | Ingestion | per-bank webhook; Kafka records |
 

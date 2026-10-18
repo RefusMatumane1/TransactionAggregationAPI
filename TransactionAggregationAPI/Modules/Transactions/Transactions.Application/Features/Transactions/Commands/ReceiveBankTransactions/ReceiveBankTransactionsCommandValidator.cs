@@ -1,7 +1,7 @@
 using FluentValidation;
 using Microsoft.Extensions.Options;
-using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Common.DTOs;
+using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
 using SharedKernel.Common.ValueObjects;

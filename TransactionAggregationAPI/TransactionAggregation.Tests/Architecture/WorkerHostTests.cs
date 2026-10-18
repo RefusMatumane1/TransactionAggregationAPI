@@ -31,6 +31,7 @@ namespace TransactionAggregation.Tests.Architecture
             || name.Name.StartsWith("Transactions.", StringComparison.Ordinal)
             || name.Name.StartsWith("WebhookSources.", StringComparison.Ordinal)
             || name.Name.StartsWith("Customers.", StringComparison.Ordinal)
+            || name.Name.StartsWith("Notifications.", StringComparison.Ordinal)
             || name.Name.StartsWith("Audit.", StringComparison.Ordinal)
             || name.Name.StartsWith("TransactionAggregation", StringComparison.Ordinal);
 

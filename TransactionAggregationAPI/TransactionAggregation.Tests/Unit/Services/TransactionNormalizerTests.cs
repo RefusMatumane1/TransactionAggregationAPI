@@ -3,7 +3,7 @@ using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Services;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

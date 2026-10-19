@@ -1,14 +1,14 @@
 using BuildingBlocks.Application.Abstractions;
 using BuildingBlocks.Application.Caching;
 using BuildingBlocks.Application.Pagination;
-using Modules.Transactions.Application.Common.Aggregation;
+using BuildingBlocks.Application.Querying;
 using Modules.Transactions.Application.Common.Caching;
 using Modules.Transactions.Application.Common.DTOs;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions
 {
-    public sealed record GetTransactionsQuery(TransactionFilter Filter) : IQuery<CursorPage<TransactionListItemDto>>, ICacheableQuery
+    public sealed record GetTransactionsQuery(AccountFilter Filter) : IQuery<CursorPage<TransactionListItemDto>>, ICacheableQuery
     {
         public string? Cursor { get; init; }
         public int PageSize { get; init; } = 20;

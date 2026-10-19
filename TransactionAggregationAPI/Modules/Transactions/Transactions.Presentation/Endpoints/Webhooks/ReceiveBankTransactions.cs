@@ -44,6 +44,7 @@ namespace Modules.Transactions.Presentation.Endpoints.Webhooks
                 hasIdempotencyKey ? idempotencyKey : null,
                 WebhookDeliveryAudit.Describe(httpContext, hasIdempotencyKey),
                 request.EffectiveSchemaVersion);
+
             var result = await sender.Send(command, cancellationToken);
 
             if (result.IsFailure && result.Error.Type is ErrorType.Validation or ErrorType.Problem)

@@ -1,10 +1,10 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
 using BuildingBlocks.Application.Pagination;
+using BuildingBlocks.Application.Querying;
 using FluentAssertions;
-using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
@@ -37,7 +37,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             new(context, new InMemoryTransactionSearch(), new InMemoryKeysetPaginator(), TestCurrencies.Catalog);
 
         private static async Task<IReadOnlyList<string>> ListAsync(
-            Func<GetTransactionsQuery, GetTransactionsQuery> configure, TransactionFilter? filter = null)
+            Func<GetTransactionsQuery, GetTransactionsQuery> configure, AccountFilter? filter = null)
         {
             var context = await SeedAsync();
 
@@ -84,7 +84,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
 
         [Fact]
         public async Task Access_AnInstitutionFilterOutsideTheCallersScope_ReturnsNothing() =>
-            (await ListAsync(q => q, new TransactionFilter(InstitutionAccess.Only(["FNB"]), Institution: "Absa")))
+            (await ListAsync(q => q, new AccountFilter(InstitutionAccess.Only(["FNB"]), Institution: "Absa")))
                 .Should().BeEmpty("narrowing can never widen what the caller may read");
 
         [Fact]
@@ -193,7 +193,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         [Fact]
         public void Validator_RejectsAnAccountWithoutItsInstitution() =>
             new GetTransactionsQueryValidator()
-                .Validate(new GetTransactionsQuery(new TransactionFilter(InstitutionAccess.All, ExternalAccountId: "acc-1")))
+                .Validate(new GetTransactionsQuery(new AccountFilter(InstitutionAccess.All, ExternalAccountId: "acc-1")))
                 .IsValid.Should().BeFalse("an account id is only unique within its bank");
 
         [Theory]

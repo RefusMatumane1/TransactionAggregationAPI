@@ -4,7 +4,7 @@ using Modules.Audit.Application.Features.SearchAuditEvents;
 using Modules.Audit.Contracts;
 using Modules.Audit.Domain;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;

@@ -2,7 +2,7 @@ using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using SharedKernel.Common.ValueObjects;
 using System.Globalization;
 using System.Text.RegularExpressions;

@@ -9,8 +9,6 @@ metadata:
     app.kubernetes.io/part-of: transaction-aggregation
     app.kubernetes.io/version: "1.0.0"
   annotations:
-    # Triggers a rolling restart when the ConfigMap or Secret content changes
-    # if you use a tool like Reloader (stakater/Reloader).
     configmap.reloader.stakater.com/reload: "transaction-api-config"
     secret.reloader.stakater.com/reload: "transaction-api-secrets"
 spec:
@@ -19,12 +17,11 @@ spec:
     matchLabels:
       app.kubernetes.io/name: transaction-api
 
-  # ── Zero-downtime rolling update ────────────────────────────────────────
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1 # Allow 1 extra pod during update
-      maxUnavailable: 0 # Never take a pod down before a new one is ready
+      maxSurge: 1
+      maxUnavailable: 0
 
   template:
     metadata:
@@ -39,17 +36,14 @@ spec:
         prometheus.io/path: "/metrics"
 
     spec:
-      # ── Security context ──────────────────────────────────────────────
       securityContext:
-        runAsUser: 1654 # Matches APP_UID in the Dockerfile
+        runAsUser: 1654
         runAsGroup: 1654
         fsGroup: 1654
         runAsNonRoot: true
 
-      # ── Graceful shutdown ─────────────────────────────────────────────
       terminationGracePeriodSeconds: 60
 
-      # ── Spread replicas across nodes to avoid single-node failure ─────
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
@@ -58,24 +52,11 @@ spec:
             matchLabels:
               app.kubernetes.io/name: transaction-api
 
-      # Migrations are applied by the dedicated Job in migration-job.yaml
-      # (Helm pre-install/pre-upgrade hook) before this Deployment rolls out.
-      # No init container is needed here — running migrations in an init container
-      # on every pod would recreate the same concurrent-migration race condition.
-
       containers:
         - name: transaction-api
-          # Replace with your actual image from a registry.
-          # Build with: docker build -t <registry>/transactionaggregationapi:1.0.0 .
-          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
+          image: transactionaggregationapi:set-by-deploy-script
           imagePullPolicy: IfNotPresent
 
-          # ── Container-level hardening ───────────────────────────────────
-          # Verified locally (docker run --read-only --tmpfs /tmp --cap-drop=ALL
-          # --security-opt=no-new-privileges) that the app starts cleanly and
-          # /liveness responds Healthy under these constraints — the only
-          # writable path it needs is /tmp (.NET's default temp directory),
-          # mounted below as an emptyDir.
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
@@ -87,18 +68,14 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-            # /metrics only (Metrics__Port in the ConfigMap). The Service and Ingress publish
-            # 8080 alone, so metrics are reachable by Prometheus (pod IP) but not the internet.
             - name: metrics
               containerPort: 9464
               protocol: TCP
 
-          # ── Environment: non-sensitive from ConfigMap ──────────────────
           envFrom:
             - configMapRef:
                 name: transaction-api-config
 
-          # ── Environment: sensitive from Secret + computed values ───────
           env:
             - name: APP_DB_PASSWORD
               valueFrom:
@@ -106,38 +83,25 @@ spec:
                   name: transaction-api-secrets
                   key: app-db-password
 
-            # Least privilege: tagg_app has DML on the module schemas and nothing else — it
-            # can't alter tables, drop the audit triggers or read outside its grants
-            # (k8s/postgres/init-roles.yaml). Only the db-migrate Job connects as tagg_migrator.
             - name: ConnectionStrings__transactiondb
               value: "Host=pgbouncer;Port=6432;Database=transactiondb;Username=tagg_app;Password=$(APP_DB_PASSWORD);Maximum Pool Size=30;No Reset On Close=true"
 
-            # Redis connection string comes from ConfigMap key REDIS_CONNECTION_STRING.
-            # ASP.NET Core reads ConnectionStrings__redis, so map it explicitly:
             - name: ConnectionStrings__redis
               valueFrom:
                 configMapKeyRef:
                   name: transaction-api-config
                   key: REDIS_CONNECTION_STRING
 
-            # Seq connection string (consumed by Program.cs → ConnectionStrings:seq)
             - name: ConnectionStrings__seq
               valueFrom:
                 configMapKeyRef:
                   name: transaction-api-config
                   key: SEQ_URL
 
-            # No ConnectionStrings__kafka: the Kafka consumer runs in the worker
-            # (k8s/worker/deployment.yaml), not in the API.
-
-            # Keycloak__Authority/PublicIssuer/Realm/Audience (non-secret) come from
-            # transaction-api-config via envFrom above.
-
           volumeMounts:
             - name: tmp
               mountPath: /tmp
 
-          # ── Resource limits ────────────────────────────────────────────
           resources:
             requests:
               cpu: "250m"
@@ -146,8 +110,6 @@ spec:
               cpu: "1000m"
               memory: "512Mi"
 
-          # ── Liveness probe ─────────────────────────────────────────────
-          # /liveness only checks the "self" health-check tag — fast, no dependency I/O.
           livenessProbe:
             httpGet:
               path: /liveness
@@ -158,10 +120,6 @@ spec:
             failureThreshold: 3
             successThreshold: 1
 
-          # ── Readiness probe ────────────────────────────────────────────
-          # /readiness checks the required dependency (Postgres); Redis only degrades it
-          # (still 200), and Seq — a log sink — is not part of it, so neither can pull
-          # healthy pods out of rotation.
           readinessProbe:
             httpGet:
               path: /readiness
@@ -172,9 +130,6 @@ spec:
             failureThreshold: 3
             successThreshold: 1
 
-          # ── Startup probe ──────────────────────────────────────────────
-          # Gives the pod up to 3 minutes (18 × 10 s) to complete startup
-          # before liveness kicks in.
           startupProbe:
             httpGet:
               path: /liveness

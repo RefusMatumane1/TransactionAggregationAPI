@@ -4,8 +4,8 @@ using BuildingBlocks.Messaging.Outbox;
 using BuildingBlocks.Messaging.Persistence;
 using MediatR;
 using NSubstitute;
-using TransactionAggregation.Worker.BackgroundServices;
-using TransactionAggregation.Worker.Outbox;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 
 namespace TransactionAggregation.Tests.Helpers
 {

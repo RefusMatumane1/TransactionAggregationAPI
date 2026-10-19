@@ -1,6 +1,10 @@
+using BuildingBlocks.Application.Seeding;
+using BuildingBlocks.Persistence.Migrations;
 using Modules.Audit;
+using Modules.Currency;
 using Modules.Customers;
 using Modules.Notifications;
+using Modules.Reporting;
 using Modules.Transactions;
 using Modules.WebhookSources;
 using Prometheus;
@@ -9,7 +13,6 @@ using Serilog;
 using TransactionAggregation.Hosting;
 using TransactionAggregation.Hosting.Observability;
 using TransactionAggregationAPI.Authentication;
-using TransactionAggregationAPI.Development;
 using TransactionAggregationAPI.Extensions;
 using TransactionAggregationAPI.Middleware;
 using TransactionAggregationAPI.RateLimiting;
@@ -24,7 +27,7 @@ try
     builder.AddSerilogLogging();
 
     builder.AddApplicationModules();
-    builder.Services.AddCustomersModule();
+    builder.Services.AddCustomersModule(builder.Environment.IsDevelopment());
     builder.AddKeycloakAuthentication();
     builder.AddApiPlatform();
     builder.Services.AddRedisRateLimiting();
@@ -68,7 +71,9 @@ try
     else
         openApi.RequireAuthorization();
 
+    app.MapCurrencyEndpoints();
     app.MapTransactionsEndpoints();
+    app.MapReportingEndpoints();
     app.MapWebhookSourcesEndpoints();
     app.MapAuditEndpoints();
     app.MapCustomersEndpoints();
@@ -79,16 +84,14 @@ try
 
     if (args.Contains("--migrate-only"))
     {
-        await app.ApplyAllModuleMigrationsAsync();
+        await app.Services.ApplyModuleMigrationsAsync();
         return;
     }
 
     if (app.Environment.IsDevelopment())
     {
-        await app.ApplyAllModuleMigrationsAsync();
-        await SeedData.SeedDatabaseAsync(app.Services, app.Configuration);
-        await CustomerSeed.SeedAsync(app.Services);
-        await MockAggregatorSource.EnsureRegisteredAsync(app.Services, app.Configuration);
+        await app.Services.ApplyModuleMigrationsAsync();
+        await app.Services.SeedDevelopmentDataAsync();
     }
 
     await app.RunAsync();

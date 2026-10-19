@@ -4,7 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Presentation.Requests;
 using Modules.Transactions.Presentation.Responses;
 

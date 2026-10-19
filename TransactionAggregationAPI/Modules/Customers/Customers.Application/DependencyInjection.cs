@@ -12,6 +12,7 @@ namespace Modules.Customers
             services.AddModuleApplication(typeof(AssemblyReference).Assembly);
 
             services.AddScoped<ICustomerAccounts, CustomerAccounts>();
+            services.AddScoped<ICustomerViewAudit, CustomerViewAudit>();
 
             return services;
         }

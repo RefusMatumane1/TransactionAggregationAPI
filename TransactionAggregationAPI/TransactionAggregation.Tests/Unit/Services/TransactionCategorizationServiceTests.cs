@@ -2,8 +2,8 @@ using FluentAssertions;
 using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Application.Services;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

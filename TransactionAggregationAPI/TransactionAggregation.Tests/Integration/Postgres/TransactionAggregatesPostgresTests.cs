@@ -1,8 +1,8 @@
 using FluentAssertions;
-using Modules.Transactions.Application.Common.DTOs;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
-using Modules.Transactions.Domain.Enums;
+using Modules.Reporting.Application.DTOs;
+using Modules.Reporting.Application.Features.Aggregates;
+using Modules.Reporting.Application.Features.GetTransactionSummary;
+using Modules.Transactions.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -30,10 +30,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var filter = TestFilters.For(bank);
 
             using var context = fixture.CreateContext();
-            var daily = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = fixture.CreateReportingContext();
+            var daily = (await new GetCashFlowQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetCashFlowQuery(new DateOnly(2026, 1, 31), new DateOnly(2026, 2, 3), filter, TimeGranularity.Day),
                 CancellationToken.None)).Value;
-            var monthly = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog).Handle(
+            var monthly = (await new GetCashFlowQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetCashFlowQuery(new DateOnly(2026, 1, 1), new DateOnly(2026, 2, 28), filter, TimeGranularity.Month),
                 CancellationToken.None)).Value;
 
@@ -60,7 +61,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var filter = TestFilters.For(bank);
 
             using var context = fixture.CreateContext();
-            var handler = new GetCategoryBreakdownQueryHandler(context, TestCurrencies.Catalog);
+            using var reporting = fixture.CreateReportingContext();
+            var handler = new GetCategoryBreakdownQueryHandler(reporting, TestCurrencies.Catalog);
             var spend = (await handler.Handle(
                 new GetCategoryBreakdownQuery(new DateOnly(2026, 3, 1), new DateOnly(2026, 3, 31), filter), CancellationToken.None)).Value;
             var income = (await handler.Handle(
@@ -88,7 +90,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             ]);
 
             using var context = fixture.CreateContext();
-            var result = (await new GetInstitutionBreakdownQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = fixture.CreateReportingContext();
+            var result = (await new GetInstitutionBreakdownQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetInstitutionBreakdownQuery(new DateOnly(2026, 4, 1), new DateOnly(2026, 4, 30), TestFilters.All),
                 CancellationToken.None)).Value;
 
@@ -113,7 +116,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             ]);
 
             using var context = fixture.CreateContext();
-            var result = (await new GetPeriodComparisonQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = fixture.CreateReportingContext();
+            var result = (await new GetPeriodComparisonQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetPeriodComparisonQuery(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), TestFilters.For(bank)),
                 CancellationToken.None)).Value;
 
@@ -132,7 +136,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await SeedAsync(bank, "acc-1", [(-40m, TransactionCategory.Dining, Utc(2026, 6, 30, 22, 30), true)]);
 
             using var context = fixture.CreateContext();
-            var summary = (await new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = fixture.CreateReportingContext();
+            var summary = (await new GetTransactionSummaryQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetTransactionSummaryQuery(Utc(2026, 6, 1, 0), Utc(2026, 7, 31, 0), TestFilters.For(bank)),
                 CancellationToken.None)).Value;
 
@@ -173,7 +178,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await fixture.RefreshDailyTotalsAsync();
 
             using var context = fixture.CreateContext();
-            var handler = new GetCategoryBreakdownQueryHandler(context, TestCurrencies.Catalog);
+            using var reporting = fixture.CreateReportingContext();
+            var handler = new GetCategoryBreakdownQueryHandler(reporting, TestCurrencies.Catalog);
             var zar = (await handler.Handle(
                 new GetCategoryBreakdownQuery(new DateOnly(2026, 8, 1), new DateOnly(2026, 8, 31), TestFilters.For(bank)),
                 CancellationToken.None)).Value;

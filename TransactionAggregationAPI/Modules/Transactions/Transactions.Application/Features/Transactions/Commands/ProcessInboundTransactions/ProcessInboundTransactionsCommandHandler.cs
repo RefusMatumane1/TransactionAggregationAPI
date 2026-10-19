@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Modules.Audit.Contracts;
 using Modules.Transactions.Application.Common.Audit;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Errors;
 using Modules.Transactions.Application.Common.Inbox;

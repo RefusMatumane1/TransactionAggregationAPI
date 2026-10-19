@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Reporting.Application</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<!-- IReportingDbContext exposes DbSet<T>: EF Core is referenced for that type only. -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+		<!-- Reporting reads the ledger's published language only: categories, and the currency catalog for conversion. -->
+		<ProjectReference Include="..\..\Transactions\Transactions.Contracts\Transactions.Contracts.csproj" />
+		<ProjectReference Include="..\..\Currency\Currency.Contracts\Currency.Contracts.csproj" />
+	</ItemGroup>
+</Project>

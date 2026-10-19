@@ -14,8 +14,8 @@ using SharedKernel.Common.Models;
 using SharedKernel.Exceptions;
 using System.Net;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.BackgroundServices;
-using TransactionAggregation.Worker.Outbox;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices

@@ -13,7 +13,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [Fact]
         public async Task Migration_BackfillsAccountIds_MergesJointCopies_AndDropsTheOwnerSchemas()
         {
-            var database = await fixture.CreateIsolatedDatabaseAsync();
+            var database = await fixture.CreateIsolatedDatabaseAsync(withReporting: false);
             using var context = fixture.CreateContext(connectionString: database);
             var migrations = context.Database.GetMigrations().ToList();
             var removal = migrations.Single(m => m.EndsWith($"_{nameof(RemoveCustomerOwnership)}"));

@@ -23,7 +23,7 @@ spec:
 
       securityContext:
         runAsNonRoot: true
-        runAsUser: 472  # grafana user
+        runAsUser: 472
         fsGroup: 472
 
       containers:
@@ -61,8 +61,6 @@ spec:
               mountPath: /etc/grafana/provisioning/dashboards/dashboard-provider.yml
               subPath: dashboard-provider.yml
               readOnly: true
-            # Whole ConfigMap as a directory (no subPath), so every dashboard key is loaded
-            # and ConfigMap updates reach the pod without a restart.
             - name: dashboards
               mountPath: /var/lib/grafana/dashboards
               readOnly: true

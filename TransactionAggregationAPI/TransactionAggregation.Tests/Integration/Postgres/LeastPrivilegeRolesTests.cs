@@ -33,17 +33,20 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             (await ScalarAsync(asApp, "SELECT count(*) FROM messaging.\"InboxMessages\"")).Should().Be(0L);
 
             await ExecuteAsync(asApp, "CREATE TEMP TABLE refresh_probe (id int)");
-            await ExecuteAsync(asApp, "DELETE FROM transactions.\"DailyTotals\"");
+            await ExecuteAsync(asApp, "DELETE FROM reporting.\"DailyTotals\"");
 
             await ShouldBeDeniedAsync(asApp, "UPDATE audit.\"AuditEvents\" SET \"Detail\" = 'tampered'", "rewrite audit history");
             await ShouldBeDeniedAsync(asApp, "DELETE FROM audit.\"AuditEvents\"", "erase audit history");
             await ShouldBeDeniedAsync(asApp, "ALTER TABLE audit.\"AuditEvents\" DISABLE TRIGGER ALL", "switch off the append-only triggers");
             await ShouldBeDeniedAsync(asApp, "DROP TABLE transactions.\"Transactions\"", "drop financial data");
+            await ShouldBeDeniedAsync(asApp, "DROP TABLE reporting.\"DailyTotals\"", "drop the reporting read model");
             await ShouldBeDeniedAsync(asApp, "ALTER TABLE transactions.\"Transactions\" DROP CONSTRAINT \"CK_Transactions_Amount_NonZero\"", "weaken invariants");
             await ShouldBeDeniedAsync(asApp, "CREATE TABLE public.shadow (id int)", "create objects");
 
             (await ScalarAsync(asMigrator, "SELECT count(*) FROM pg_tables WHERE tableowner = 'tagg_migrator' AND schemaname = 'transactions'"))
-                .Should().Be(3L, "the ledger, its daily read model and the read model's checkpoint");
+                .Should().Be(1L, "the ledger");
+            (await ScalarAsync(asMigrator, "SELECT count(*) FROM pg_tables WHERE tableowner = 'tagg_migrator' AND schemaname = 'reporting'"))
+                .Should().Be(2L, "the daily read model and its checkpoint, moved here by the migrator and still its own");
         }
 
         private async Task<(string AsMigrator, string AsApp)> ProvisionAsync()
@@ -60,6 +63,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             await using (var messaging = _fixture.CreateMessagingContext(asMigrator)) await messaging.Database.MigrateAsync();
             await using (var transactions = _fixture.CreateContext(connectionString: asMigrator)) await transactions.Database.MigrateAsync();
+            await using (var reporting = _fixture.CreateReportingContext(asMigrator)) await reporting.Database.MigrateAsync();
             await using (var webhookSources = _fixture.CreateWebhookSourcesContext(asMigrator)) await webhookSources.Database.MigrateAsync();
             await using (var audit = _fixture.CreateAuditContext(asMigrator)) await audit.Database.MigrateAsync();
             await using (var customers = _fixture.CreateCustomersContext(asMigrator)) await customers.Database.MigrateAsync();

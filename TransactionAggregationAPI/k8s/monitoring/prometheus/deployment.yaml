@@ -24,7 +24,7 @@ spec:
 
       securityContext:
         runAsNonRoot: true
-        runAsUser: 65534  # nobody
+        runAsUser: 65534
         fsGroup: 65534
 
       containers:

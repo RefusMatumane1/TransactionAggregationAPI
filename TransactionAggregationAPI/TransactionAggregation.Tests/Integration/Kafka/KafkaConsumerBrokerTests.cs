@@ -21,7 +21,8 @@ using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.Kafka;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Kafka

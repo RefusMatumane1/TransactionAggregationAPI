@@ -21,6 +21,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\Transactions.Application\Transactions.Application.csproj" />
+		<ProjectReference Include="..\..\Currency\Currency.Contracts\Currency.Contracts.csproj" />
 		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Web\BuildingBlocks.Web.csproj" />
 		<ProjectReference Include="..\..\WebhookSources\WebhookSources.Contracts\WebhookSources.Contracts.csproj" />
 		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />

@@ -45,6 +45,10 @@ COPY ["Modules/Notifications/Notifications.Domain/Notifications.Domain.csproj", 
 COPY ["Modules/Notifications/Notifications.Application/Notifications.Application.csproj", "Modules/Notifications/Notifications.Application/"]
 COPY ["Modules/Notifications/Notifications.Infrastructure/Notifications.Infrastructure.csproj", "Modules/Notifications/Notifications.Infrastructure/"]
 COPY ["Modules/Notifications/Notifications.Contracts/Notifications.Contracts.csproj", "Modules/Notifications/Notifications.Contracts/"]
+COPY ["Modules/Currency/Currency.Application/Currency.Application.csproj", "Modules/Currency/Currency.Application/"]
+COPY ["Modules/Currency/Currency.Contracts/Currency.Contracts.csproj", "Modules/Currency/Currency.Contracts/"]
+COPY ["Modules/Reporting/Reporting.Application/Reporting.Application.csproj", "Modules/Reporting/Reporting.Application/"]
+COPY ["Modules/Reporting/Reporting.Infrastructure/Reporting.Infrastructure.csproj", "Modules/Reporting/Reporting.Infrastructure/"]
 RUN dotnet restore "./TransactionAggregation.Worker/TransactionAggregation.Worker.csproj"
 
 COPY . .

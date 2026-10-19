@@ -7,8 +7,6 @@ metadata:
     app.kubernetes.io/name: transaction-api
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: transaction-aggregation
-  # No scrape annotations here: Prometheus scrapes pods directly on their private metrics
-  # port (9464), which this Service deliberately does not expose.
 spec:
   type: ClusterIP
   selector:

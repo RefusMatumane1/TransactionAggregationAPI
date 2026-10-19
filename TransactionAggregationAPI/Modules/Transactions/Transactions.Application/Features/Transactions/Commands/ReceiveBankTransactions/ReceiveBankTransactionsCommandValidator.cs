@@ -1,6 +1,6 @@
 using FluentValidation;
 using Microsoft.Extensions.Options;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Options;
 using Modules.Transactions.Domain.Common.ValueObjects;

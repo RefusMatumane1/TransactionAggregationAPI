@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Infrastructure.Persistence;
 using System.Net;
 using System.Net.Http.Json;

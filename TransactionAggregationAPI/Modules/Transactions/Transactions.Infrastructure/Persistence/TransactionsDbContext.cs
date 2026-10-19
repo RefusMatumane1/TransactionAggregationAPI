@@ -3,7 +3,6 @@ using BuildingBlocks.Messaging.Persistence;
 using BuildingBlocks.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Modules.Audit.Contracts;
-using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Domain.Entities;
 using Modules.Transactions.Infrastructure.Persistence.Configurations;
@@ -28,10 +27,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
 
         public DbSet<Transaction> Transactions => Set<Transaction>();
 
-        public DbSet<DailyTotal> DailyTotals => Set<DailyTotal>();
-
-        public DbSet<AggregationCheckpoint> AggregationCheckpoints => Set<AggregationCheckpoint>();
-
         public void StageAudit(IEnumerable<AuditEventRecord> events) => _stagedAudit.AddRange(events);
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -39,8 +34,6 @@ namespace Modules.Transactions.Infrastructure.Persistence
             modelBuilder.HasDefaultSchema("transactions");
 
             modelBuilder.ApplyConfiguration(new TransactionConfiguration());
-            modelBuilder.ApplyConfiguration(new DailyTotalConfiguration());
-            modelBuilder.ApplyConfiguration(new AggregationCheckpointConfiguration());
 
             base.OnModelCreating(modelBuilder);
         }

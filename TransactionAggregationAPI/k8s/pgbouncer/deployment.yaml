@@ -1,12 +1,3 @@
-# ── PgBouncer ─────────────────────────────────────────────────────────────
-# Transaction pooling in front of Postgres so API and worker replicas can scale
-# without multiplying server connections. Budget (keep in step with Postgres
-# max_connections = 100): replicas × MAX_DB_CONNECTIONS = 2 × 40 = 80, leaving 20
-# for the migration Job, pgAdmin and superuser maintenance. Clients never hold a
-# server connection between transactions, so MAX_CLIENT_CONN can be large.
-# Safe here: the application uses no session state (advisory locks, LISTEN,
-# SET, temp tables); the only session-level use is the migrator's advisory lock,
-# and the migration Job connects to Postgres directly.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

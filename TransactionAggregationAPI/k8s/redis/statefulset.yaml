@@ -8,8 +8,6 @@ metadata:
     app.kubernetes.io/component: cache
     app.kubernetes.io/part-of: transaction-aggregation
 spec:
-  # Single replica: standard Redis is single-writer. For HA use Redis Sentinel
-  # (3 replicas + sentinel) or the Bitnami Redis chart.
   replicas: 1
   serviceName: redis
   selector:

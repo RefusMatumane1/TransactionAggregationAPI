@@ -12,12 +12,10 @@ spec:
   selector:
     app.kubernetes.io/name: seq
   ports:
-    # The API connects to this port for log ingestion (http://seq:80)
     - name: ui
       port: 80
       targetPort: 80
       protocol: TCP
-    # Legacy / Serilog.Sinks.Seq default ingestion port
     - name: ingestion
       port: 5341
       targetPort: 5341

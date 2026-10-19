@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Modules.Reporting.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using System.Net;
 using System.Net.Http.Json;
@@ -22,7 +23,7 @@ namespace TransactionAggregation.Tests.Integration
                 usd,
                 TestTransactions.Create(-4m, "Dinner", account: account, currency: "EUR", date: DateTime.UtcNow.AddMinutes(-3)));
             await context.SaveChangesAsync();
-            await InMemoryDailyTotals.BuildAsync(context);
+            await InMemoryDailyTotals.BuildAsync(context, scope.ServiceProvider.GetRequiredService<ReportingDbContext>());
             return (account, usd.Id.Value);
         }
 

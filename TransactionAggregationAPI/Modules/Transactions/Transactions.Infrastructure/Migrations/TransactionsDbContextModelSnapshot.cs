@@ -23,61 +23,6 @@ namespace Modules.Transactions.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Modules.Transactions.Application.Common.Aggregation.AggregationCheckpoint", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("AsOf")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("Watermark")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AggregationCheckpoints", "transactions");
-                });
-
-            modelBuilder.Entity("Modules.Transactions.Application.Common.Aggregation.DailyTotal", b =>
-                {
-                    b.Property<string>("SourceName")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<string>("ExternalAccountId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateOnly>("Day")
-                        .HasColumnType("date");
-
-                    b.Property<int>("Category")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Currency")
-                        .HasMaxLength(3)
-                        .HasColumnType("character varying(3)");
-
-                    b.Property<int>("ExpenseCount")
-                        .HasColumnType("integer");
-
-                    b.Property<decimal>("Expenses")
-                        .HasPrecision(28, 4)
-                        .HasColumnType("numeric(28,4)");
-
-                    b.Property<decimal>("Income")
-                        .HasPrecision(28, 4)
-                        .HasColumnType("numeric(28,4)");
-
-                    b.Property<int>("IncomeCount")
-                        .HasColumnType("integer");
-
-                    b.HasKey("SourceName", "ExternalAccountId", "Day", "Category", "Currency");
-
-                    b.ToTable("DailyTotals", "transactions");
-                });
-
             modelBuilder.Entity("Modules.Transactions.Domain.Entities.Transaction", b =>
                 {
                     b.Property<Guid>("Id")

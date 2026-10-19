@@ -9,7 +9,8 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using SharedKernel.Common.Models;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.BackgroundServices;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices

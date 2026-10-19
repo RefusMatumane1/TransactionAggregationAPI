@@ -1,5 +1,3 @@
-# Visual Studio container debugging: mounts the developer's user secrets and dev HTTPS
-# certificate. Environment and ports come from docker-compose.yml.
 services:
   api:
     volumes:

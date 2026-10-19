@@ -1,11 +1,11 @@
 using BuildingBlocks.Application.Abstractions;
 using BuildingBlocks.Application.Pagination;
 using Microsoft.EntityFrameworkCore;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Pagination;
+using Modules.Transactions.Application.Common.Queries;
 using Modules.Transactions.Domain.Entities;
 using SharedKernel.Common.Models;
 

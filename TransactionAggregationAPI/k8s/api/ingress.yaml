@@ -24,7 +24,6 @@ spec:
                   name: http
 
 ---
-# Seq UI — dev/staging only
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -36,8 +35,6 @@ metadata:
     app.kubernetes.io/part-of: transaction-aggregation
   annotations:
     traefik.ingress.kubernetes.io/router.entrypoints: web
-    # Seq runs with SEQ_FIRSTRUN_NOAUTHENTICATION and has no auth of its own — require basic
-    # auth at the ingress, same as Grafana/Prometheus — see k8s/monitoring/basic-auth-*.yaml.
     traefik.ingress.kubernetes.io/router.middlewares: transaction-aggregation-monitoring-basic-auth@kubernetescrd
 spec:
   ingressClassName: traefik

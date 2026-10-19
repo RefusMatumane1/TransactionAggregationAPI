@@ -2,7 +2,7 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using Npgsql;
 using Xunit;
 
@@ -16,7 +16,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [Fact]
         public async Task LegacyStatusesBecomeExpired_WithoutChangingAnyBalance_AndCanNoLongerBeWritten()
         {
-            var database = await fixture.CreateIsolatedDatabaseAsync();
+            var database = await fixture.CreateIsolatedDatabaseAsync(withReporting: false);
             using var context = fixture.CreateContext(connectionString: database);
             var migrations = context.Database.GetMigrations().ToList();
             var retire = migrations.Single(m => m.EndsWith(Migration));

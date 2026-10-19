@@ -1,6 +1,3 @@
-# Alert rules for docker-compose and Aspire. k8s carries the same groups inline in
-# k8s/monitoring/prometheus/configmap.yaml (rules.yml key) — keep the two in step.
-# No Alertmanager runs locally: firing alerts show at http://localhost:9090/alerts.
 groups:
   - name: transaction-api.rules
     rules:
@@ -43,8 +40,6 @@ groups:
           summary: "transaction-api working set approaching its 512Mi container limit"
           description: "k8s/api/deployment.yaml sets a 512Mi memory limit; sustained usage above ~450Mi risks an OOMKill."
 
-  # Background processing runs in the worker (job="transaction-worker"), so every
-  # messaging signal is scraped from there, not from the API.
   - name: message-dispatch.rules
     rules:
       - alert: TransactionWorkerDown
@@ -124,12 +119,9 @@ groups:
           summary: "The bank-transactions Kafka consumer loop died and restarted its host"
           description: "Repeated crashes mean ingestion over Kafka is not progressing. Check worker logs for the LogCritical entry."
 
-  # The worker's scheduled and polling jobs. A job can fail on every run while its process stays
-  # up (liveness green), so failures and freshness are alerted on directly.
   - name: background-jobs.rules
     rules:
       - alert: TransactionAggregatesStale
-        # max(): only the replica holding the refresh lock sets the timestamp; the others report 0.
         expr: time() - max(transaction_aggregates_last_refresh_timestamp_seconds{job="transaction-worker"}) > 2 * 3600
         for: 10m
         labels:

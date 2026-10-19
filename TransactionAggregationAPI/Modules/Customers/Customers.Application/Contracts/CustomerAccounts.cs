@@ -1,3 +1,5 @@
+using BuildingBlocks.Application.Abstractions.Authentication;
+using BuildingBlocks.Application.Querying;
 using Microsoft.EntityFrameworkCore;
 using Modules.Customers.Application.Persistence;
 using Modules.Customers.Contracts;
@@ -17,6 +19,23 @@ namespace Modules.Customers.Application.Contracts
                 .FirstOrDefaultAsync(cancellationToken);
 
             return customer?.Accounts;
+        }
+
+        public async Task<IReadOnlyList<AccountKey>?> FindVisibleAsync(
+            Guid customerId, InstitutionAccess access, CancellationToken cancellationToken = default)
+        {
+            var linked = await FindAsync(customerId, cancellationToken);
+            if (linked is null)
+                return null;
+
+            var visible = linked
+                .Where(a => access.AllInstitutions || access.Institutions.Contains(a.Institution, StringComparer.OrdinalIgnoreCase))
+                .Select(a => new AccountKey(a.Institution, a.ExternalAccountId))
+                .OrderBy(a => a.Institution, StringComparer.Ordinal)
+                .ThenBy(a => a.ExternalAccountId, StringComparer.Ordinal)
+                .ToList();
+
+            return visible.Count == 0 && !access.AllInstitutions ? null : visible;
         }
     }
 }

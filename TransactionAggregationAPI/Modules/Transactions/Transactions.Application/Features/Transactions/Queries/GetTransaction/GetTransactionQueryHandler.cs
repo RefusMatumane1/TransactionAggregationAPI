@@ -1,10 +1,11 @@
 using BuildingBlocks.Application.Abstractions;
+using BuildingBlocks.Application.Querying;
 using Microsoft.EntityFrameworkCore;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Errors;
 using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Application.Common.Queries;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using SharedKernel.Common.Models;
 
@@ -22,7 +23,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
             var transactionId = TransactionId.CreateFrom(request.TransactionId);
 
             var transaction = await context.Transactions
-                .Ledger(new TransactionFilter(request.Access))
+                .Ledger(new AccountFilter(request.Access))
                 .FirstOrDefaultAsync(t => t.Id == transactionId, cancellationToken);
 
             return transaction is null

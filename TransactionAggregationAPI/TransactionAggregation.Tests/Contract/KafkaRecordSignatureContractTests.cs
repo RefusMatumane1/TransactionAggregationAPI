@@ -2,7 +2,7 @@ using FluentAssertions;
 using Modules.WebhookSources.Domain;
 using System.Security.Cryptography;
 using TransactionAggregation.MockAggregator.Feed;
-using TransactionAggregation.Worker.Kafka;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Contract

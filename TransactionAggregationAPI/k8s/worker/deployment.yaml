@@ -1,15 +1,3 @@
-# ── Background worker ──────────────────────────────────────────────────────
-# Kafka consumer + inbox/outbox dispatchers + message archiving (TransactionAggregation.Worker).
-# Scales independently of the API: every dispatcher claims rows with
-# FOR UPDATE SKIP LOCKED, so replicas drain the queues in parallel. Kafka
-# parallelism is capped by Kafka__TopicPartitions — replicas beyond that sit idle
-# on the consumer side but still help drain the inbox/outbox.
-#
-# Replica count is owned by the autoscaler: worker/scaledobject.yaml (KEDA, scales on the
-# inbox/outbox backlog) or worker/hpa.yaml (CPU fallback when KEDA is not installed).
-#
-# No Service: nothing calls the worker. Prometheus scrapes the pods directly via
-# the annotations below.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -49,13 +37,11 @@ spec:
 
     spec:
       securityContext:
-        runAsUser: 1654 # Matches APP_UID in the Dockerfile
+        runAsUser: 1654
         runAsGroup: 1654
         fsGroup: 1654
         runAsNonRoot: true
 
-      # Long enough for an in-flight inbox/outbox batch to finish and for the Kafka
-      # consumer to commit its offsets and leave the group cleanly.
       terminationGracePeriodSeconds: 60
 
       topologySpreadConstraints:
@@ -66,13 +52,9 @@ spec:
             matchLabels:
               app.kubernetes.io/name: transaction-worker
 
-      # Migrations are applied by the db-migrate Job (k8s/api/migration-job.yaml)
-      # before rollout; the worker never migrates.
-
       containers:
         - name: transaction-worker
-          # Build with: docker build -t <registry>/transactionaggregationworker:1.0.0 -f TransactionAggregation.Worker/Dockerfile .
-          image: transactionaggregationworker:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
+          image: transactionaggregationworker:set-by-deploy-script
           imagePullPolicy: IfNotPresent
 
           securityContext:
@@ -86,14 +68,10 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
-            # /metrics (Metrics__Port in the ConfigMap); scraped from the pod IP, never exposed.
             - name: metrics
               containerPort: 9464
               protocol: TCP
 
-          # The shared settings, then the worker's own (Kafka__*, Outbox__*, Inbox__*,
-          # MessageArchive__*, NotificationOptions__*). The HTTP-only keys in the
-          # shared ConfigMap are ignored here.
           envFrom:
             - configMapRef:
                 name: transaction-api-config
@@ -107,9 +85,6 @@ spec:
                   name: transaction-api-secrets
                   key: app-db-password
 
-            # Least privilege: tagg_app has DML on the module schemas and nothing else — it
-            # can't alter tables, drop the audit triggers or read outside its grants
-            # (k8s/postgres/init-roles.yaml). Only the db-migrate Job connects as tagg_migrator.
             - name: ConnectionStrings__transactiondb
               value: "Host=pgbouncer;Port=6432;Database=transactiondb;Username=tagg_app;Password=$(APP_DB_PASSWORD);Maximum Pool Size=20;No Reset On Close=true"
 
@@ -125,8 +100,6 @@ spec:
                   name: transaction-api-config
                   key: SEQ_URL
 
-            # Kafka bootstrap servers (ConnectionStrings:kafka). The consumer only
-            # starts when this is set.
             - name: ConnectionStrings__kafka
               valueFrom:
                 configMapKeyRef:
@@ -145,7 +118,6 @@ spec:
               cpu: "1000m"
               memory: "512Mi"
 
-          # /liveness only checks the "self" tag — the process is up and responsive.
           livenessProbe:
             httpGet:
               path: /liveness
@@ -155,9 +127,6 @@ spec:
             timeoutSeconds: 5
             failureThreshold: 3
 
-          # The worker receives no traffic, so readiness never routes anything: it shows a
-          # worker that cannot reach PostgreSQL as NotReady (instead of Running and blind),
-          # and holds a rollout whose new pods could not do their job.
           readinessProbe:
             httpGet:
               path: /readiness

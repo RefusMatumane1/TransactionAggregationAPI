@@ -1,8 +1,8 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
-using Modules.Transactions.Application.Common.Aggregation;
+using BuildingBlocks.Application.Querying;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 
 namespace TransactionAggregation.Tests.Helpers
 {
@@ -31,11 +31,11 @@ namespace TransactionAggregation.Tests.Helpers
 
     public static class TestFilters
     {
-        public static TransactionFilter All { get; } = new(InstitutionAccess.All);
+        public static AccountFilter All { get; } = new(InstitutionAccess.All);
 
-        public static TransactionFilter For(string? institution = null, string? account = null) =>
+        public static AccountFilter For(string? institution = null, string? account = null) =>
             new(InstitutionAccess.All, institution, account);
 
-        public static TransactionFilter Only(params string[] institutions) => new(InstitutionAccess.Only(institutions));
+        public static AccountFilter Only(params string[] institutions) => new(InstitutionAccess.Only(institutions));
     }
 }

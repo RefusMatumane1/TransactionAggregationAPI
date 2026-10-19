@@ -47,6 +47,12 @@
     <ProjectReference Include="..\Modules\Notifications\Notifications.Infrastructure\Notifications.Infrastructure.csproj" />
     <ProjectReference Include="..\Modules\Notifications\Notifications.Contracts\Notifications.Contracts.csproj" />
     <ProjectReference Include="..\Modules\Notifications\Notifications.Presentation\Notifications.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Currency\Currency.Presentation\Currency.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Reporting\Reporting.Presentation\Reporting.Presentation.csproj" />
+    <ProjectReference Include="..\Modules\Reporting\Reporting.Infrastructure\Reporting.Infrastructure.csproj" />
+    <ProjectReference Include="..\Modules\Reporting\Reporting.Application\Reporting.Application.csproj" />
+    <ProjectReference Include="..\Modules\Currency\Currency.Application\Currency.Application.csproj" />
+    <ProjectReference Include="..\Modules\Currency\Currency.Contracts\Currency.Contracts.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Domain\Customers.Domain.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Application\Customers.Application.csproj" />
     <ProjectReference Include="..\Modules\Customers\Customers.Infrastructure\Customers.Infrastructure.csproj" />

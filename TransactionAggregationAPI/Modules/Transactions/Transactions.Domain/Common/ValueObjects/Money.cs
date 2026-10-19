@@ -8,7 +8,7 @@ namespace Modules.Transactions.Domain.Common.ValueObjects
         public decimal Amount { get; }
         public string Currency { get; }
 
-        public const int MaxScale = 4;
+        public const int MaxScale = MoneyScale.Max;
         public const decimal MaxAbsoluteAmount = 999_999_999_999_999.9999m;
 
         private Money(decimal amount, string currency)

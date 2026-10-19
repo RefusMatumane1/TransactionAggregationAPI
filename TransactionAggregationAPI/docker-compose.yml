@@ -1,5 +1,3 @@
-# Credentials are read from .env next to this file (git-ignored; copy .env.template). A missing
-# value stops `docker compose` with a message naming it.
 services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
@@ -8,30 +6,17 @@ services:
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env (copy .env.template)}
-      # Passwords of the realm's dev users, substituted into the realm import.
       TRANSACTION_APP_ADMIN_PASSWORD: ${TRANSACTION_APP_ADMIN_PASSWORD:?Set TRANSACTION_APP_ADMIN_PASSWORD in .env (copy .env.template)}
       TRANSACTION_APP_STAFF_PASSWORD: ${TRANSACTION_APP_STAFF_PASSWORD:?Set TRANSACTION_APP_STAFF_PASSWORD in .env (copy .env.template)}
-      # Keeps the `iss` claim on every issued token fixed to this address regardless of which
-      # hostname/port a request physically arrived on, so it matches Keycloak__PublicIssuer
-      # below (the value the API's JwtBearer issuer check validates against). See TransactionAggregationAPI/Authentication/AuthenticationSetup.cs.
-      # Keycloak 25+ (hostname v2) requires a full URL here — "localhost:8081" made it refuse
-      # to start ("neither a plain hostname nor a valid URL"), which the old service_started
-      # dependency hid. BACKCHANNEL_DYNAMIC keeps the API's in-network metadata/JWKS calls on
-      # http://keycloak:8080 while the browser-facing issuer stays http://localhost:8081.
       KC_HOSTNAME: http://localhost:8081
       KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
       KC_HTTP_ENABLED: "true"
-      # Exposes /health/ready on the management port (9000) for the healthcheck below.
       KC_HEALTH_ENABLED: "true"
     ports:
       - "8081:8080"
     volumes:
-      # Staff and admin users (and their roles) survive a recreate. The realm import is
-      # skipped once the realm exists.
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
-    # The image has no curl/wget; bash's /dev/tcp is enough for a readiness probe. "Ready"
-    # means the realm import has finished, which is what the API needs to validate tokens.
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -q '\"UP\"' <&3"]
       interval: 10s
@@ -49,22 +34,15 @@ services:
     container_name: transactionaggregation-api-1
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      # 8080 = traffic, 9464 = /metrics only (scraped by Prometheus, never published to the host).
       - ASPNETCORE_HTTP_PORTS=8080;9464
       - Metrics__Port=9464
       - ConnectionStrings__transactiondb=Host=postgres;Port=5432;Database=transactiondb;Username=postgres;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.template)}
       - ConnectionStrings__redis=redis:6379
       - ConnectionStrings__seq=http://seq:80
-      # Reached from inside the compose network — reliable, no dependency on host DNS.
       - Keycloak__Authority=http://keycloak:8080
-      # Reached by the browser — must match KC_HOSTNAME above, since it becomes the `iss` claim
-      # on every token. Deliberately a different address than Keycloak__Authority — see
-      # TransactionAggregationAPI/Authentication/AuthenticationSetup.cs for why the API doesn't need these to be the same URL.
       - Keycloak__PublicIssuer=http://localhost:8081/realms/transaction-aggregation
       - Keycloak__Realm=transaction-aggregation
       - Keycloak__Audience=transaction-ui
-      # Development only: base of the mock banks' keys. FNB, StandardBank, Absa and Capitec are each
-      # registered as their own source at startup, keyed <base>-<code in lower case>.
       - MockAggregator__WebhookApiKey=${MOCK_AGGREGATOR_API_KEY:?Set MOCK_AGGREGATOR_API_KEY in .env (copy .env.template)}
     ports:
       - "5001:8080"
@@ -87,9 +65,6 @@ services:
       - transaction-network
     restart: unless-stopped
 
-  # Background processing: Kafka consumer + inbox/outbox/pending-expiry dispatchers.
-  # Scale independently of the API, e.g. `docker compose up --scale worker=3`
-  # (no container_name / host port for that reason).
   worker:
     build:
       context: .
@@ -102,7 +77,6 @@ services:
       - ConnectionStrings__redis=redis:6379
       - ConnectionStrings__seq=http://seq:80
       - NotificationOptions__DuplicateAlertWebhookUrl=${DUPLICATE_ALERT_WEBHOOK_URL:-}
-      # The broker's in-network listener (see the kafka service below), not the host-mapped 9092.
       - ConnectionStrings__kafka=kafka:9093
     depends_on:
       postgres:
@@ -113,7 +87,6 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
-      # The API applies migrations in Development before it reports healthy.
       api:
         condition: service_healthy
     healthcheck:
@@ -126,9 +99,6 @@ services:
       - transaction-network
     restart: unless-stopped
 
-  # Development stand-in for the external account aggregator: mock FNB/Absa/Capitec/Standard
-  # Bank feeds for a fixed set of accounts, pushed through the API's webhook. Set Feed__Channel=Kafka to push to the topic instead;
-  # Kafka records are signed: register GET :5090/kafka/signing-key first.
   mock-aggregator:
     build:
       context: .
@@ -138,7 +108,6 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_HTTP_PORTS=8080
       - Feed__ApiBaseUrl=http://api:8080
-      # Same base key as the API's; the mock sends each bank's feed with that bank's own key.
       - Feed__ApiKey=${MOCK_AGGREGATOR_API_KEY:?Set MOCK_AGGREGATOR_API_KEY in .env (copy .env.template)}
       - ConnectionStrings__kafka=kafka:9093
       - ConnectionStrings__seq=http://seq:80
@@ -154,6 +123,8 @@ services:
       start_period: 20s
     depends_on:
       api:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     networks:
       - transaction-network

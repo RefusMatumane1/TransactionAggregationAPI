@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Options;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Common.Options;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 
 namespace Modules.Transactions.Application.Services
 {

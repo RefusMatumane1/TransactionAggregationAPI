@@ -1,11 +1,11 @@
 using FluentAssertions;
-using Modules.Transactions.Application.Common.DTOs;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
+using Modules.Reporting.Application.DTOs;
+using Modules.Reporting.Application.Features.Aggregates;
+using Modules.Reporting.Application.Features.GetTransactionSummary;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransaction;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
 using SharedKernel.Common.Enums;
 using TransactionAggregation.Tests.Helpers;
@@ -39,7 +39,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             new(Day.AddDays(-1), Day.AddDays(1), TestFilters.All, currency, convertTo);
 
         private static async Task<TransactionSummaryDto> SummaryAsync(TransactionsDbContext context, GetTransactionSummaryQuery query) =>
-            (await new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog).Handle(query, CancellationToken.None)).Value;
+            (await new GetTransactionSummaryQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog).Handle(query, CancellationToken.None)).Value;
 
         [Fact]
         public async Task Summary_ConvertsEveryConfiguredCurrencyIntoTheTarget()
@@ -102,7 +102,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         {
             var context = await SeedAsync();
             var usdBase = TestCurrencies.Create("USD", ("ZAR", 0.05m), ("EUR", 1.1m));
-            var handler = new GetTransactionSummaryQueryHandler(context, usdBase);
+            var handler = new GetTransactionSummaryQueryHandler(InMemoryDailyTotals.Of(context), usdBase);
 
             var summary = (await handler.Handle(Summary(), CancellationToken.None)).Value;
             var zar = (await handler.Handle(Summary("ZAR"), CancellationToken.None)).Value;
@@ -131,7 +131,7 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
         {
             var context = await SeedAsync();
 
-            var result = await new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog)
+            var result = await new GetTransactionSummaryQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(Summary(convertTo: target), CancellationToken.None);
 
             result.IsFailure.Should().BeTrue();
@@ -147,13 +147,13 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             const decimal expectedNet = 1000m - 1850m;
 
             var summary = await SummaryAsync(context, Summary(convertTo: "ZAR"));
-            var cashFlow = (await new GetCashFlowQueryHandler(context, catalog)
+            var cashFlow = (await new GetCashFlowQueryHandler(InMemoryDailyTotals.Of(context), catalog)
                 .Handle(new GetCashFlowQuery(ReportDay, ReportDay, TestFilters.All, TimeGranularity.Day, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, catalog)
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(InMemoryDailyTotals.Of(context), catalog)
                 .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, TestFilters.All, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var comparison = (await new GetPeriodComparisonQueryHandler(context, catalog)
+            var comparison = (await new GetPeriodComparisonQueryHandler(InMemoryDailyTotals.Of(context), catalog)
                 .Handle(new GetPeriodComparisonQuery(ReportDay, ReportDay, TestFilters.All, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var categories = (await new GetCategoryBreakdownQueryHandler(context, catalog)
+            var categories = (await new GetCategoryBreakdownQueryHandler(InMemoryDailyTotals.Of(context), catalog)
                 .Handle(new GetCategoryBreakdownQuery(ReportDay, ReportDay, TestFilters.All, CashFlowDirection.Expense, ConvertTo: "ZAR"), CancellationToken.None)).Value;
 
             summary.NetBalance.Should().Be(expectedNet);

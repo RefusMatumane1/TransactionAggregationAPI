@@ -1,11 +1,3 @@
-# ── EF Core Migration Job ──────────────────────────────────────────────────
-# Applies every module's migrations as the schema owner (tagg_migrator) with the image the API
-# is about to run. Pods never migrate outside Development. deploy-k8s.sh runs it before the
-# rollout and stops if it fails; by hand:
-#   1. kubectl apply -f k8s/api/migration-job.yaml -n transaction-aggregation
-#   2. kubectl wait --for=condition=complete job/db-migrate -n transaction-aggregation --timeout=300s
-#   3. kubectl apply -f k8s/api/deployment.yaml -n transaction-aggregation
-# ──────────────────────────────────────────────────────────────────────────
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -17,7 +9,7 @@ metadata:
     app.kubernetes.io/part-of: transaction-aggregation
 spec:
   backoffLimit: 3
-  activeDeadlineSeconds: 300 # Fail the job after 5 minutes
+  activeDeadlineSeconds: 300
   template:
     metadata:
       labels:
@@ -33,11 +25,9 @@ spec:
 
       containers:
         - name: migrate
-          image: transactionaggregationapi:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
+          image: transactionaggregationapi:set-by-deploy-script
           imagePullPolicy: IfNotPresent
 
-          # --migrate-only is handled in Program.cs: the app applies all pending
-          # EF Core migrations and exits with code 0 without starting the web server.
           command: ["dotnet", "TransactionAggregationAPI.dll", "--migrate-only"]
 
           securityContext:
@@ -51,20 +41,11 @@ spec:
             - name: tmp
               mountPath: /tmp
 
-          # Startup (AuthenticationSetup.cs) validates Keycloak config and registers the Seq/Redis
-          # clients during startup BEFORE the --migrate-only check runs (they're
-          # builder-time calls, not app-time) — without these, the process
-          # throws before ever reaching the migration. Verified: running this
-          # container with only the env vars this Job used to declare crashes
-          # with "Unable to add a Seq health check because the 'ServerUrl'
-          # setting is missing" before a single migration is attempted.
           envFrom:
             - configMapRef:
                 name: transaction-api-config
 
           env:
-            # The only workload that connects as the schema owner: migrations need DDL, the
-            # running application must not have it (k8s/postgres/init-roles.yaml).
             - name: MIGRATOR_DB_PASSWORD
               valueFrom:
                 secretKeyRef:

@@ -10,11 +10,11 @@ using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using NSubstitute;
 using SharedKernel.Common.Models;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.BackgroundServices;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Audit

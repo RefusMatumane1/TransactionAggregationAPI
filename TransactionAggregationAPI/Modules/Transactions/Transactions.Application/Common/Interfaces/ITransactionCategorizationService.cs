@@ -1,4 +1,4 @@
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 
 namespace Modules.Transactions.Application.Common.Interfaces
 {

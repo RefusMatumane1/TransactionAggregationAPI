@@ -26,21 +26,14 @@ data:
   Outbox__MaxConcurrency: "16"
   Outbox__MaxAttempts: "5"
 
-  # ── Inbound webhook inbox dispatcher ────────────────────────────────────
-  # Polls InboxMessages for raw webhook payloads queued by ReceiveBankTransactionsCommandHandler
-  # — see InboxDispatcherBackgroundService. Same multi-replica-safe claim as the outbox.
   Inbox__PollIntervalSeconds: "5"
   Inbox__BatchSize: "50"
   Inbox__MaxAttempts: "5"
 
-  # ── Message archive ─────────────────────────────────────────────────────
-  # Processed inbox/outbox rows older than RetainDays move to messaging.*Archive tables.
-  # Nothing is deleted; duplicate-delivery detection also checks the archive.
   MessageArchive__RetainDays: "30"
   MessageArchive__BatchSize: "1000"
   MessageArchive__MaxBatchesPerRun: "50"
 
-  # Most transactions one Kafka record may carry (1-5000). Keep equal to the API's value.
   Ingestion__MaxTransactionsPerDelivery: "500"
 
   Aggregation__IntervalMinutes: "5"

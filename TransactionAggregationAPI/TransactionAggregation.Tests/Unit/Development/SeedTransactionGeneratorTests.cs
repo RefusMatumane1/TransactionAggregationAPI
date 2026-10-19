@@ -1,5 +1,5 @@
 using FluentAssertions;
-using TransactionAggregationAPI.Development;
+using Modules.Transactions.Infrastructure.Development;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Development

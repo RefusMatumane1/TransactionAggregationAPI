@@ -1,7 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Hosting;
 using System.Reflection;
-using TransactionAggregation.Worker.BackgroundServices;
+using TransactionAggregation.Worker.Messaging;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Architecture

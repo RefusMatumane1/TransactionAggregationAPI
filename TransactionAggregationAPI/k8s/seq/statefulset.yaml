@@ -20,10 +20,6 @@ spec:
         app.kubernetes.io/component: logging
         app.kubernetes.io/part-of: transaction-aggregation
     spec:
-      # Seq runs as root by default (datalust/seq); we cannot override the user
-      # without a custom entry point. Accept this for a local dev/staging cluster.
-      # For production, evaluate the Seq cloud offering or a production-grade log
-      # aggregation stack (Loki + Grafana).
       terminationGracePeriodSeconds: 30
 
       containers:

@@ -1,5 +1,5 @@
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using Modules.Transactions.Domain.Enums;
 using SharedKernel.Exceptions;
 
 namespace Modules.Transactions.Domain.Entities

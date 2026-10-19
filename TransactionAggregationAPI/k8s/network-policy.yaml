@@ -1,11 +1,3 @@
-# ── Network Policies ────────────────────────────────────────────────────────
-# Assumption: CNI plugin supports NetworkPolicy (Calico, Cilium, Flannel with
-# NetworkPolicy, etc.). Rancher k3s ships with Flannel by default, which does
-# NOT enforce NetworkPolicy. Install Calico or switch to Canal/Cilium if you
-# need enforcement.
-# ────────────────────────────────────────────────────────────────────────────
-
-# Allow PgBouncer → Postgres. The API and worker reach Postgres only through PgBouncer.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -23,7 +15,6 @@ spec:
       ports:
         - protocol: TCP
           port: 5432
-    # Also allow migration job
     - from:
         - podSelector:
             matchLabels:
@@ -33,7 +24,6 @@ spec:
           port: 5432
 
 ---
-# Allow API + worker → PgBouncer
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -56,7 +46,6 @@ spec:
           port: 5432
 
 ---
-# Allow the KEDA operator → Prometheus, to read the worker backlog it scales on
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -76,7 +65,6 @@ spec:
           port: 9090
 
 ---
-# Allow API + worker → Redis
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -99,7 +87,6 @@ spec:
           port: 6379
 
 ---
-# Allow API + worker → Seq (log ingestion)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -124,9 +111,6 @@ spec:
           port: 5341
 
 ---
-# Allow worker → Kafka (consumer + DLQ producer) and Kafka UI → Kafka (dev-tools)
-# Only the in-cluster listener; 9092 is for kubectl port-forward, which bypasses
-# NetworkPolicy anyway.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -149,9 +133,6 @@ spec:
           port: 9093
 
 ---
-# Allow UI nginx proxy → API
-# The browser never calls the API directly; the UI nginx pod proxies /api/ to
-# the API service. This policy permits that in-cluster hop.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -171,10 +152,6 @@ spec:
           port: 8080
 
 ---
-# Allow Ingress controller → API
-# ingressClassName is "traefik" in all manifests.
-# k3s default: Traefik runs in kube-system.
-# Custom Helm Traefik install: change the namespace label to "traefik".
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -194,7 +171,6 @@ spec:
           port: 8080
 
 ---
-# Allow pgAdmin → Postgres (dev-tools only)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -214,7 +190,6 @@ spec:
           port: 5432
 
 ---
-# Allow Ingress controller → Seq UI (Traefik runs in kube-system)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -234,7 +209,6 @@ spec:
           port: 80
 
 ---
-# Allow Prometheus → API (scraping /metrics on the private metrics port 9464 only)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -254,7 +228,6 @@ spec:
           port: 9464
 
 ---
-# Allow Prometheus → worker (scraping /metrics on the private metrics port 9464 only)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -274,7 +247,6 @@ spec:
           port: 9464
 
 ---
-# Allow Grafana → Prometheus (datasource queries on port 9090)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -294,7 +266,6 @@ spec:
           port: 9090
 
 ---
-# Allow Ingress controller → Grafana (Traefik runs in kube-system)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -314,7 +285,6 @@ spec:
           port: 3000
 
 ---
-# Allow Ingress controller → Prometheus
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -334,8 +304,6 @@ spec:
           port: 9090
 
 ---
-# Default deny-all egress from postgres and redis
-# (they should never initiate outbound connections)
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

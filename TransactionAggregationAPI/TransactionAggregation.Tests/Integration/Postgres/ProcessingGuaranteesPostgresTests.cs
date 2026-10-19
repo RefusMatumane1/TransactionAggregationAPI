@@ -15,7 +15,7 @@ using Npgsql;
 using NSubstitute;
 using SharedKernel.Common.Models;
 using System.Text.Json;
-using TransactionAggregation.Worker.BackgroundServices;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres

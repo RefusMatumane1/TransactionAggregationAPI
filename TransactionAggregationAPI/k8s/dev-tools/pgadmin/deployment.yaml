@@ -1,7 +1,3 @@
-# ── DEV / STAGING ONLY ────────────────────────────────────────────────────
-# pgAdmin is a database management GUI; it should NEVER be deployed to
-# production. Gate deployment with an overlay or a Helm values flag.
-# ──────────────────────────────────────────────────────────────────────────
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -13,12 +9,12 @@ metadata:
     app.kubernetes.io/part-of: transaction-aggregation
     environment: dev
 spec:
-  replicas: 1    # Single replica — stateful UI session, not worth HA
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: pgadmin
   strategy:
-    type: Recreate  # pgAdmin stores session state locally; use Recreate
+    type: Recreate
   template:
     metadata:
       labels:

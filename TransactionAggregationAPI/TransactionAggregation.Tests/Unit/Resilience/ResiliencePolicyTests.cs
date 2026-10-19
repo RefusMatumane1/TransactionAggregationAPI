@@ -4,7 +4,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using SharedKernel.Exceptions;
-using TransactionAggregation.Worker.Kafka;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Resilience

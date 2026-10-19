@@ -1,6 +1,6 @@
 using FluentAssertions;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
-using Modules.Transactions.Domain.Enums;
+using Modules.Reporting.Application.Features.GetTransactionSummary;
+using Modules.Transactions.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -31,7 +31,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             ]);
 
             using var context = _fixture.CreateContext();
-            var handler = new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog);
+            using var reporting = _fixture.CreateReportingContext();
+            var handler = new GetTransactionSummaryQueryHandler(reporting, TestCurrencies.Catalog);
 
             var result = await handler.Handle(
                 new GetTransactionSummaryQuery(new DateTime(2026, 1, 1), new DateTime(2026, 12, 31), TestFilters.For(TestInstitutions.FNB, account)), CancellationToken.None);

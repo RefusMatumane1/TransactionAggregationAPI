@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
-using TransactionAggregation.Worker.BackgroundServices;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Reporting;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices

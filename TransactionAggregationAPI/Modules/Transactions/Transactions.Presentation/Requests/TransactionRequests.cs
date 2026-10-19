@@ -1,9 +1,8 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Common.Currency;
+using BuildingBlocks.Application.Querying;
+using Modules.Currency.Contracts;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 
 namespace Modules.Transactions.Presentation.Requests
 {
@@ -25,7 +24,7 @@ namespace Modules.Transactions.Presentation.Requests
         string? ConvertTo = null)
     {
         internal GetTransactionsQuery ToQuery(InstitutionAccess access, ICurrencyCatalog catalog) =>
-            new(new TransactionFilter(access, Institution, ExternalAccountId))
+            new(new AccountFilter(access, Institution, ExternalAccountId))
             {
                 Cursor = Cursor,
                 PageSize = PageSize,
@@ -42,22 +41,5 @@ namespace Modules.Transactions.Presentation.Requests
                 ConvertTo = ConvertTo,
                 RatesVersion = ConvertTo is null ? null : catalog.Version
             };
-    }
-
-    public sealed record TransactionSummaryRequest(
-        DateTime? StartDate = null,
-        DateTime? EndDate = null,
-        string? Institution = null,
-        string? ExternalAccountId = null,
-        string? Currency = null,
-        string? ConvertTo = null)
-    {
-        internal GetTransactionSummaryQuery ToQuery(InstitutionAccess access, TimeProvider time, ICurrencyCatalog catalog)
-        {
-            var now = time.GetUtcNow().UtcDateTime;
-            return new(StartDate ?? now.AddMonths(-12), EndDate ?? now,
-                new TransactionFilter(access, Institution, ExternalAccountId), Currency ?? catalog.BaseCurrency,
-                ConvertTo, ConvertTo is null ? null : catalog.Version);
-        }
     }
 }

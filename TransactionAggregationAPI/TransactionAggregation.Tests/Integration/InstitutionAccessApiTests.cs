@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
+using Modules.Reporting.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using System.Net;
 using System.Net.Http.Json;
@@ -22,7 +23,7 @@ namespace TransactionAggregation.Tests.Integration
             context.Transactions.AddRange(fnb, capitec);
             await context.SaveChangesAsync();
 
-            await InMemoryDailyTotals.BuildAsync(context);
+            await InMemoryDailyTotals.BuildAsync(context, scope.ServiceProvider.GetRequiredService<ReportingDbContext>());
             return (fnb.Id.Value, capitec.Id.Value, account);
         }
 

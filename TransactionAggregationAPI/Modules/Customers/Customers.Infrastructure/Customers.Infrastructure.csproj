@@ -20,5 +20,6 @@
 		<ProjectReference Include="..\Customers.Domain\Customers.Domain.csproj" />
 		<ProjectReference Include="..\Customers.Contracts\Customers.Contracts.csproj" />
 		<ProjectReference Include="..\..\Audit\Audit.Contracts\Audit.Contracts.csproj" />
+		<ProjectReference Include="..\..\Transactions\Transactions.Contracts\Transactions.Contracts.csproj" />
 	</ItemGroup>
 </Project>

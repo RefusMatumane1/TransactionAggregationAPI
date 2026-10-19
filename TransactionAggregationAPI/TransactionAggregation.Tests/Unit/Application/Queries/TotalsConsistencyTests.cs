@@ -1,10 +1,10 @@
+using BuildingBlocks.Application.Querying;
 using FluentAssertions;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Common.DTOs;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
+using Modules.Reporting.Application.DTOs;
+using Modules.Reporting.Application.Features.Aggregates;
+using Modules.Reporting.Application.Features.GetTransactionSummary;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using Modules.Transactions.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
@@ -35,8 +35,8 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             return transactions;
         }
 
-        private static Task<TransactionSummaryDto> SummaryAsync(TransactionsDbContext context, TransactionFilter filter, string currency = "ZAR") =>
-            new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog)
+        private static Task<TransactionSummaryDto> SummaryAsync(TransactionsDbContext context, AccountFilter filter, string currency = "ZAR") =>
+            new GetTransactionSummaryQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(new GetTransactionSummaryQuery(Day.AddDays(-1), Day.AddDays(1), filter, currency), CancellationToken.None)
                 .ContinueWith(t => t.Result.Value);
 
@@ -64,9 +64,9 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             var context = await SeedAsync();
 
             var summary = await SummaryAsync(context, TestFilters.All);
-            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
+            var cashFlow = (await new GetCashFlowQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(ReportDay, ReportDay, TestFilters.All, TimeGranularity.Day), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, TestCurrencies.Catalog)
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, TestFilters.All), CancellationToken.None)).Value;
 
             summary.NetBalance.Should().Be(500m);
@@ -83,9 +83,9 @@ namespace TransactionAggregation.Tests.Unit.Application.Queries
             var absaOnly = TestFilters.Only(TestInstitutions.Absa);
 
             var summary = await SummaryAsync(context, absaOnly);
-            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
+            var cashFlow = (await new GetCashFlowQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(ReportDay, ReportDay, absaOnly, TimeGranularity.Day), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, TestCurrencies.Catalog)
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(InMemoryDailyTotals.Of(context), TestCurrencies.Catalog)
                 .Handle(new GetInstitutionBreakdownQuery(ReportDay, ReportDay, absaOnly), CancellationToken.None)).Value;
 
             summary.NetBalance.Should().Be(-200m);

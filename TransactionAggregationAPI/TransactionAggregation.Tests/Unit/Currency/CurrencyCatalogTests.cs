@@ -1,7 +1,8 @@
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Application;
+using Modules.Currency.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 

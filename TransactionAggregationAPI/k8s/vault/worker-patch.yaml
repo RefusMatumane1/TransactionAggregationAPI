@@ -1,4 +1,3 @@
-# Strategic-merge patch for deployment/transaction-worker; see api-patch.yaml.
 spec:
   template:
     metadata:
@@ -17,8 +16,6 @@ spec:
           env:
             - name: Secrets__FilePath
               value: /vault/secrets/secrets.json
-            # Environment variables outrank secrets.json, so the Secret-based connection string
-            # is removed: the one in Vault is the only one the host sees.
             - name: ConnectionStrings__transactiondb
               $patch: delete
             - name: APP_DB_PASSWORD

@@ -29,12 +29,12 @@ namespace TransactionAggregation.Tests.Integration.Postgres
                 }
             },
             {
-                "transactions", "DailyTotals", new()
+                "reporting", "DailyTotals", new()
                 {
                     ["PK_DailyTotals"] =
-                        """CREATE UNIQUE INDEX "PK_DailyTotals" ON transactions."DailyTotals" USING btree ("SourceName", "ExternalAccountId", "Day", "Category", "Currency")""",
+                        """CREATE UNIQUE INDEX "PK_DailyTotals" ON reporting."DailyTotals" USING btree ("SourceName", "ExternalAccountId", "Day", "Category", "Currency")""",
                     ["IX_DailyTotals_Currency_Day"] =
-                        """CREATE INDEX "IX_DailyTotals_Currency_Day" ON transactions."DailyTotals" USING btree ("Currency", "Day")"""
+                        """CREATE INDEX "IX_DailyTotals_Currency_Day" ON reporting."DailyTotals" USING btree ("Currency", "Day")"""
                 }
             },
             {

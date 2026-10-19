@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<RootNamespace>Modules.Currency.Contracts</RootNamespace>
+	</PropertyGroup>
+
+	<!-- Published cross-module contracts (ICurrencyCatalog). Depends on nothing. -->
+
+</Project>

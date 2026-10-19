@@ -16,8 +16,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Modules.Audit;
+using Modules.Currency;
 using Modules.Notifications;
-using Modules.Notifications.Application.Common;
+using Modules.Reporting;
 using Modules.Transactions;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources;
@@ -27,7 +28,6 @@ using StackExchange.Redis;
 using TransactionAggregation.Hosting.Caching;
 using TransactionAggregation.Hosting.Health;
 using TransactionAggregation.Hosting.Logging;
-using TransactionAggregation.Hosting.Security;
 
 namespace TransactionAggregation.Hosting
 {
@@ -78,12 +78,16 @@ namespace TransactionAggregation.Hosting
                 builder.Configuration.GetSection(CachingOptions.SectionName).Get<CachingOptions>());
             builder.Services.AddSingleton<IKeysetPaginator, RowValueKeysetPaginator>();
             builder.Services.TryAddSingleton(TimeProvider.System);
-            builder.Services.AddMessagingBuildingBlock();
-            builder.Services.AddAuditModule();
-            builder.Services.AddWebhookSourcesModule();
-            builder.Services.AddNotificationsModule(builder.Configuration);
-            builder.Services.AddSingleton<IAlertUrlProtector, DataProtectionAlertUrlProtector>();
+
+            // Registration order is migration order: Transactions first, because Reporting's migration takes over
+            // tables the Transactions migrations created.
+            builder.Services.AddCurrencyModule(builder.Configuration);
             builder.Services.AddTransactionsModule(builder.Configuration, builder.Environment.IsDevelopment());
+            builder.Services.AddReportingModule();
+            builder.Services.AddMessagingBuildingBlock();
+            builder.Services.AddWebhookSourcesModule(builder.Environment.IsDevelopment());
+            builder.Services.AddAuditModule();
+            builder.Services.AddNotificationsModule(builder.Configuration);
 
             builder.EnrichNpgsqlDbContext<TransactionsDbContext>(settings => settings.DisableHealthChecks = true);
             builder.Services.AddHealthChecks()

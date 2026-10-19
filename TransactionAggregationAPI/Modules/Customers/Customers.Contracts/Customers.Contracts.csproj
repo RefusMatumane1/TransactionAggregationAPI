@@ -3,6 +3,11 @@
 		<RootNamespace>Modules.Customers.Contracts</RootNamespace>
 	</PropertyGroup>
 
-	<!-- Published cross-module contracts (ICustomerAccounts). -->
+	<!-- Published cross-module contracts (ICustomerAccounts, ICustomerViewAudit). -->
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\BuildingBlocks\SharedKernel\SharedKernel.csproj" />
+		<ProjectReference Include="..\..\..\BuildingBlocks\BuildingBlocks.Application\BuildingBlocks.Application.csproj" />
+	</ItemGroup>
 
 </Project>

@@ -80,7 +80,6 @@ TransactionAggregationAPI/              ← solution root
 ├── TransactionAggregationAPI/          ← Web API (entry point, also hosts Blazor in dev)
 │   ├── Middleware/                     ← Exception handling, request context logging
 │   ├── RateLimiting/                   ← Redis-backed custom RateLimiter
-│   ├── Development/SeedData.cs         ← 21 demo accounts at four banks, ~2 700 ledger entries
 │   ├── Program.cs                      ← App bootstrap
 │   ├── appsettings.json                ← Non-secret settings (tracked)
 │   ├── secrets.template.json           ← Shape of the secrets (tracked)
@@ -97,7 +96,10 @@ TransactionAggregationAPI/              ← solution root
 ├── TransactionAggregation.MockAggregator/ ← Development only: stand-in account aggregator — mock FNB/Absa/Capitec/Standard Bank
 │                                         feeds for a fixed set of accounts, pushed through the real webhook or Kafka
 ├── TransactionAggregation.Worker/      ← All background processing, and only here: Kafka consumer, inbox/outbox dispatchers,
-│                                         integration-event publishing, message archiving, duplicate alerts (the API runs none of it)
+│                                         integration-event publishing, message archiving, duplicate alerts (the API runs none of it).
+│                                         Laid out by module — Messaging/ (outbox, archive, Kafka publisher), Transactions/ (inbox, signed
+│                                         Kafka feed), Reporting/ (daily totals), Notifications/ (duplicate alerts) — each with its own
+│                                         AddXxxProcessing registration, composed by BackgroundProcessing
 │   └── Dockerfile                      ← Scales independently of the API (serves only /liveness, /readiness, /health; /metrics on :9464)
 │
 ├── TransactionAggregation.Hosting/     ← Composition shared by the API and the worker (modules, Postgres, Redis cache,
@@ -107,16 +109,14 @@ TransactionAggregationAPI/              ← solution root
 │   ├── AppHost.cs                      ← Wires up API + worker + Postgres + Redis + Seq + Kafka
 │   └── secrets.json                    ← Local parameter values (git-ignored; copy secrets.template.json)
 │
-├── Modules/Transactions/Transactions.Application/    ← Transaction use cases (CQRS / MediatR), categorization
-├── Modules/Transactions/Transactions.Domain/         ← Immutable Transaction (ledger entry), Money, TransactionSource
-├── Modules/Transactions/Transactions.Contracts/      ← TransactionRecorded v1 integration event (dependency-free)
-├── Modules/Transactions/Transactions.Infrastructure/ ← TransactionsDbContext (`transactions` schema), migrations
 ├── TransactionAggregationAPI.ServiceDefaults/ ← Health checks, OpenTelemetry, prometheus-net
 │
 ├── BuildingBlocks/                     ← Shared technical infrastructure; depends on no module
 │   ├── SharedKernel/                   ← Domain primitives only (BaseEntity, domain events, ValueObject, Result/Error) — no persistence/validation/logging framework
-│   ├── BuildingBlocks.Application/     ← ICommand/IQuery, IUserContext, the shared MediatR pipeline (validation, logging, caching) and module registration
-│   ├── BuildingBlocks.Persistence/     ← AppDbContextBase, module DbContext registration (retry policy, migrations assembly), design-time support
+│   ├── BuildingBlocks.Application/     ← ICommand/IQuery, IUserContext, the shared MediatR pipeline (validation, logging, caching), module registration,
+│   │                                     AccountFilter (which bank accounts a query may see) and IDevelopmentSeeder (each module's own demo data)
+│   ├── BuildingBlocks.Persistence/     ← AppDbContextBase, AddModuleDbContext (retry policy, migrations assembly, enrols the context in the host's
+│   │                                     ordered, locked migration run), design-time support
 │   ├── BuildingBlocks.Messaging/       ← Generic Inbox/Outbox reliability mechanism — own DbContext, `messaging` schema
 │   └── BuildingBlocks.Web/             ← HTTP helpers every module's Presentation reuses (Result → ProblemDetails, versioned route groups,
 │                                         shared policy and role names)
@@ -124,6 +124,13 @@ TransactionAggregationAPI/              ← solution root
 │   │                                     Presentation = the module's HTTP surface: one file per endpoint under Endpoints/, wire shapes under
 │   │                                     Requests/ and Responses/. Application DTOs are always mapped to a response, never serialized
 │   │                                     directly. Referenced only by the API host — the worker runs every module without it.
+│   ├── Transactions/                   ← The ledger: webhook and Kafka ingestion, normalization, categorization, list and search — own DbContext,
+│   │                                     `transactions` schema. Publishes the ledger's language (TransactionCategory, TransactionStatus, the
+│   │                                     TransactionRecorded event, the demo accounts) through Transactions.Contracts
+│   ├── Reporting/                      ← The daily-totals read model and every summary and aggregate built on it — own DbContext, `reporting` schema.
+│   │                                     Reads the ledger only through Transactions.Contracts; no Domain layer, it holds no business rules
+│   ├── Currency/                       ← Reference data: the configured currencies and their rates (ICurrencyCatalog). No persistence
+│   ├── Customers/                      ← Cross-bank grouping of accounts — own DbContext, `customerdirectory` schema
 │   ├── WebhookSources/                 ← First fully-extracted module — own DbContext, `webhooksources` schema, depends only on SharedKernel
 │   ├── Notifications/                  ← Duplicate alerts — own DbContext, `notifications` schema; other modules and the worker use only Notifications.Contracts
 │   └── Audit/                          ← Append-only inbound audit trail — own DbContext, `audit` schema, depends on no other module
@@ -163,8 +170,9 @@ TransactionAggregationAPI/              ← solution root
 
 ## Seed data
 
-Every Development start seeds the database (`Development/SeedData.cs`), each demo account under
-its own bank:
+Every Development start seeds the database. Each module loads its own demo data (an `IDevelopmentSeeder` it registers only
+in Development): the ledger from `Transactions.Infrastructure/Development`, the customers from `Customers.Infrastructure/Development`, the mock
+banks' webhook sources from `WebhookSources.Infrastructure/Development`. Each demo account sits under its own bank:
 
 - **21 demo accounts** (checking, savings, credit card, investment) at FNB, Standard Bank, Absa
   and Capitec, grouped into ten households with their own salary, rent and spending patterns.
@@ -609,7 +617,7 @@ currency](#currencies-and-conversion)) to see every configured currency converte
 summed instead; `currency` is then ignored.
 
 Aggregates are never computed on the request path. The worker rebuilds a daily read model
-(`transactions."DailyTotals"`: one row per day, bank, account, category and currency) every
+(`reporting."DailyTotals"`: one row per day, bank, account, category and currency) every
 `Aggregation:IntervalMinutes` (5 by default). Each rebuild recomputes, in full, every account-day
 that received entries since the last one, so a backdated or re-delivered transaction can't be
 double counted. A rebuild folds in at most `Aggregation:MaxRowsPerRun` (500,000 by default) new
@@ -1171,7 +1179,7 @@ regardless of the token, the API most likely can't validate against Keycloak —
 Limits: 150 req/min per endpoint group, 200 req/min global.
 To raise temporarily for testing:
 
-- Global → `Program.cs` `AddOptions<RateLimiterOptions>` block: `PermitLimit = 3000`
-- Endpoint policy → `RateLimiting/RedisFixedWindowPolicy.cs`: `PermitLimit = 600`
+- Global → `RateLimiting/RateLimitingSetup.cs`, `GlobalLimit`: `PermitLimit = 3000`
+- Endpoint group → `RateLimiting/RateLimitingSetup.cs`, `ApiGroupLimit`: `PermitLimit = 600`
 
 Rebuild and redeploy. Revert before committing.

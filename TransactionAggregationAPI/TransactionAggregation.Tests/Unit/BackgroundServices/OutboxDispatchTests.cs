@@ -13,8 +13,8 @@ using Modules.Transactions.Contracts.IntegrationEvents;
 using NSubstitute;
 using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.BackgroundServices;
-using TransactionAggregation.Worker.Outbox;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.BackgroundServices

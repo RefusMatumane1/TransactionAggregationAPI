@@ -1,7 +1,3 @@
-# ── Worker autoscaling fallback (CPU) ──────────────────────────────────────
-# Applied only when KEDA is not installed; worker/scaledobject.yaml (queue depth)
-# is the primary scaler. CPU is a weak proxy for backlog, so this is a floor, not a
-# substitute.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

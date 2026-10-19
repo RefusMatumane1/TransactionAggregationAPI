@@ -581,10 +581,6 @@ tr.clickable {
 .badge-Shopping       { background-color: #be185d; color: #fff; }
 .badge-Subscriptions  { background-color: #b45309; color: #fff; }
 
-.badge-Pending   { background-color: #b45309; color: #fff; }
-.badge-Settled   { background-color: #047857; color: #fff; }
-.badge-Expired   { background-color: #cbd5e1; color: #334155; }
-
 #blazor-error-ui {
     display: none;
 }

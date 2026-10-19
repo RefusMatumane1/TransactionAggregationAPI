@@ -7,7 +7,8 @@ using Modules.Audit.Application.Contracts;
 using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
 using Modules.Customers.Infrastructure.Persistence;
-using Modules.Transactions.Application.Common.Aggregation;
+using Modules.Reporting.Application.Aggregation;
+using Modules.Reporting.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using Npgsql;
@@ -42,6 +43,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             using var context = CreateContext();
             await context.Database.MigrateAsync();
 
+            using var reporting = CreateReportingContext();
+            await reporting.Database.MigrateAsync();
+
             using var audit = CreateAuditContext();
             await audit.Database.MigrateAsync();
 
@@ -52,7 +56,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await notifications.Database.MigrateAsync();
         }
 
-        public async Task<string> CreateIsolatedDatabaseAsync()
+        /// <param name="withReporting">False leaves the Reporting module unmigrated, for tests that step the Transactions history
+        /// backwards: Reporting builds on Transactions' tables, so a real rollback undoes it first.</param>
+        public async Task<string> CreateIsolatedDatabaseAsync(bool withReporting = true)
         {
             var name = $"isolated_{Guid.NewGuid():N}";
             await using (var admin = new NpgsqlConnection(ConnectionString))
@@ -68,6 +74,11 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await messaging.Database.MigrateAsync();
             using var context = CreateContext(connectionString: connectionString);
             await context.Database.MigrateAsync();
+            if (withReporting)
+            {
+                using var reporting = CreateReportingContext(connectionString);
+                await reporting.Database.MigrateAsync();
+            }
             using var webhookSources = CreateWebhookSourcesContext(connectionString);
             await webhookSources.Database.MigrateAsync();
             using var audit = CreateAuditContext(connectionString);
@@ -97,7 +108,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
         public async Task<DailyTotalsRefresh?> RefreshDailyTotalsAsync(string? connectionString = null, TimeSpan? overlap = null, int maxRows = int.MaxValue)
         {
-            using var context = CreateContext(connectionString: connectionString);
+            using var context = CreateReportingContext(connectionString);
             return await new PostgresDailyTotalsRefresher(context, TimeProvider.System)
                 .RefreshAsync(overlap ?? TimeSpan.FromMinutes(10), maxRows, CancellationToken.None);
         }
@@ -138,6 +149,9 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
             return new AuditTrail(new AuditDbContext(options), NullLogger<AuditTrail>.Instance);
         }
+
+        public ReportingDbContext CreateReportingContext(string? connectionString = null) =>
+            new(new DbContextOptionsBuilder<ReportingDbContext>().UseNpgsql(connectionString ?? ConnectionString).Options);
 
         public MessagingDbContext CreateMessagingContext(string? connectionString = null)
         {

@@ -2,7 +2,6 @@ using BuildingBlocks.Web;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Modules.Transactions.Presentation.Endpoints.Customers;
-using Modules.Transactions.Presentation.Endpoints.Reporting;
 using Modules.Transactions.Presentation.Endpoints.Transactions;
 using Modules.Transactions.Presentation.Endpoints.Webhooks;
 
@@ -17,12 +16,6 @@ namespace Modules.Transactions
 
             transactions.MapListTransactions();
             transactions.MapGetTransactionById();
-            transactions.MapGetTransactionSummary();
-            transactions.MapTransactionAggregates();
-
-            app.MapApiGroup("currencies", "Currencies")
-               .RequireAuthorization(AuthorizationPolicies.Staff)
-               .MapGetCurrencies();
 
             app.MapApiGroup("customers", "Customers")
                .RequireAuthorization(AuthorizationPolicies.Staff)

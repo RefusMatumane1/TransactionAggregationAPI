@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Application;
+using Modules.Currency.Contracts;
 
 namespace TransactionAggregation.Tests.Helpers
 {

@@ -22,12 +22,22 @@
     <Project Path="Modules/Audit/Audit.Infrastructure/Audit.Infrastructure.csproj" />
     <Project Path="Modules/Audit/Audit.Presentation/Audit.Presentation.csproj" />
   </Folder>
+  <Folder Name="/Modules/Reporting/">
+    <Project Path="Modules/Reporting/Reporting.Application/Reporting.Application.csproj" />
+    <Project Path="Modules/Reporting/Reporting.Infrastructure/Reporting.Infrastructure.csproj" />
+    <Project Path="Modules/Reporting/Reporting.Presentation/Reporting.Presentation.csproj" />
+  </Folder>
   <Folder Name="/Modules/Transactions/">
     <Project Path="Modules/Transactions/Transactions.Contracts/Transactions.Contracts.csproj" />
     <Project Path="Modules/Transactions/Transactions.Application/Transactions.Application.csproj" Id="ffdc5dc1-72ce-4ff2-8f05-f8ad6f205bfe" />
     <Project Path="Modules/Transactions/Transactions.Domain/Transactions.Domain.csproj" Id="69d4d908-2140-4efc-b376-cd669f1b39dd" />
     <Project Path="Modules/Transactions/Transactions.Infrastructure/Transactions.Infrastructure.csproj" Id="d31ee87e-c37b-4135-9c6c-32ba316d2ac4" />
     <Project Path="Modules/Transactions/Transactions.Presentation/Transactions.Presentation.csproj" />
+  </Folder>
+  <Folder Name="/Modules/Currency/">
+    <Project Path="Modules/Currency/Currency.Application/Currency.Application.csproj" />
+    <Project Path="Modules/Currency/Currency.Contracts/Currency.Contracts.csproj" />
+    <Project Path="Modules/Currency/Currency.Presentation/Currency.Presentation.csproj" />
   </Folder>
   <Folder Name="/Modules/Customers/">
     <Project Path="Modules/Customers/Customers.Application/Customers.Application.csproj" />

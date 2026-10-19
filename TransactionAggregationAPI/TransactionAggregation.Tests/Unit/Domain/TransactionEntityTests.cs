@@ -1,7 +1,7 @@
 using FluentAssertions;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using SharedKernel.Exceptions;
 using System.Reflection;
 using TransactionAggregation.Tests.Helpers;

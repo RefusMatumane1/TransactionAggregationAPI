@@ -1,16 +1,3 @@
-# Least-privilege database roles.
-#
-#   tagg_migrator  owns every module schema and table; used only by the db-migrate Job.
-#   tagg_app       SELECT/INSERT/UPDATE/DELETE on those tables, nothing else; used by the API
-#                  and the worker. It cannot create, alter or drop anything, so it cannot
-#                  disable the audit trail's append-only triggers — and a migration revokes
-#                  UPDATE/DELETE/TRUNCATE on the audit table from it outright.
-#
-# Mounted into /docker-entrypoint-initdb.d, so it runs automatically on a fresh volume.
-# Idempotent: for an existing database, run it once by hand —
-#   kubectl -n transaction-aggregation exec -it postgres-0 -- \
-#     env MIGRATOR_DB_PASSWORD=... APP_DB_PASSWORD=... bash /docker-entrypoint-initdb.d/10-roles.sh
-# then re-assign ownership of existing objects to tagg_migrator.
 apiVersion: v1
 kind: ConfigMap
 metadata:

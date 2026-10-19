@@ -2,8 +2,8 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
-using Modules.Transactions.Domain.Enums;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
@@ -23,7 +23,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
         [Fact]
         public async Task Backfill_SettlesPendingIngestedRows_AndLeavesSeedAndOtherStatusesAlone()
         {
-            var database = await _fixture.CreateIsolatedDatabaseAsync();
+            var database = await _fixture.CreateIsolatedDatabaseAsync(withReporting: false);
 
             using var context = _fixture.CreateContext(connectionString: database);
             var migrations = context.Database.GetMigrations().ToList();

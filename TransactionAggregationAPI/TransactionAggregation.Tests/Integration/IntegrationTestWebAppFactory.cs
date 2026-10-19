@@ -15,6 +15,7 @@ using Modules.Audit.Contracts;
 using Modules.Audit.Infrastructure.Persistence;
 using Modules.Customers.Infrastructure.Persistence;
 using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Reporting.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Infrastructure.Persistence;
 using TransactionAggregation.Tests.Helpers;
@@ -42,6 +43,7 @@ namespace TransactionAggregation.Tests.Integration
                     sp.GetRequiredService<DbContextOptions<TransactionsDbContext>>(),
                     sp.GetRequiredService<MessagingDbContext>(),
                     sp.GetRequiredService<IAuditTrail>()));
+                ReplaceWithInMemory<ReportingDbContext>(services);
                 ReplaceWithInMemory<MessagingDbContext>(services);
                 ReplaceWithInMemory<WebhookSourcesDbContext>(services);
                 ReplaceWithInMemory<AuditDbContext>(services);
@@ -55,7 +57,7 @@ namespace TransactionAggregation.Tests.Integration
 
                 services.RemoveAll<Modules.Notifications.Application.Common.IAlertUrlProtector>();
                 services.AddSingleton<Modules.Notifications.Application.Common.IAlertUrlProtector>(
-                    new TransactionAggregation.Hosting.Security.DataProtectionAlertUrlProtector(
+                    new Modules.Notifications.Infrastructure.Security.DataProtectionAlertUrlProtector(
                         new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider()));
 
                 services.Configure<HealthCheckServiceOptions>(opts => opts.Registrations.Clear());

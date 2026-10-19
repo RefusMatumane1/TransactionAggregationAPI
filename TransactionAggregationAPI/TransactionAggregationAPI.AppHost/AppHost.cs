@@ -50,14 +50,20 @@ var keycloak = builder
     .WithEnvironment("KC_HOSTNAME", "http://localhost:8081")
     .WithEnvironment("KC_HOSTNAME_STRICT", "false")
     .WithEnvironment("KC_HTTP_ENABLED", "true")
+    // Exposes /health/ready on the management port (9000); "ready" means the realm import has finished.
+    .WithEnvironment("KC_HEALTH_ENABLED", "true")
     .WithHttpEndpoint(
         port: 8081,
         targetPort: 8080,
         name: "http")
+    .WithHttpEndpoint(targetPort: 9000, name: "management")
+    .WithHttpHealthCheck("/health/ready", endpointName: "management")
     .WithLifetime(ContainerLifetime.Persistent);
 
+// The readiness probe reports Healthy/Degraded only after migrations have been applied (Development).
 var api = builder
     .AddProject<Projects.TransactionAggregationAPI>("transactionaggregationapi")
+    .WithHttpHealthCheck("/readiness")
     .WithReference(seq)
     .WaitForStart(seq);
 
@@ -77,7 +83,7 @@ builder
     .WaitForStart(redis)
     .WithReference(kafka)
     .WaitFor(kafka)
-    .WaitForStart(api);
+    .WaitFor(api);
 
 var mockAggregatorApiKey = builder.AddParameter("mock-aggregator-api-key", secret: true);
 
@@ -89,9 +95,10 @@ api.WithEnvironment("MockAggregator__WebhookApiKey", mockAggregatorApiKey);
 mockAggregator
     .WithReference(seq)
     .WithReference(kafka)
+    .WaitFor(kafka)
     .WithEnvironment("Feed__ApiBaseUrl", apiHttps)
     .WithEnvironment("Feed__ApiKey", mockAggregatorApiKey)
-    .WaitForStart(api);
+    .WaitFor(api);
 
 var prometheus = builder
     .AddContainer("prometheus", "prom/prometheus")

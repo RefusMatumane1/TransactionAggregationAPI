@@ -17,32 +17,30 @@ spec:
   maxReplicas: 10
 
   metrics:
-    # ── CPU utilisation ──────────────────────────────────────────────────
     - type: Resource
       resource:
         name: cpu
         target:
           type: Utilization
-          averageUtilization: 70 # Scale up when average CPU > 70%
+          averageUtilization: 70
 
-    # ── Memory utilisation ───────────────────────────────────────────────
     - type: Resource
       resource:
         name: memory
         target:
           type: Utilization
-          averageUtilization: 80 # Scale up when average memory > 80%
+          averageUtilization: 80
 
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 60 # Wait 1 min before scaling up again
+      stabilizationWindowSeconds: 60
       policies:
         - type: Pods
           value: 2
-          periodSeconds: 60 # Add at most 2 pods per minute
+          periodSeconds: 60
     scaleDown:
-      stabilizationWindowSeconds: 300 # Wait 5 min before scaling down
+      stabilizationWindowSeconds: 300
       policies:
         - type: Pods
           value: 1
-          periodSeconds: 120 # Remove at most 1 pod every 2 min
+          periodSeconds: 120

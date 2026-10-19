@@ -1,6 +1,6 @@
-using Modules.Transactions.Application.Common.Currency;
+using Modules.Currency.Contracts;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 
 namespace Modules.Transactions.Application.Common.DTOs
 {

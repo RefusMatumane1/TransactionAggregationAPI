@@ -1,8 +1,8 @@
 using FluentAssertions;
-using Modules.Transactions.Application.Common.DTOs;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
-using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactionSummary;
-using Modules.Transactions.Domain.Enums;
+using Modules.Reporting.Application.DTOs;
+using Modules.Reporting.Application.Features.Aggregates;
+using Modules.Reporting.Application.Features.GetTransactionSummary;
+using Modules.Transactions.Contracts;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
 
@@ -41,15 +41,16 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var catalog = TestCurrencies.Catalog;
             using var context = _fixture.CreateContext();
 
-            var summary = (await new GetTransactionSummaryQueryHandler(context, catalog).Handle(
+            using var reporting = _fixture.CreateReportingContext();
+            var summary = (await new GetTransactionSummaryQueryHandler(reporting, catalog).Handle(
                 new GetTransactionSummaryQuery(Day.AddDays(-1), Day.AddDays(1), filter, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var cashFlow = (await new GetCashFlowQueryHandler(context, catalog).Handle(
+            var cashFlow = (await new GetCashFlowQueryHandler(reporting, catalog).Handle(
                 new GetCashFlowQuery(ReportDay, ReportDay, filter, TimeGranularity.Day, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var institutions = (await new GetInstitutionBreakdownQueryHandler(context, catalog).Handle(
+            var institutions = (await new GetInstitutionBreakdownQueryHandler(reporting, catalog).Handle(
                 new GetInstitutionBreakdownQuery(ReportDay, ReportDay, filter, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var comparison = (await new GetPeriodComparisonQueryHandler(context, catalog).Handle(
+            var comparison = (await new GetPeriodComparisonQueryHandler(reporting, catalog).Handle(
                 new GetPeriodComparisonQuery(ReportDay, ReportDay, filter, ConvertTo: "ZAR"), CancellationToken.None)).Value;
-            var categories = (await new GetCategoryBreakdownQueryHandler(context, catalog).Handle(
+            var categories = (await new GetCategoryBreakdownQueryHandler(reporting, catalog).Handle(
                 new GetCategoryBreakdownQuery(ReportDay, ReportDay, filter, CashFlowDirection.Expense, ConvertTo: "ZAR"), CancellationToken.None)).Value;
 
             const decimal expenses = 300.5m + 75.25m * 18m + 10m * 20m;
@@ -70,7 +71,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             var account = await SeedAsync();
             using var context = _fixture.CreateContext();
 
-            var summary = (await new GetTransactionSummaryQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = _fixture.CreateReportingContext();
+            var summary = (await new GetTransactionSummaryQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetTransactionSummaryQuery(Day.AddDays(-1), Day.AddDays(1), TestFilters.For(TestInstitutions.FNB, account), ConvertTo: "USD"),
                 CancellationToken.None)).Value;
 

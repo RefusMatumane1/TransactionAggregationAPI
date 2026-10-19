@@ -8,9 +8,6 @@ metadata:
     app.kubernetes.io/component: database
     app.kubernetes.io/part-of: transaction-aggregation
 spec:
-  # ── Single replica: PostgreSQL does not support active-active multi-primary
-  # out of the box. For HA, replace this with a Patroni-based chart or use
-  # CloudNativePG operator.
   replicas: 1
   serviceName: postgres
   selector:
@@ -23,7 +20,6 @@ spec:
         app.kubernetes.io/component: database
         app.kubernetes.io/part-of: transaction-aggregation
     spec:
-      # Run as non-root (postgres user uid 999)
       securityContext:
         runAsUser: 999
         runAsGroup: 999
@@ -59,7 +55,6 @@ spec:
                   key: POSTGRES_DB
             - name: PGDATA
               value: /var/lib/postgresql/data/pgdata
-            # Passwords for the least-privilege roles created by init-roles.yaml.
             - name: MIGRATOR_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -115,8 +110,6 @@ spec:
           app.kubernetes.io/name: postgres
       spec:
         accessModes: ["ReadWriteOnce"]
-        # Set storageClassName to match your Rancher/local provisioner.
-        # Rancher Local Path Provisioner ships by default → use "local-path".
         storageClassName: "local-path"
         resources:
           requests:

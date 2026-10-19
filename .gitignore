@@ -75,3 +75,4 @@ nunit-*.xml
 # Local documentation (not tracked)
 TransactionAggregationAPI/docs/
 /.gitleaks.toml
+/TransactionAggregationAPI/k8s/secrets.yaml

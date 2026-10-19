@@ -1,11 +1,11 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
+using Modules.Reporting.Application.Aggregation;
+using Modules.Reporting.Application.Features.Aggregates;
+using Modules.Reporting.Infrastructure.Persistence;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
-using Modules.Transactions.Infrastructure.Persistence;
 using Npgsql;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;
@@ -33,7 +33,7 @@ namespace TransactionAggregation.Tests.Integration.Postgres
 
         private async Task<List<DailyTotal>> TotalsAsync(string db)
         {
-            using var context = fixture.CreateContext(connectionString: db);
+            using var context = fixture.CreateReportingContext(connectionString: db);
             return await context.DailyTotals.AsNoTracking().OrderBy(d => d.Day).ThenBy(d => d.Category).ToListAsync();
         }
 
@@ -142,7 +142,8 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             await RecordAsync(db, Entry(-1000m, Utc(5, 11, 9)));
 
             using var context = fixture.CreateContext(connectionString: db);
-            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog).Handle(
+            using var reporting = fixture.CreateReportingContext(connectionString: db);
+            var cashFlow = (await new GetCashFlowQueryHandler(reporting, TestCurrencies.Catalog).Handle(
                 new GetCashFlowQuery(new DateOnly(2026, 5, 1), new DateOnly(2026, 5, 31), TestFilters.For(Bank)),
                 CancellationToken.None)).Value;
 

@@ -32,7 +32,6 @@ spec:
         app.kubernetes.io/version: "1.0.0"
 
     spec:
-      # nginx-unprivileged: every process runs as uid 101 and listens on 8080.
       securityContext:
         runAsNonRoot: true
         runAsUser: 101
@@ -54,7 +53,7 @@ spec:
       containers:
         - name: transaction-ui
 
-          image: transactionaggregationui:set-by-deploy-script # deploy-k8s.sh substitutes an immutable tag (git sha)
+          image: transactionaggregationui:set-by-deploy-script
           imagePullPolicy: IfNotPresent
 
           ports:

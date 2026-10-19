@@ -1,12 +1,12 @@
 using BuildingBlocks.Application.Abstractions.Authentication;
+using BuildingBlocks.Application.Querying;
 using BuildingBlocks.Persistence.Pagination;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Modules.Customers.Domain;
-using Modules.Transactions.Application.Common.Aggregation;
-using Modules.Transactions.Application.Features.Transactions.Queries.Aggregates;
+using Modules.Reporting.Application.Features.Aggregates;
 using Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Infrastructure.Persistence;
 using Npgsql;
 using TransactionAggregation.Tests.Helpers;
@@ -36,17 +36,18 @@ namespace TransactionAggregation.Tests.Integration.Postgres
             }
             await fixture.RefreshDailyTotalsAsync(db);
 
-            var filter = new TransactionFilter(InstitutionAccess.All, Accounts:
+            var filter = new AccountFilter(InstitutionAccess.All, Accounts:
                 [new AccountKey(bankA, "shared-id"), new AccountKey(bankB, "acc-b")]);
 
             using var context = fixture.CreateContext(connectionString: db);
             var list = (await new GetTransactionsQueryHandler(context, new PostgresTransactionSearch(), new RowValueKeysetPaginator(), TestCurrencies.Catalog)
                 .Handle(new GetTransactionsQuery(filter) { PageSize = 50 }, CancellationToken.None)).Value;
-            var cashFlow = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
+            using var reporting = fixture.CreateReportingContext(connectionString: db);
+            var cashFlow = (await new GetCashFlowQueryHandler(reporting, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30), filter), CancellationToken.None)).Value;
-            var nothing = (await new GetCashFlowQueryHandler(context, TestCurrencies.Catalog)
+            var nothing = (await new GetCashFlowQueryHandler(reporting, TestCurrencies.Catalog)
                 .Handle(new GetCashFlowQuery(new DateOnly(2026, 6, 1), new DateOnly(2026, 6, 30),
-                    new TransactionFilter(InstitutionAccess.All, Accounts: [])), CancellationToken.None)).Value;
+                    new AccountFilter(InstitutionAccess.All, Accounts: [])), CancellationToken.None)).Value;
 
             list.Items.Select(t => t.Description).Should().BeEquivalentTo(["Mine at A", "Mine at B", "Salary at B"]);
             cashFlow.TotalExpenses.Should().Be(140m);

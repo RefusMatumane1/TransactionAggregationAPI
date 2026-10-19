@@ -5,6 +5,7 @@
 
 	<ItemGroup>
 		<ProjectReference Include="..\..\..\BuildingBlocks\SharedKernel\SharedKernel.csproj" />
+		<ProjectReference Include="..\Transactions.Contracts\Transactions.Contracts.csproj" />
 	</ItemGroup>
 
 </Project>

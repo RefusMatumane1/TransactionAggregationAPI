@@ -18,10 +18,11 @@ namespace TransactionAggregation.Tests.Architecture
             typeof(Modules.WebhookSources.Infrastructure.Persistence.WebhookSourcesDbContext).Assembly,
             typeof(Modules.Audit.Infrastructure.Persistence.AuditDbContext).Assembly,
             typeof(Modules.Customers.Infrastructure.Persistence.CustomersDbContext).Assembly,
-            typeof(Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext).Assembly
+            typeof(Modules.Notifications.Infrastructure.Persistence.NotificationsDbContext).Assembly,
+            typeof(Modules.Reporting.Infrastructure.Persistence.ReportingDbContext).Assembly
         ];
 
-        [GeneratedRegex(@"\b(UPDATE|DELETE\s+FROM|TRUNCATE)\b\s+(transactions|messaging|audit|webhooksources|notifications)\.", RegexOptions.IgnoreCase)]
+        [GeneratedRegex(@"\b(UPDATE|DELETE\s+FROM|TRUNCATE)\b\s+(transactions|messaging|audit|webhooksources|notifications|reporting)\.", RegexOptions.IgnoreCase)]
         private static partial Regex DataChange();
 
         [GeneratedRegex(@"\bCREATE\s+(UNIQUE\s+)?INDEX\b(?!\s+CONCURRENTLY)", RegexOptions.IgnoreCase)]

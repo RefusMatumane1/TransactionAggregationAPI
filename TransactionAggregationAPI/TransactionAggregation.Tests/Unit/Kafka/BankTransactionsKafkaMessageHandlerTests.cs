@@ -10,7 +10,8 @@ using NSubstitute;
 using SharedKernel.Common.Models;
 using System.Security.Cryptography;
 using TransactionAggregation.Tests.Helpers;
-using TransactionAggregation.Worker.Kafka;
+using TransactionAggregation.Worker.Messaging;
+using TransactionAggregation.Worker.Transactions;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Unit.Kafka

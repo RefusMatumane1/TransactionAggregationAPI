@@ -8,8 +8,6 @@ metadata:
     app.kubernetes.io/component: api
     app.kubernetes.io/part-of: transaction-aggregation
 spec:
-  # Ensure at least 1 pod is always available during voluntary disruptions
-  # (node drains, rolling cluster upgrades, etc.)
   minAvailable: 1
   selector:
     matchLabels:

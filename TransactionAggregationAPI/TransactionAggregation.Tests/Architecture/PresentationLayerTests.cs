@@ -7,16 +7,28 @@ namespace TransactionAggregation.Tests.Architecture
 {
     public class PresentationLayerTests
     {
-        private static readonly string[] Modules = ["Audit", "Customers", "Notifications", "Transactions", "WebhookSources"];
+        private static readonly string[] Modules = ["Audit", "Currency", "Customers", "Notifications", "Reporting", "Transactions", "WebhookSources"];
 
         public static TheoryData<string> ModuleNames => new(Modules);
 
-        private static Assembly Load(string module, string layer) => Assembly.Load(new AssemblyName($"{module}.{layer}"));
+        private static Assembly? TryLoad(string module, string layer)
+        {
+            try
+            {
+                return Assembly.Load(new AssemblyName($"{module}.{layer}"));
+            }
+            catch (FileNotFoundException)
+            {
+                return null;
+            }
+        }
 
+        private static Assembly Load(string module, string layer) =>
+            TryLoad(module, layer) ?? throw new InvalidOperationException($"{module} has no {layer} project.");
+
+        // Not every module has every layer: Currency is reference data with no persistence, Reporting a read model with no domain.
         private static string[] InnerLayersOf(string module) =>
-            module == "Transactions"
-                ? ["Domain", "Application", "Infrastructure"]
-                : ["Domain", "Application", "Infrastructure", "Contracts"];
+            new[] { "Domain", "Application", "Infrastructure", "Contracts" }.Where(layer => TryLoad(module, layer) is not null).ToArray();
 
         [Theory]
         [MemberData(nameof(ModuleNames))]
@@ -66,7 +78,10 @@ namespace TransactionAggregation.Tests.Architecture
         [MemberData(nameof(ModuleNames))]
         public void Infrastructure_ShouldNotMapEndpoints(string module)
         {
-            var result = Types.InAssembly(Load(module, "Infrastructure"))
+            if (TryLoad(module, "Infrastructure") is not { } infrastructure)
+                return;
+
+            var result = Types.InAssembly(infrastructure)
                 .Should()
                 .NotHaveDependencyOnAny("Microsoft.AspNetCore.Routing", "Microsoft.AspNetCore.Http.IResult", "BuildingBlocks.Web")
                 .GetResult();

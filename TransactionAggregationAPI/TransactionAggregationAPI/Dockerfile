@@ -60,6 +60,12 @@ COPY ["Modules/Audit/Audit.Application/Audit.Application.csproj", "Modules/Audit
 COPY ["Modules/Audit/Audit.Infrastructure/Audit.Infrastructure.csproj", "Modules/Audit/Audit.Infrastructure/"]
 COPY ["Modules/Audit/Audit.Presentation/Audit.Presentation.csproj", "Modules/Audit/Audit.Presentation/"]
 COPY ["Modules/Audit/Audit.Contracts/Audit.Contracts.csproj", "Modules/Audit/Audit.Contracts/"]
+COPY ["Modules/Currency/Currency.Application/Currency.Application.csproj", "Modules/Currency/Currency.Application/"]
+COPY ["Modules/Currency/Currency.Contracts/Currency.Contracts.csproj", "Modules/Currency/Currency.Contracts/"]
+COPY ["Modules/Currency/Currency.Presentation/Currency.Presentation.csproj", "Modules/Currency/Currency.Presentation/"]
+COPY ["Modules/Reporting/Reporting.Application/Reporting.Application.csproj", "Modules/Reporting/Reporting.Application/"]
+COPY ["Modules/Reporting/Reporting.Infrastructure/Reporting.Infrastructure.csproj", "Modules/Reporting/Reporting.Infrastructure/"]
+COPY ["Modules/Reporting/Reporting.Presentation/Reporting.Presentation.csproj", "Modules/Reporting/Reporting.Presentation/"]
 RUN dotnet restore "./TransactionAggregationAPI/TransactionAggregationAPI.csproj"
 
 COPY . .

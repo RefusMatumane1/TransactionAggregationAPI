@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Modules.Reporting.Infrastructure.Persistence;
 using Modules.Transactions.Infrastructure.Persistence;
 using Modules.WebhookSources.Domain;
 using Modules.WebhookSources.Infrastructure.Persistence;
@@ -39,7 +40,7 @@ namespace TransactionAggregation.Tests.Integration
                     TestTransactions.Create(-40m, $"Capitec spend {run}", institution: TestInstitutions.Capitec, account: capitecAccount),
                     TestTransactions.Create(-999m, $"Not theirs {run}", institution: TestInstitutions.FNB, account: $"stranger-{run}"));
                 await ledger.SaveChangesAsync();
-                await InMemoryDailyTotals.BuildAsync(ledger);
+                await InMemoryDailyTotals.BuildAsync(ledger, scope.ServiceProvider.GetRequiredService<ReportingDbContext>());
             }
 
             using var admin = factory.CreateClient().SignedInAs("admin");

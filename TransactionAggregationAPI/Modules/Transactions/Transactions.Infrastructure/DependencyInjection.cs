@@ -1,11 +1,11 @@
+using BuildingBlocks.Application.Seeding;
 using BuildingBlocks.Persistence;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.Interfaces;
+using Modules.Transactions.Contracts;
+using Modules.Transactions.Infrastructure.Development;
 using Modules.Transactions.Infrastructure.Persistence;
-using Npgsql;
 
 namespace Modules.Transactions
 {
@@ -18,22 +18,21 @@ namespace Modules.Transactions
         {
             services.AddTransactionsApplication(configuration);
 
-            services.AddDbContext<TransactionsDbContext>((sp, options) =>
+            services.AddModuleDbContext<TransactionsDbContext, ITransactionsDbContext>(options =>
             {
-                options.UseNpgsql(sp.GetRequiredService<NpgsqlConnection>(),
-                    npgsql => npgsql.UseModuleDefaults<TransactionsDbContext>());
-
                 if (isDevelopment)
                 {
                     options.EnableDetailedErrors();
                     options.EnableSensitiveDataLogging();
                 }
             });
-
-            services.AddScoped<ITransactionsDbContext>(provider =>
-                provider.GetRequiredService<TransactionsDbContext>());
             services.AddSingleton<ITransactionSearch, PostgresTransactionSearch>();
-            services.AddScoped<IDailyTotalsRefresher, PostgresDailyTotalsRefresher>();
+
+            if (isDevelopment)
+            {
+                services.AddSingleton<IDemoAccountDirectory, DemoAccountDirectory>();
+                services.AddDevelopmentSeeder<TransactionsDemoSeeder>();
+            }
 
             return services;
         }

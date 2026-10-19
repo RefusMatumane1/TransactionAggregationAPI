@@ -8,7 +8,6 @@ metadata:
     app.kubernetes.io/component: database
     app.kubernetes.io/part-of: transaction-aggregation
 spec:
-  # ClusterIP — PostgreSQL is an internal service; never expose externally.
   type: ClusterIP
   selector:
     app.kubernetes.io/name: postgres

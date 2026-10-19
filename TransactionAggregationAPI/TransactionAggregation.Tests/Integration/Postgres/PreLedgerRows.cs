@@ -1,5 +1,5 @@
 using Microsoft.EntityFrameworkCore;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 
 namespace TransactionAggregation.Tests.Integration.Postgres
 {

@@ -1,6 +1,7 @@
 using BuildingBlocks.Application.Pagination;
+using BuildingBlocks.Application.Querying;
+using BuildingBlocks.Application.Validation;
 using FluentValidation;
-using Modules.Transactions.Application.Common.Aggregation;
 using Modules.Transactions.Application.Common.Pagination;
 
 namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTransactions
@@ -13,7 +14,7 @@ namespace Modules.Transactions.Application.Features.Transactions.Queries.GetTran
 
         public GetTransactionsQueryValidator()
         {
-            RuleFor(x => x.Filter).NotNull().SetValidator(new TransactionFilterValidator());
+            RuleFor(x => x.Filter).NotNull().SetValidator(new AccountFilterValidator());
 
             RuleFor(x => x.PageSize)
                 .InclusiveBetween(1, MaxPageSize).WithMessage($"Page size must be between 1 and {MaxPageSize}");

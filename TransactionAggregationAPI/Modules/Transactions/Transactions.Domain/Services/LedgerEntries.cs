@@ -1,5 +1,5 @@
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using System.Linq.Expressions;
 
 namespace Modules.Transactions.Domain.Services

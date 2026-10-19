@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using NSubstitute;
 using TransactionAggregation.Tests.Helpers;
 using Xunit;

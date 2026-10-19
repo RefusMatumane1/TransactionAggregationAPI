@@ -1,17 +1,3 @@
-# ── Worker autoscaling on queue depth (KEDA) ────────────────────────────────
-# Scales on what the worker actually drains: pending inbox + outbox messages. Every
-# replica reports the same global backlog, so max() reads it once, and KEDA divides
-# by the threshold to get the desired replicas (1 replica per 250 pending messages,
-# within min/max). If Prometheus is unreachable for 3 polls, KEDA holds the fallback
-# replica count instead of scaling to the minimum.
-#
-# Scaling is safe at any replica count: dispatchers claim rows with FOR UPDATE
-# SKIP LOCKED, the archiver moves rows the same way, and each pod's database
-# connections are capped (Maximum Pool Size=20) behind PgBouncer. Kafka consumption
-# parallelism is still capped by Kafka__TopicPartitions.
-#
-# Requires KEDA (https://keda.sh) and the monitoring stack (./deploy-k8s.sh --monitoring).
-# Without KEDA, deploy-k8s.sh applies worker/hpa.yaml (CPU) instead.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:

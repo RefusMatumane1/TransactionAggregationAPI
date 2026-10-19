@@ -5,7 +5,7 @@ using FluentAssertions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using System.Text;
-using TransactionAggregation.Worker.Kafka;
+using TransactionAggregation.Worker.Messaging;
 using Xunit;
 
 namespace TransactionAggregation.Tests.Integration.Kafka

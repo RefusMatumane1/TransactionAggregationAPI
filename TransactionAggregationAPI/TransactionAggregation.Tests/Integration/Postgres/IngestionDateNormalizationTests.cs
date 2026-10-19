@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Features.Transactions.Commands.ProcessInboundTransactions;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using NSubstitute;
 using System.Text.Json;
 using TransactionAggregation.Tests.Helpers;

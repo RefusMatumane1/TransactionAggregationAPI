@@ -2,7 +2,7 @@ using FluentAssertions;
 using Modules.Transactions.Application.Common.DTOs;
 using Modules.Transactions.Application.Common.Interfaces;
 using Modules.Transactions.Application.Features.Transactions.Commands.ReceiveBankTransactions;
-using Modules.Transactions.Domain.Enums;
+using Modules.Transactions.Contracts;
 using System.Text.Json;
 using TransactionAggregation.MockAggregator.Banks;
 using TransactionAggregation.MockAggregator.Catalog;
@@ -99,7 +99,7 @@ namespace TransactionAggregation.Tests.Integration.MockBanks
         {
             foreach (var account in MockCatalog.Accounts)
             {
-                TransactionAggregationAPI.Development.MockAggregatorSource.Banks.Select(b => b.Code).Should().Contain(account.Institution,
+                Modules.WebhookSources.Infrastructure.Development.MockAggregatorBankSeeder.Banks.Select(b => b.Code).Should().Contain(account.Institution,
                     $"'{account.Institution}' must be a bank the API registers, or the mock has no key to deliver it with");
                 BankStatementStyles.ByInstitution.Should().ContainKey(account.Institution);
             }

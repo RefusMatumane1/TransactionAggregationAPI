@@ -1,9 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Modules.Transactions.Contracts;
 using Modules.Transactions.Domain.Common.ValueObjects;
 using Modules.Transactions.Domain.Entities;
-using Modules.Transactions.Domain.Enums;
 using System.Text.Json;
 
 namespace Modules.Transactions.Infrastructure.Persistence.Configurations
